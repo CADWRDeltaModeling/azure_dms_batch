@@ -1,17 +1,18 @@
 name: dev_azure
 channels:
-  - defaults
+  - conda-forge
+  - nodefaults
 dependencies:
   - pip
   - python=3.8
   - ipykernel
   - autopep8
   - pip:
-    - azure-batch==11.0.0
-    - azure-storage-blob==12.9.0
-    - azure-mgmt-resource>=20.0.0
-    - azure-identity>=1.7.1
-    - msrest>=0.6.21
+    - azure-batch #==11.0.0
+    - azure-storage-blob #==12.9.0
+    - azure-mgmt-resource #>=20.0.0
+    - azure-identity #>=1.7.1
+    - msrest #>=0.6.21
   # dev stuff
   - pytest-runner
   - autopep8

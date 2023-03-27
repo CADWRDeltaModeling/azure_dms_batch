@@ -223,6 +223,7 @@ class AzureBatch:
             vm_size='standard_f2s_v2',
             tasks_per_vm=2,
             os_image_data=('microsoftwindowsserver', 'windowsserver', '2019-datacenter-core'),
+            os_image_reference=None,
             app_packages=[],
             start_task_cmd="cmd /c set",
             start_task_admin=False,
@@ -272,8 +273,14 @@ class AzureBatch:
         """
         vm_count = pool_size
         # choosing windows machine here (just the core windows, it has no other apps on it including explorer)
-        sku_to_use, image_ref_to_use = self.select_latest_verified_vm_image_with_node_agent_sku(
-            *os_image_data)
+        if os_image_reference == None:
+            sku_to_use, image_ref_to_use = self.select_latest_verified_vm_image_with_node_agent_sku(
+                *os_image_data)
+        else:
+            sku_to_use, image_ref_to_use = os_image_reference
+        vmconfig = batchmodels.VirtualMachineConfiguration(
+            image_reference=image_ref_to_use,
+            node_agent_sku_id=sku_to_use)
         # applications needed here
         app_references = [batchmodels.ApplicationPackageReference(
             application_id=app[0], version=app[1]) for app in app_packages]
@@ -286,9 +293,7 @@ class AzureBatch:
             user_identity = batchmodels.UserIdentity()
         pool = batchmodels.PoolAddParameter(
             id=pool_id,
-            virtual_machine_configuration=batchmodels.VirtualMachineConfiguration(
-                image_reference=image_ref_to_use,
-                node_agent_sku_id=sku_to_use),
+            virtual_machine_configuration=vmconfig,
             vm_size=vm_size,
             target_dedicated_nodes=vm_count,
             # not understood but carried from an example maybe outdated ?
@@ -492,7 +497,7 @@ class AzureBatch:
             time.sleep(polling_interval_secs)
         return
 
-    def create_input_file_spec(self, container_name: str, blob_prefix: str, file_path: str = '.'):
+    def create_input_file_spec(self, container_name: str, blob_prefix: str, file_path: str = '.', container_name_is_sas_url: bool = False) -> batchmodels.ResourceFile:
         """
         input file specs are information for the batch task to download these files
         to the task before starting the task. 
@@ -511,10 +516,15 @@ class AzureBatch:
         ResourceFile
             :py:func:`batch.models.ResourceFile`
         """
-        return batchmodels.ResourceFile(
-            auto_storage_container_name=container_name,
-            blob_prefix=blob_prefix,
-            file_path=file_path)
+        if container_name_is_sas_url:
+            return batchmodels.ResourceFile(
+                http_url=container_name,
+                file_path=file_path)
+        else:
+            return batchmodels.ResourceFile(
+                auto_storage_container_name=container_name,
+                blob_prefix=blob_prefix,
+                file_path=file_path)
 
     def create_output_file_spec(self, file_pattern: str, output_container_sas_url: str, blob_path: str = '.') -> batchmodels.OutputFile:
         """
@@ -575,7 +585,7 @@ class AzureBatch:
         return prep_task
 
     def create_task_copy_file_to_shared_dir(self, container: str, blob_path: str, file_path: str,
-            shared_dir: str = 'AZ_BATCH_NODE_SHARED_DIR', ostype: str = 'windows') -> batchmodels.JobPreparationTask:
+            shared_dir: str = 'AZ_BATCH_NODE_SHARED_DIR', ostype: str = 'windows', container_is_sas_url = False) -> batchmodels.JobPreparationTask:
         """
         A special job prep task for the common use case of copying file from container blob to shared directory on node.
         This is designed to be run as preperation task for a job to have this shared file available to the tasks that will subsequently run 
@@ -599,20 +609,26 @@ class AzureBatch:
         batchmodels.JobPreparationTask
             the preperation task
         """
-        input_file = batchmodels.ResourceFile(
-            auto_storage_container_name=container,
-            blob_prefix=blob_path,
-            file_path=file_path)
+        if container_is_sas_url:
+            input_file = batchmodels.ResourceFile(
+                http_url=container,
+                file_path=file_path)
+        else:
+            input_file = batchmodels.ResourceFile(
+                auto_storage_container_name=container,
+                blob_prefix=blob_path,
+                file_path=file_path)
 
         cmdline = ''
         if ostype == 'windows':
-            cmdline = f'move {file_path}\\{blob_path} %AZ_BATCH_NODE_SHARED_DIR%'
+            cmdline = f'move {file_path}\\{blob_path}* %AZ_BATCH_NODE_SHARED_DIR%'
         else:
-            cmdline = f'mv {file_path}/{blob_path}' + ' ${AZ_BATCH_NODE_SHARED_DIR}'
+            cmdline = f'mv {file_path}/{blob_path}*' + ' ${AZ_BATCH_NODE_SHARED_DIR}'
 
         prep_task = self.create_prep_task('copy_file_task', [cmdline], resource_files=[
-                                          input_file], ostype=ostype)
+                                        input_file], ostype=ostype)
         return prep_task
+
 
     def create_task(self, task_id: str, command: str, resource_files: list = None, output_files: list = None, env_settings: dict = None,
             elevation_level: str = None, num_instances: int = 1, coordination_cmdline: str = None, coordination_files: list = None):
@@ -1349,6 +1365,8 @@ class AzureBlob:
         str
             sas token with the permissions and expiry
         """
+        if expiry == None:  # if expiry not defined, use timeout
+            expiry = datetime.datetime.utcnow() + timeout
         blob_sas_token = generate_blob_sas(
             self.storage_account_name,
             container_name,
