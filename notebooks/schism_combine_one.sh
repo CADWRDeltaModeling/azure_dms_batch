@@ -10,9 +10,21 @@ blob_path=${2}
 sas_token=${3}
 # set day_index to the fourth argument, or 0 if no argument is given
 day_index=${4}
+# set number of combine files to the fifth argument, or 0 if no argument is given
+num_combine_files=${5:-0}
 
-azcopy cp "${base_url}?${sas_token}" "." --include-pattern "schout*_${day_index}.nc"
-
+# if num_combine_files is 0, then use include pattern to get all files
+if [ $num_combine_files -eq 0 ]; then
+    azcopy cp "${base_url}?${sas_token}" "." --include-pattern "schout*_${day_index}.nc"
+else
+    # loop from 0 to num_combine_files-1
+    for i in $(seq 0 $(($num_combine_files-1))); do
+        # set processor_no to i with 4 digits that are zero padded
+        processor_no=$(printf "%04d" $i)
+        echo "schout_${processor_no}_${day_index}.nc" >> combine_list.txt
+    done
+    azcopy cp "${base_url}?${sas_token}" "." --list-of-files combine_list.txt
+fi
 
 # Try to load environment modules using the module command
 if ! command -v module &> /dev/null; then
