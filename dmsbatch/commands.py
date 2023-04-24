@@ -973,7 +973,10 @@ class AzureBatch:
             app_loc_var = ['${' + 'AZ_BATCH_APP_PACKAGE_{app_name}_{app_version}{brace}/{bin_loc}'.format(
                 app_name=name.replace('.', '_'), app_version=version.replace('.', '_'), brace='}', bin_loc=bin_loc) for name, version, bin_loc in apps]
             env_var_path = ":".join(app_loc_var)
-            cmd = "export PATH={env_var_path}:$PATH".format(env_var_path=env_var_path)
+            if len(env_var_path) > 0:
+                cmd = "export PATH={env_var_path}:$PATH".format(env_var_path=env_var_path)
+            else:
+                cmd= "export PATH=$PATH" # do nothing
         else:
             raise Exception(f'unknown ostype: {ostype}')
         return cmd
