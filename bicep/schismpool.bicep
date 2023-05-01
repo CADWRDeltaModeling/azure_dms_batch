@@ -74,10 +74,16 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2022-10-01' = {
     }
 
     scaleSettings: {
+      /*
       fixedScale: {
         targetDedicatedNodes: targetDedicatedNodes
         targetLowPriorityNodes: 0
         resizeTimeout: 'PT15M'
+      }
+      */
+      autoScale: {
+        formula: replace(loadTextContent('pool_autoscaling.txt'), 'NUMBER_NODES', string(targetDedicatedNodes))
+        evaluationInterval: 'PT5M'
       }
     }
     startTask: {

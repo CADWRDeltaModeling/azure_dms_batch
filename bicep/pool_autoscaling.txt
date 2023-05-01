@@ -1,0 +1,9 @@
+// Get pending tasks for the past 5 minutes. Batch doesn't check quicker than 5 minutes anyways
+$samples = $PendingTasks.GetSamplePercent(TimeInterval_Minute * 5);
+// If you have fewer than 70 percent data points, use the last sample point,
+// otherwise use the maximum of last sample point and the history average.
+$tasks = $samples < 70 ? max(0,$PendingTasks.GetSample(1)) : max( $PendingTasks.GetSample(1), avg($PendingTasks.GetSample(TimeInterval_Minute * 5)));
+// For multi instance tasks, set targetVMs to 3, otherwise 0.
+$TargetDedicatedNodes = $tasks > 0 ? NUMBER_NODES: 0;
+// Set node deallocation mode - let running tasks finish before removing a node
+$NodeDeallocationOption = taskcompletion;

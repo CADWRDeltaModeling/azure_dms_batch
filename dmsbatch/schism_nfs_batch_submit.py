@@ -5,8 +5,8 @@ client = create_batch_client('../tests/data/schismbatch.config')
 blob_client = create_blob_client('../tests/data/schismbatch.config')
 vm_core_map={'standard_hc44rs':44,'standard_hb120rs_v2':120}
 vm_size= 'standard_hb120rs_v2'# 'standard_hc44rs' #
-num_hosts=2 # TEST ONLY: change with num_hosts
-num_cores=num_hosts*(vm_core_map[vm_size]-5) # change with the vm_size, reserve 5 cores per node for other activities
+num_hosts=3 # TEST ONLY: change with num_hosts
+num_cores=num_hosts*(vm_core_map[vm_size]-1) # change with the vm_size, reserve 1 core per node for other activities
 # num_cores=220 # TEST ONLY:  override for test, remove after
 num_scribes=6 #  number of schism scribes, depends upon the schism setup
 # copy setup directories from blob storage to the batch pool
@@ -33,6 +33,7 @@ source /opt/intel/oneapi/setvars.sh intel64; # seems to conflict with the instal
 export PATH=$PATH:/opt/netcdf-c/4.8.1/bin/:/opt/netcdf-fortran/4.5.3/bin/:/opt/hdf5/1.10.8/bin/:/opt/schism/5.10.0/;
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/netcdf-c/4.8.1/lib/:/opt/netcdf-fortran/4.5.3/lib/:/opt/hdf5/1.10.8/lib/:/opt/schism/5.10.0/lib/;
 ulimit -s unlimited;
+# already loaded by oneapi sourcing but cause segfault. Needs recompilation
 module load mpi/impi-2021;
 echo "Copying from blob to local for the setup first time";
 cd simulations;
@@ -49,8 +50,10 @@ echo "Running schism with {num_cores} cores and {num_hosts} hosts";
 export I_MPI_FABRICS=shm:ofi;
 export I_MPI_OFI_PROVIDER=mlx;
 mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes};
+echo Schism Run Done;
 sleep 300;
-echo Done"""
+echo "Killing background copy_modified_loop.sh with pid $pid";
+kill $pid"""
 cmd_string = client.wrap_cmd_with_app_path(cmd_string,[],ostype='linux')
 # coordination task, commands to be run on all nodes
 # sudoers file needs to be modified to allow sudo without password
@@ -59,7 +62,7 @@ echo 'running nfs install script';
 sudo -E $AZ_BATCH_NODE_MOUNTS_DIR/{batch_scripts_dir}/nfs_start.sh;
 echo "linking to nfs /shared/data as simulations and changing directory to simulations";
 ln -s /shared/data $AZ_BATCH_TASK_WORKING_DIR/simulations;
-echo Done"""
+echo Coordination Task Done"""
 print(task_name)
 print(cmd_string)
 print(coordination_cmd)
