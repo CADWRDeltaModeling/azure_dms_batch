@@ -58,6 +58,8 @@ cmd_string = client.wrap_cmd_with_app_path(cmd_string,[],ostype='linux')
 # coordination task, commands to be run on all nodes
 # sudoers file needs to be modified to allow sudo without password
 coordination_cmd = f"""
+echo 'running enable_app_insights.sh';
+sudo -E $AZ_BATCH_NODE_MOUNTS_DIR/{batch_scripts_dir}/enable_app_insights.sh;
 echo 'running nfs install script';
 sudo -E $AZ_BATCH_NODE_MOUNTS_DIR/{batch_scripts_dir}/nfs_start.sh;
 echo "linking to nfs /shared/data as simulations and changing directory to simulations";
