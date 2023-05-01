@@ -57,11 +57,14 @@ mkdir -p /shared/home || echo "home already exists"
 
 chmod 777 /shared/scratch
 
+# NFS mount options
+nfs_mount_options="rw,sync,rsize=65536,wsize=65536"
+
 cat << EOF >> /etc/fstab
-$nfs_server:$nfs_share/home           /shared/home   nfs defaults 0 0
-$nfs_server:/mnt/resource/scratch /shared/scratch      nfs defaults 0 0
-$nfs_server:$nfs_share/apps    /shared/apps   nfs defaults 0 0
-$nfs_server:$nfs_share/data    /shared/data   nfs defaults 0 0
+$nfs_server:$nfs_share/home           /shared/home   nfs $nfs_mount_options 0 0
+$nfs_server:/mnt/resource/scratch /shared/scratch      nfs $nfs_mount_options 0 0
+$nfs_server:$nfs_share/apps    /shared/apps   nfs $nfs_mount_options 0 0
+$nfs_server:$nfs_share/data    /shared/data   nfs $nfs_mount_options 0 0
 EOF
 
 setsebool -P use_nfs_home_dirs 1
