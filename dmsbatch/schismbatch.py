@@ -116,14 +116,14 @@ def submit_schism_job(config_file):
     location = 'eastus'  # hardwired for now
     # hardwired for now
     config_dict['batch_account_url'] = f'https://{config_dict["batch_account_name"]}.{location}.batch.azure.com'
-    if os.environ['BATCH_ACCOUNT_KEY']:
+    if 'BATCH_ACCOUNT_KEY' in os.environ:
         config_dict['batch_account_key'] = os.environ['BATCH_ACCOUNT_KEY']
     else:
-        config_dict['batch_account_key'] = get_batch_account_key(config_dict['resource_group_name'],config_dict['batch_account_name'])
-    if os.environ['STORAGE_ACCOUNT_KEY']:
+        config_dict['batch_account_key'] = get_batch_account_key(config_dict['resource_group'],config_dict['batch_account_name'])
+    if 'STORAGE_ACCOUNT_KEY' in os.environ:
         config_dict['storage_account_key'] = os.environ['STORAGE_ACCOUNT_KEY']
     else:
-        config_dict['storage_account_key'] = get_storage_account_key(config_dict['resource_group_name'],config_dict['storage_account_name'])
+        config_dict['storage_account_key'] = get_storage_account_key(config_dict['resource_group'],config_dict['storage_account_name'])
     if 'application_command_template' not in config_dict:
         config_dict['application_command_template'] = 'application_command_template.sh'
     if 'mpi_command_template' not in config_dict:
