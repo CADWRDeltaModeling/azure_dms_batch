@@ -95,7 +95,6 @@ def create_batch_client(config_file: str):
     # Create a Batch service client. We'll now be interacting with the Batch
     return AzureBatch(config['_BATCH_ACCOUNT_NAME'], config['_BATCH_ACCOUNT_KEY'], config['_BATCH_ACCOUNT_URL'])
 
-
 def create_blob_client(config_file: str):
     """
     Create a blob client

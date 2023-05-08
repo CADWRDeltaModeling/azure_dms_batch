@@ -1,0 +1,39 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "batchAccountName": {
+            "value": "batch_account_name"
+        },
+        "batchStorageName": {
+            "value": "batch_storage_name"
+        },
+        "batchContainerName": {
+            "value": "batch"
+        },
+        "batchContainerName2": {
+            "value": "batch_container_name"
+        },
+        "poolName": {
+            "value": "pool_name"
+        },
+        "vmSize": {
+            "value": "Standard_HB120rs_v2"
+        },
+        "taskSlotsPerNode": {
+            "value": 1
+        },
+        "nodeAgentSKUId": {
+            "value": "batch.node.centos 7"
+        },
+        "startTaskScript": {
+            "value": "printenv && source $AZ_BATCH_NODE_MOUNTS_DIR/batch/schism_pool_nfs_start.sh"
+        },
+        "storageAccountKey": {
+            "value": "storage_account_key"
+        },
+        "formula": {
+            "value": "formula"
+        }
+    }
+}

@@ -1,44 +1,65 @@
-from argparse import ArgumentParser
 import dmsbatch
 from dmsbatch import __version__
 from dmsbatch import commands
+from dmsbatch import schismbatch
 
+import click
+import os
+import sys
 
-def config_generate_cmd(args):
-    if not args.file:
-        print('Specify config file!')
-        return
-    print('Generating blank config: ', args.file)
-    commands.generate_blank_config(args.file)
+CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
-def cli(args=None):
-    p = ArgumentParser(
-        description="Azure Batch for Delta Modeling Section ",
-        conflict_handler='resolve'
-    )
-    p.set_defaults(func=lambda args: p.print_help())
-    p.add_argument(
-        '-v', '--version',
-        action='version',
-        help='Show the conda-prefix-replacement version number and exit.',
-        version="dmsbatch %s" % __version__,
-    )
+@click.group(context_settings=CONTEXT_SETTINGS)
+def main():
+    pass
 
-    # do something with the sub commands
-    sub_p = p.add_subparsers(help='sub-command help')
-    # add show all sensors command
-    p1 = sub_p.add_parser('gen-config', help='generate config')
-    p1.add_argument('-f', '--file', type=str, required=True, help='output file')
-    p1.set_defaults(func=config_generate_cmd)
-    # Now call the appropriate response.
-    args = p.parse_args(args)
-    args.func(args)
-    return
-    # No return value means no error.
-    # Return a value of 1 or higher to signify an error.
-    # See https://docs.python.org/3/library/sys.html#sys.exit
+@click.command()
+@click.option('--file', prompt='generate sample config file', help='config file')
+def config_generate_cmd(file):
+    commands.generate_blank_config(file)
+
+@click.group()
+def schism():
+    pass
+
+@click.command(help='submits schism job using the config file specified. You can generate a sample config file using the generate-config command')
+@click.option('--file', prompt='config file', help='config file describing the job to be submitted. Use the generate-schism-job-config command to generate a sample config file.')
+def submit_schism_job(file):
+    schismbatch.submit_schism_job(file)
+
+@click.command(help='generate schism job yaml file: Use as an example to fill in your own yaml file')
+@click.option('--file', prompt='generate sample config file', help='config file')
+def generate_schism_job_config(file):
+    schismbatch.generate_schism_job_yaml(file)
+
+@click.command(help='set batch and storage account keys')
+@click.option('--resource-group-name', prompt='resource group name', help='resource group name')
+@click.option('--batch-account-name', prompt='batch account name', help='batch account name')
+@click.option('--storage-account-name', prompt='storage account name', help='storage account name')
+def set_keys(resource_group_name, batch_account_name, storage_account_name):
+    batch_account_key = schismbatch.get_batch_account_key(resource_group_name, batch_account_name)
+    storage_account_key = schismbatch.get_storage_account_key(resource_group_name, storage_account_name)
+    if sys.platform == "win32":
+        with open('schism_keys.bat','w') as f:
+            f.write('set BATCH_ACCOUNT_KEY={}\n'.format(batch_account_key))
+            f.write('set STORAGE_ACCOUNT_KEY={}\n'.format(storage_account_key))
+        print('Batch and storage account keys written to schism_keys.bat')
+        print('Run schism_keys.bat to set environment variables before using dmsbatch schism to submit jobs. Delete it when done for security.')
+        print('call schism_keys.bat && del schism_keys.bat')
+    else:
+        with open('schism_keys.sh','w') as f:
+            f.write('export BATCH_ACCOUNT_KEY={}\n'.format(batch_account_key))
+            f.write('export STORAGE_ACCOUNT_KEY={}\n'.format(storage_account_key))
+        print('Batch and storage account keys written to schism_keys.sh')
+        print('Run source schism_keys.sh to set environment variables before using dmsbatch schism to submit jobs. Delete it when done for security.')
+        print('source schism_keys.sh && rm schism_keys.sh')
+
+schism.add_command(submit_schism_job, name='submit-schism-job')
+schism.add_command(generate_schism_job_config, name='generate-config')
+schism.add_command(set_keys, name='set-keys')
+main.add_command(config_generate_cmd, name='config-generate')
+main.add_command(schism, name='schism')
 
 
 if __name__ == '__main__':
-    import sys
-    cli(sys.argv[1:])
+    sys.exit(main())

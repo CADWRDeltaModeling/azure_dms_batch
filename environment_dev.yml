@@ -6,6 +6,7 @@ dependencies:
   - pip
   - python=3.8
   - ipykernel
+  - pyyaml
   - autopep8
   - pip:
     - azure-batch #==11.0.0
