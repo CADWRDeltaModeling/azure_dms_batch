@@ -22,7 +22,9 @@ def get_storage_account_key(resource_group_name, storage_account_name):
 @click.option('--resource-group-name', required=True, help='Name of the resource group')
 @click.option('--storage-account-name', required=True, help='Name of the storage account')
 @click.option('--container-name', required=True, help='Name of the container')
-def mount_blob(resource_group_name, storage_account_name, container_name, mount_point='/mnt/resource/blobs'):
+@click.option('--mount-point', default='/mnt/resource/blobs', help='Mount point for the container')
+@click.option('--read-only', is_flag=True, default=False, help='Mount the container in read-only mode')
+def mount_blob(resource_group_name, storage_account_name, container_name, mount_point='/mnt/resource/blobs', read_only=False):
     '''make sure az cli is logged in to the correct subscription. 
     Use az login --use-device-code to login to the correct subscription.'''
     template = pkg_resources.resource_string(__name__, 'blob_mount_config_template.yml').decode('utf-8')
@@ -30,7 +32,8 @@ def mount_blob(resource_group_name, storage_account_name, container_name, mount_
     template = template.format(storage_account_name=storage_account_name, 
                                storage_account_key=storage_account_key, 
                                container_name=container_name,
-                               mount_point=mount_point)
+                               mount_point=mount_point,
+                               read_only=str(read_only).lower())
     dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     try:
         tmp_config_fname = f'temp_config_template_{dtstr}.yml'

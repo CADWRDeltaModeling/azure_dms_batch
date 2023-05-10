@@ -2,7 +2,7 @@
 
 allow-other: true
 
-read-only: true
+read-only: {read_only}
 
 logging:
   type: syslog
@@ -22,7 +22,7 @@ libfuse:
 file_cache:
   path: {mount_point}tmp/{container_name}
   timeout-sec: 120
-  max-size-mb: 4096
+  max-size-mb: 32768
 
 attr_cache:
   timeout-sec: 7200
