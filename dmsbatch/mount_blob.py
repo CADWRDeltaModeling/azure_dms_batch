@@ -24,16 +24,22 @@ def get_storage_account_key(resource_group_name, storage_account_name):
 @click.option('--container-name', required=True, help='Name of the container')
 @click.option('--mount-point', default='/mnt/resource/blobs', help='Mount point for the container')
 @click.option('--read-only', is_flag=True, default=False, help='Mount the container in read-only mode')
-def mount_blob(resource_group_name, storage_account_name, container_name, mount_point='/mnt/resource/blobs', read_only=False):
+@click.option('--cache-size-mb', default=1024, help='Size of the cache (mounted at {mount-point}/.tmp{container-name}) in MB')
+def mount_blob(resource_group_name, storage_account_name, container_name, 
+                mount_point='/mnt/resource/blobs', read_only=False, cache_size_mb=1024):
     '''make sure az cli is logged in to the correct subscription. 
     Use az login --use-device-code to login to the correct subscription.'''
+    if 'STORAGE_ACCOUNT_KEY' in os.environ: # get key from environment variable
+        storage_account_key = os.environ['STORAGE_ACCOUNT_KEY']
+    else:
+        storage_account_key = get_storage_account_key(resource_group_name, storage_account_name)
     template = pkg_resources.resource_string(__name__, 'blob_mount_config_template.yml').decode('utf-8')
-    storage_account_key = get_storage_account_key(resource_group_name, storage_account_name)
-    template = template.format(storage_account_name=storage_account_name, 
-                               storage_account_key=storage_account_key, 
+    template = template.format(storage_account_name=storage_account_name,
+                               storage_account_key=storage_account_key,
                                container_name=container_name,
                                mount_point=mount_point,
-                               read_only=str(read_only).lower())
+                               read_only=str(read_only).lower(),
+                               cache_size_mb=cache_size_mb)
     dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     try:
         tmp_config_fname = f'temp_config_template_{dtstr}.yml'

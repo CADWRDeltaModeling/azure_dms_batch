@@ -20,9 +20,9 @@ libfuse:
   negative-entry-expiration-sec: 240
 
 file_cache:
-  path: {mount_point}tmp/{container_name}
+  path: {mount_point}/.tmp{container_name}
   timeout-sec: 120
-  max-size-mb: 32768
+  max-size-mb: {cache_size_mb}
 
 attr_cache:
   timeout-sec: 7200
