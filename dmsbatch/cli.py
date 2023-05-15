@@ -2,6 +2,7 @@ import dmsbatch
 from dmsbatch import __version__
 from dmsbatch import commands
 from dmsbatch import schismbatch
+from dmsbatch import mount_blob
 
 import click
 import os
@@ -66,8 +67,11 @@ schism.add_command(generate_schism_job_config, name='generate-config')
 schism.add_command(set_keys, name='set-keys')
 schism.add_command(upload_batch_scripts, name='upload-batch-scripts')
 
+
 main.add_command(config_generate_cmd, name='config-generate')
 main.add_command(schism, name='schism')
+main.add_command(mount_blob.mount_blob, name='mount-blob')
+main.add_command(mount_blob.unmount_all_blobs)
 
 
 if __name__ == '__main__':
