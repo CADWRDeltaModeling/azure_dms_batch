@@ -40,7 +40,13 @@ fi
 
 src_dir="$1"
 dest_dir="$2"
-
+storage_account="$3"
+container="$4"
+# SAS needs to be defined in the environment of calling script
+if [[ -z "${SAS}" ]]; then
+  echo "SAS needs to be defined in the environment of calling script"
+  exit 1
+fi
 # copy from src_dir to dest_dir excluding the output directory
 echo "Starting copy loop from ${src_dir} to ${dest_dir}"
 modified_minutes=${max_modified_minutes}
@@ -51,7 +57,16 @@ do
     # copying files modified no more than ${modified_minutes} minutes ago
     echo "Copying files modified upto ${modified_minutes} minutes ago"
     # find files modified in the last modified_minutes minutes and copy them to dest_dir
-    find "${src_dir}" -type f -mmin "-${modified_minutes}" -exec cp -v --parents {} "${dest_dir}" \;
+    # OPTION1: cp with blobfuse mounted dir (slower due to writeback cache)
+    # find "${src_dir}" -type f -mmin "-${modified_minutes}" -exec cp -v --parents {} "${dest_dir}" \;
+    # OPTION2: azcopy (faster, but need to install azcopy and set up SAS). Also sync scans destination and source so is slower
+    # use azcopy sync (not sure how preformance compares to cp))
+    # azcopy sync "${src_dir}" "https://${storage_account}.blob.core.windows.net/${container}/${dest_dir}?${SAS}"
+    # OPTION3: azcopy as exec from find but each file is copied separately (slower)
+    # find "${src_dir}" -type f -mmin "-${modified_minutes}" -exec azcopy cp {} "https://${storage_account}.blob.core.windows.net/${container}/${dest_dir}?${SAS}" \;
+    # OPTION 4: find files modified in the last modified_minutes minutes and then azcopy with list-of-files filter for faster copying times
+    find . -type f -mmin "-${modified_minutes}" -print > /tmp/azcopy_filelist.txt
+    azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${study_dir}?${SAS}" --list-of-files /tmp/azcopy_filelist.txt
     # find output directory under src directory and delete *.nc files older than ${delete_modified_minutes} minutes from it
     echo "Deleting files from ${src_dir} older than ${delete_modified_minutes} minutes"
     find "${src_dir}" -type d -name "outputs" -exec find {} -type f -mmin +${delete_modified_minutes} -name "*.nc" -delete \;

@@ -173,3 +173,14 @@ def get_storage_account_key(resource_group_name, storage_account_name):
     cmd = f'az storage account keys list --account-name {storage_account_name} --resource-group {resource_group_name}'
     key_dict = json.loads(subprocess.check_output(cmd, shell=True).decode('utf-8').strip())
     return key_dict[0]['value']
+
+def get_sas(storage_account_name, storage_account_key, container_name, blob_name, permission='r', expires_in_days=7):
+    '''make sure az cli is logged in to the correct subscription. 
+    Use az login --use-device-code to login to the correct subscription.'''
+    # export SAS=$(az storage container generate-sas --permissions acdlrw --expiry `date +%FT%TZ -u -d "+1 days"` --account-name ${storage_account} --name ${container} --output tsv --auth-mode key --account-key ${ACCOUNT_KEY} --only-show-errors)
+    dt = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0))
+    # add expires_in_days
+    expiry = (dt + datetime.timedelta(days=expires_in_days)).isoFormat()
+    cmd = f'az storage blob generate-sas --account-name {storage_account_name} --account-key {storage_account_key} --container-name {container_name} --name {blob_name} --permissions {permission} --expiry {expiry}'
+    sas_dict = json.loads(subprocess.check_output(cmd, shell=True).decode('utf-8').strip())
+    return sas_dict['sas']

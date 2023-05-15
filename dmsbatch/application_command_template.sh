@@ -20,12 +20,13 @@ for dir in "${{setup_dirs[@]}}"; do
     mkdir -p $(dirname $dir);
     rsync -av --exclude="outputs/" --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/$dir $(dirname $dir);
 done
+# change to study directory
+cd {study_dir};
 # start background copy script
-bash $AZ_BATCH_NODE_MOUNTS_DIR/batch/copy_modified_loop.sh {study_dir} $AZ_BATCH_NODE_MOUNTS_DIR& 
+SAS = "{sas}" bash $AZ_BATCH_NODE_MOUNTS_DIR/batch/copy_modified_loop.sh {study_dir} $AZ_BATCH_NODE_MOUNTS_DIR "{storage_account_name}" "{storage_container_name}"& 
 pid=$!;
 echo "Running background copy_modified_loop.sh with pid $pid";
-#
-cd {study_dir};
+# run schism
 echo "Running schism with {num_cores} cores and {num_hosts} hosts";
 export I_MPI_FABRICS=shm:ofi;
 export I_MPI_OFI_PROVIDER=mlx;
