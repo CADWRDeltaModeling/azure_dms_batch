@@ -20,7 +20,7 @@ setup(
     packages=['dmsbatch'],
     entry_points={
         'console_scripts': [
-            'dmsbatch=dmsbatch.cli:cli'
+            'dmsbatch=dmsbatch.cli:main'
         ]
     },
     install_requires=requirements,

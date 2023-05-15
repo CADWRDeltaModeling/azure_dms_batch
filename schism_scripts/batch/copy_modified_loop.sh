@@ -65,11 +65,13 @@ do
     # OPTION3: azcopy as exec from find but each file is copied separately (slower)
     # find "${src_dir}" -type f -mmin "-${modified_minutes}" -exec azcopy cp {} "https://${storage_account}.blob.core.windows.net/${container}/${dest_dir}?${SAS}" \;
     # OPTION 4: find files modified in the last modified_minutes minutes and then azcopy with list-of-files filter for faster copying times
+    # MAJOR ASSUMPTION: current directory is the study directory
+    # FIXME: $dest_dir is not used in the azcopy command as $src_dir is enough information to construct the destination path
     find . -type f -mmin "-${modified_minutes}" -print > /tmp/azcopy_filelist.txt
-    azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${study_dir}?${SAS}" --list-of-files /tmp/azcopy_filelist.txt
+    azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --list-of-files /tmp/azcopy_filelist.txt
     # find output directory under src directory and delete *.nc files older than ${delete_modified_minutes} minutes from it
     echo "Deleting files from ${src_dir} older than ${delete_modified_minutes} minutes"
-    find "${src_dir}" -type d -name "outputs" -exec find {} -type f -mmin +${delete_modified_minutes} -name "*.nc" -delete \;
+    find . -type d -name "outputs" -exec find {} -type f -mmin +${delete_modified_minutes} -name "*.nc" -delete \;
     sleep $wait_seconds # giving a breathing room of 60 seconds for overlap in case it's delayed.
     end_time=$(date +%s)
     diff=$((end_time - start_time))

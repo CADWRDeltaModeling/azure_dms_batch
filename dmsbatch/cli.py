@@ -54,9 +54,18 @@ def set_keys(resource_group_name, batch_account_name, storage_account_name):
         print('Run source schism_keys.sh to set environment variables before using dmsbatch schism to submit jobs. Delete it when done for security.')
         print('source schism_keys.sh && rm schism_keys.sh')
 
+@click.command(help='upload batch scripts to storage account')
+@click.option('--resource-group-name', prompt='resource group name', help='resource group name')
+@click.option('--storage-account-name', prompt='storage account name', help='storage account name')
+def upload_batch_scripts(resource_group_name, storage_account_name):
+    schismbatch.upload_batch_scripts(resource_group_name, storage_account_name)
+
+
 schism.add_command(submit_schism_job, name='submit-schism-job')
 schism.add_command(generate_schism_job_config, name='generate-config')
 schism.add_command(set_keys, name='set-keys')
+schism.add_command(upload_batch_scripts, name='upload-batch-scripts')
+
 main.add_command(config_generate_cmd, name='config-generate')
 main.add_command(schism, name='schism')
 

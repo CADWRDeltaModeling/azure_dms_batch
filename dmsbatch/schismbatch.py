@@ -49,14 +49,14 @@ def create_schism_pool(resource_group_name, pool_name, num_hosts,
                         formula = build_autoscaling_formula(num_hosts, datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)))
         # Run the command and capture its output
         cmdstr = f"az deployment group create --name {pool_name} --resource-group {resource_group_name} --template-file {bicep_file} --parameters {modified_parameters_file}"
-        cmdlist = cmdstr.split()
-        result = subprocess.run(cmdlist, stdout=subprocess.PIPE, text=True, shell=True)
-        # Print the output
-        # print(result.stdout)
+        result = subprocess.check_output(cmdstr, shell=True).decode('utf-8').strip()
+        # Print the output -- for debug ---
+        #print(result)
         return pool_name
     finally:
         # delete the modified parameters file
         os.remove(modified_parameters_file)
+        #print('removed the modified parameters file') # for debug 
 
 
 def estimate_cores_available(vm_size, num_hosts):
@@ -65,6 +65,7 @@ def estimate_cores_available(vm_size, num_hosts):
 
 
 def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, study_dir, setup_dirs,
+                       storage_account_name, storage_container_name, sas,
                        application_command_template='application_command_template.sh',
                        mpi_command_template='mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}',
                        coordination_command_template='coordination_command_template.sh'):
@@ -82,13 +83,18 @@ def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, stu
     task_name = f'schism_{dtstr}'
     app_cmd = load_command_from_resourcepath(fname=application_command_template)
     app_cmd = app_cmd.format(num_cores=num_cores, num_scribes=num_scribes,
-                                num_hosts=num_hosts,
+                                num_hosts=num_hosts, 
+                                storage_account_name = storage_account_name,
+                                storage_container_name = storage_container_name,
+                                sas = sas,
                                 study_dir=study_dir, setup_dirs=' '.join(setup_dirs),
                                 mpi_command=mpi_command_template.format(num_cores=num_cores, num_hosts=num_hosts, num_scribes=num_scribes))
     app_cmd = client.wrap_cmd_with_app_path(app_cmd, [], ostype='linux')
     coordination_cmd = load_command_from_resourcepath(fname=coordination_command_template)
     coordination_cmd = coordination_cmd.format(num_cores=num_cores, num_scribes=num_scribes,
-                                            num_hosts=num_hosts, study_dir=study_dir, setup_dirs=' '.join(setup_dirs))
+                                            num_hosts=num_hosts, 
+                                            storage_container_name = storage_container_name, 
+                                            study_dir=study_dir, setup_dirs=' '.join(setup_dirs))
     coordination_cmd = client.wrap_cmd_with_app_path(coordination_cmd, [], ostype='linux')
     #
     schism_task = client.create_task(task_name, app_cmd,
@@ -148,8 +154,10 @@ def submit_schism_job(config_file):
                                    config_dict['storage_account_name'], config_dict['storage_container_name'],
                                    pool_bicep_resource=config_dict['pool_bicep_resource_file'],
                                    pool_parameters_resource=config_dict['pool_parameters_file'])
+    sas = get_sas(config_dict['storage_account_name'], config_dict['storage_account_key'], config_dict['storage_container_name'])
     submit_schism_task(client, pool_name, config_dict['num_hosts'], config_dict['num_cores'],
                        config_dict['num_scribes'], config_dict['study_dir'], config_dict['setup_dirs'],
+                       config_dict['storage_account_name'], config_dict['storage_container_name'], sas,
                        config_dict['application_command_template'], config_dict['mpi_command_template'], config_dict['coordination_command_template'])
 
 
@@ -174,13 +182,24 @@ def get_storage_account_key(resource_group_name, storage_account_name):
     key_dict = json.loads(subprocess.check_output(cmd, shell=True).decode('utf-8').strip())
     return key_dict[0]['value']
 
-def get_sas(storage_account_name, storage_account_key, container_name, blob_name, permission='r', expires_in_days=7):
+def get_sas(storage_account_name, storage_account_key, container_name, permissions='acdlrw', expires_in_days=7):
     '''make sure az cli is logged in to the correct subscription. 
     Use az login --use-device-code to login to the correct subscription.'''
     # export SAS=$(az storage container generate-sas --permissions acdlrw --expiry `date +%FT%TZ -u -d "+1 days"` --account-name ${storage_account} --name ${container} --output tsv --auth-mode key --account-key ${ACCOUNT_KEY} --only-show-errors)
-    dt = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0))
+    dt = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
     # add expires_in_days
-    expiry = (dt + datetime.timedelta(days=expires_in_days)).isoFormat()
-    cmd = f'az storage blob generate-sas --account-name {storage_account_name} --account-key {storage_account_key} --container-name {container_name} --name {blob_name} --permissions {permission} --expiry {expiry}'
-    sas_dict = json.loads(subprocess.check_output(cmd, shell=True).decode('utf-8').strip())
-    return sas_dict['sas']
+    expiry = (dt + datetime.timedelta(days=expires_in_days)).strftime('%Y-%m-%dT%H:%MZ')
+    cmd = f'az storage container generate-sas --account-name {storage_account_name} --auth-mode key --account-key {storage_account_key} --name {container_name} --permissions {permissions} --expiry {expiry} --only-show-errors'
+    return json.loads(subprocess.check_output(cmd, shell=True).decode('utf-8').strip())
+
+def upload_batch_scripts(resource_group_name, storage_account_name, batch_container_name='batch'):
+    if 'STORAGE_ACCOUNT_KEY' in os.environ:
+        storage_account_key = os.environ['STORAGE_ACCOUNT_KEY']
+    else:
+        storage_account_key = get_storage_account_key(resource_group_name, storage_account_name)
+    sas = get_sas(storage_account_name, storage_account_key, batch_container_name)
+    batch_dir = pkg_resources.resource_filename('dmsbatch', '../schism_scripts/batch')
+    # upload batch scripts
+    cmd = f'cd {batch_dir} && azcopy cp "./*"  "https://{storage_account_name}.blob.core.windows.net/{batch_container_name}?{sas}" --recursive=true'
+    subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+    return
