@@ -21,3 +21,5 @@ mpi_command_template: "mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_
 #pool_bicep_resource: 'pool.bicep' # pkg_resources.resource_filename('dmsbatch', 'pool.bicep')
 # pool parameters file, which is used to create the pool
 #pool_parameters_resource: 'pool.parameters.json' # pkg_resources.resource_filename('dmsbatch', 'pool.parameters.json')
+#app_insights_instrumentation_key: '' # this is the instrumentation key for the app insights instance
+#app_insights_app_id: '' # this is the app id for the app insights instance

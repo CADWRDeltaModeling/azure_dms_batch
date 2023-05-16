@@ -31,6 +31,7 @@ def build_autoscaling_formula(num_hosts, startTime):
 
 def create_schism_pool(resource_group_name, pool_name, num_hosts,
                        batch_account_name, storage_account_key, storage_name, container_name,
+                       app_insights_app_id, app_insights_instrumentation_key,
                        pool_bicep_resource='schismpool.bicep', pool_parameters_resource='schismpool.parameters.json'):
     ''' create a schism pool with the given number of hosts.  The pool name is
     assumed to include the date and time after the last _ in the name.'''
@@ -46,6 +47,7 @@ def create_schism_pool(resource_group_name, pool_name, num_hosts,
                         poolName=pool_name, 
                         batchAccountName=batch_account_name, storageAccountKey=storage_account_key, 
                         batchStorageName=storage_name, batchContainerName2=container_name,
+                        appInsightsAppId=app_insights_app_id, appInsightsInstrumentationKey=app_insights_instrumentation_key,
                         formula = build_autoscaling_formula(num_hosts, datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)))
         # Run the command and capture its output
         cmdstr = f"az deployment group create --name {pool_name} --resource-group {resource_group_name} --template-file {bicep_file} --parameters {modified_parameters_file}"
@@ -152,6 +154,7 @@ def submit_schism_job(config_file):
     pool_name = create_schism_pool(config_dict['resource_group'], pool_name, config_dict['num_hosts'],
                                    config_dict['batch_account_name'], config_dict['storage_account_key'], 
                                    config_dict['storage_account_name'], config_dict['storage_container_name'],
+                                   config_dict['app_insights_app_id'], config_dict['app_insights_instrumentation_key'], 
                                    pool_bicep_resource=config_dict['pool_bicep_resource_file'],
                                    pool_parameters_resource=config_dict['pool_parameters_file'])
     sas = get_sas(config_dict['storage_account_name'], config_dict['storage_account_key'], config_dict['storage_container_name'])
