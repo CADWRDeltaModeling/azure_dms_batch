@@ -6,6 +6,7 @@ dependencies:
   - pip
   - python=3.8
   - ipykernel
+  - click
   - pyyaml
   - autopep8
   - pip:
@@ -16,8 +17,6 @@ dependencies:
     - msrest #>=0.6.21
   # dev stuff
   - pytest-runner
-  - autopep8
-  - click
   - nbsphinx
   - sphinx-autobuild
   - pandoc
