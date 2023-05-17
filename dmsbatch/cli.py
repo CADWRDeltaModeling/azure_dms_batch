@@ -62,7 +62,7 @@ def upload_batch_scripts(resource_group_name, storage_account_name):
     schismbatch.upload_batch_scripts(resource_group_name, storage_account_name)
 
 
-schism.add_command(submit_schism_job, name='submit-schism-job')
+schism.add_command(submit_schism_job, name='submit-job')
 schism.add_command(generate_schism_job_config, name='generate-config')
 schism.add_command(set_keys, name='set-keys')
 schism.add_command(upload_batch_scripts, name='upload-batch-scripts')
