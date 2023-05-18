@@ -128,7 +128,7 @@ def create_batch_client(name, key, url):
     return AzureBatch(name, key, url)
 
 
-def submit_schism_job(config_file):
+def submit_schism_job(config_file, pool_name=None):
     config_dict = parse_yaml_file(config_file)
     config_dict['pool_name'] = config_dict['job_name']  # hardwired for now
     config_dict['vm_size'] = 'standard_hb120rs_v2'  # hardwired for now
@@ -160,14 +160,15 @@ def submit_schism_job(config_file):
     client = create_batch_client(
         config_dict['batch_account_name'], config_dict['batch_account_key'], config_dict['batch_account_url'])
     dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    pool_name = config_dict['pool_name'] + f'_{dtstr}'
-    # create pool 
-    pool_name = create_schism_pool(config_dict['resource_group'], pool_name, config_dict['num_hosts'],
-                                   config_dict['batch_account_name'], config_dict['storage_account_key'], 
-                                   config_dict['storage_account_name'], config_dict['storage_container_name'],
-                                   config_dict['app_insights_app_id'], config_dict['app_insights_instrumentation_key'], 
-                                   pool_bicep_resource=config_dict['pool_bicep_resource_file'],
-                                   pool_parameters_resource=config_dict['pool_parameters_file'])
+    if pool_name is None:
+        pool_name = config_dict['pool_name'] + f'_{dtstr}'
+        # create pool 
+        pool_name = create_schism_pool(config_dict['resource_group'], pool_name, config_dict['num_hosts'],
+                                    config_dict['batch_account_name'], config_dict['storage_account_key'], 
+                                    config_dict['storage_account_name'], config_dict['storage_container_name'],
+                                    config_dict['app_insights_app_id'], config_dict['app_insights_instrumentation_key'], 
+                                    pool_bicep_resource=config_dict['pool_bicep_resource_file'],
+                                    pool_parameters_resource=config_dict['pool_parameters_file'])
     sas = get_sas(config_dict['storage_account_name'], config_dict['storage_account_key'], config_dict['storage_container_name'])
     submit_schism_task(client, pool_name, config_dict['num_hosts'], config_dict['num_cores'],
                        config_dict['num_scribes'], config_dict['study_dir'], config_dict['setup_dirs'],
