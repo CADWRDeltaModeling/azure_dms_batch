@@ -527,7 +527,10 @@ class AzureBatch:
                 blob_prefix=blob_prefix,
                 file_path=file_path)
 
-    def create_output_file_spec(self, file_pattern: str, output_container_sas_url: str, blob_path: str = '.') -> batchmodels.OutputFile:
+    def create_output_file_spec(self, file_pattern: str, 
+        output_container_sas_url: str, 
+        blob_path: str = '.', 
+        upload_condition=batchmodels.OutputFileUploadCondition.task_completion) -> batchmodels.OutputFile:
         """
         create an output file spec that is information for uploading the output of the task matching the file_pattern to be 
         uploaded to the container as defined by the output_container_sas_url and the blob_path
@@ -552,7 +555,7 @@ class AzureBatch:
                 container=batchmodels.OutputFileBlobContainerDestination(
                     container_url=output_container_sas_url, path=blob_path)),
             upload_options=batchmodels.OutputFileUploadOptions(
-                upload_condition=batchmodels.OutputFileUploadCondition.task_success)
+                upload_condition=upload_condition)
         )
 
     def create_prep_task(self, task_name: str, commands: str,

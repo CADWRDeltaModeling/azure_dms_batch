@@ -6,6 +6,7 @@ import datetime
 import pkg_resources
 import json
 
+import azure.batch.models as batchmodels
 from azure.batch.models import BatchErrorException
 from dmsbatch.commands import AzureBatch
 
@@ -67,7 +68,7 @@ def estimate_cores_available(vm_size, num_hosts):
 
 
 def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, study_dir, setup_dirs,
-                       storage_account_name, storage_container_name, sas,
+                       storage_account_name, storage_container_name, sas, storage_account_key,
                        application_command_template='application_command_template.sh',
                        mpi_command_template='mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}',
                        coordination_command_template='coordination_command_template.sh'):
@@ -98,10 +99,20 @@ def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, stu
                                             storage_container_name = storage_container_name, 
                                             study_dir=study_dir, setup_dirs=' '.join(setup_dirs))
     coordination_cmd = client.wrap_cmd_with_app_path(coordination_cmd, [], ostype='linux')
+    # output files should be saved to batch container
+    sas_batch = get_sas(storage_account_name, storage_account_key, 'batch')
+    output_file_specs = []
+    for upload_condition in [batchmodels.OutputFileUploadCondition.task_completion, batchmodels.OutputFileUploadCondition.task_failure]:
+        spec = client.create_output_file_spec('../std*', 
+                            "https://{}.blob.core.windows.net/{}?{}".format(storage_account_name, 'batch', sas_batch), 
+                            f'jobs/{task_name}',
+                            upload_condition=upload_condition)
+        output_file_specs.append(spec)
     #
     schism_task = client.create_task(task_name, app_cmd,
                                     num_instances=num_hosts,
-                                    coordination_cmdline=coordination_cmd)
+                                    coordination_cmdline=coordination_cmd,
+                                    output_files=output_file_specs)
     client.submit_tasks(job_name, [schism_task])
     print(f'Submitted task {job_name} to pool {pool_name}.')
 
@@ -160,7 +171,7 @@ def submit_schism_job(config_file):
     sas = get_sas(config_dict['storage_account_name'], config_dict['storage_account_key'], config_dict['storage_container_name'])
     submit_schism_task(client, pool_name, config_dict['num_hosts'], config_dict['num_cores'],
                        config_dict['num_scribes'], config_dict['study_dir'], config_dict['setup_dirs'],
-                       config_dict['storage_account_name'], config_dict['storage_container_name'], sas,
+                       config_dict['storage_account_name'], config_dict['storage_container_name'], sas, config_dict['storage_account_key'],
                        config_dict['application_command_template'], config_dict['mpi_command_template'], config_dict['coordination_command_template'])
 
 
