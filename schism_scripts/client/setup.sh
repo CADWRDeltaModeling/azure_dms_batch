@@ -1,3 +1,5 @@
+#!/bin/bash
+# source this file to get these function shortcuts
 function install_dos2unix {
     sudo apt-get update
     sudo apt-get install dos2unix
@@ -11,9 +13,8 @@ function install_git {
 function install_miniconda3 {
     wget https://repo.anaconda.com/miniconda/Miniconda3-py37_4.10.3-Linux-x86_64.sh
     chmod +x ./Miniconda3-py37_4.10.3-Linux-x86_64.sh 
-    sudo ./Miniconda3-py37_4.10.3-Linux-x86_64.sh -b
-    source ~/.bashrc
-    conda install mamba -n base -c conda-forge
+    sudo ./Miniconda3-py37_4.10.3-Linux-x86_64.sh -b -p /usr/local/miniconda3
+    rm ./Miniconda3-py37_4.10.3-Linux-x86_64.sh
 }
 
 function install_dmsbatch {
@@ -26,10 +27,11 @@ function install_dmsbatch {
 }
 
 function install_azcopy {
-    cd /usr/local/bin
+    pushd /usr/local/bin
     wget -q https://aka.ms/downloadazcopy-v10-linux -O - | sudo tar zxf - --strip-components 1 --wildcards '*/azcopy'
     sudo chmod 755 /usr/local/bin/azcopy 
     azcopy --version
+    popd
 }
 
 function install_az {
