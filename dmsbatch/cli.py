@@ -25,7 +25,8 @@ def schism():
 
 @click.command(help='submits schism job using the config file specified. You can generate a sample config file using the generate-config command')
 @click.option('--file', prompt='config file', help='config file describing the job to be submitted. Use the generate-schism-job-config command to generate a sample config file.')
-@click.option('--pool-name', prompt='pool name', help='The pool name if specified means the pool already exists and so would not be created but used', required=False)
+#optional pool name, no prompt needed
+@click.option('--pool-name', help='The pool name if specified means the pool already exists and so would not be created but used', required=False)
 def submit_schism_job(file, pool_name=None):
     schismbatch.submit_schism_job(file, pool_name)
 
