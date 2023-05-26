@@ -1,6 +1,8 @@
 #!/bin/bash
 # set -e
 # arg: $1 = nfsserver
+source $AZ_BATCH_NODE_MOUNTS_DIR/batch/azhpc-library.sh
+
 master_node=$AZ_BATCH_MASTER_NODE
 ip_address=$(echo $master_node | cut -d: -f1)
 echo "Master node IP address: $ip_address"
@@ -26,15 +28,19 @@ if [[ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]]; then
     source $AZ_BATCH_NODE_MOUNTS_DIR/batch/nfs_common.sh
     systemctl enable rpcbind
     systemctl enable nfs-server
-    systemctl enable nfs-lock
-    systemctl enable nfs-idmap
-    systemctl enable nfs
+    if is_centos7; then
+        systemctl enable nfs-lock
+        systemctl enable nfs-idmap
+        systemctl enable nfs
+    fi
 
     systemctl start rpcbind
     systemctl start nfs-server
-    systemctl start nfs-lock
-    systemctl start nfs-idmap
-    systemctl start nfs
+    if is_centos7; then
+        systemctl start nfs-lock
+        systemctl start nfs-idmap
+        systemctl start nfs
+    fi
 
     setup_disks
     tune_nfs

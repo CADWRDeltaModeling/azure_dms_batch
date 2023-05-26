@@ -34,7 +34,6 @@ export I_MPI_OFI_PROVIDER=mlx;
 echo Schism Run Done;
 sleep 300;
 echo "Killing background copy_modified_loop.sh with pid $pid";
-# kill sending output and error to /dev/null
-kill $pid > /dev/null 2>&1;
+kill $pid;
 # no semicolon for last command
 echo "Done with everything. Shutting down"

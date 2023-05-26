@@ -6,6 +6,14 @@ NFS_DATA=$NFS_MOUNT_POINT/data
 NFS_HOME=$NFS_MOUNT_POINT/home
 NFS_SCRATCH=/mnt/resource/scratch
 
+read_os()
+{
+    os_release=$(cat /etc/os-release | grep "^ID\=" | cut -d'=' -f 2 | sed -e 's/^"//' -e 's/"$//')
+    os_maj_ver=$(cat /etc/os-release | grep "^VERSION_ID\=" | cut -d'=' -f 2 | sed -e 's/^"//' -e 's/"$//')
+    full_version=$(cat /etc/$os_release-release | cut -d' ' -f4)
+}
+
+
 # Partitions all data disks attached to the VM
 #
 setup_data_disks()

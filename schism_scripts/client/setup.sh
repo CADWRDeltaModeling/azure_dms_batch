@@ -14,6 +14,7 @@ function install_miniconda3 {
     wget https://repo.anaconda.com/miniconda/Miniconda3-py37_4.10.3-Linux-x86_64.sh
     chmod +x ./Miniconda3-py37_4.10.3-Linux-x86_64.sh 
     sudo ./Miniconda3-py37_4.10.3-Linux-x86_64.sh -b -p /usr/local/miniconda3
+    /usr/local/miniconda3/bin/conda init
     rm ./Miniconda3-py37_4.10.3-Linux-x86_64.sh
 }
 
@@ -42,7 +43,7 @@ function install_az {
 
 function install_blobfuse2 {
     sudo wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
-    sudo dpkg -i packages-microsoft-prod.deb
+    sudo dpkg -i packages-microsoft-prod.deb && rm packages-microsoft-prod.deb
     sudo apt-get update
     sudo apt-get install blobfuse2
 }

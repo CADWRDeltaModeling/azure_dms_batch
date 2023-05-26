@@ -9,7 +9,14 @@ import json
 import azure.batch.models as batchmodels
 from azure.batch.models import BatchErrorException
 from dmsbatch.commands import AzureBatch
-
+# set up logging
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+# configure logger to print to stdout
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+logger.addHandler(ch)
 
 def load_command_from_resourcepath(fname):
     return pkg_resources.resource_string(__name__, fname).decode('utf-8')
@@ -52,14 +59,20 @@ def create_schism_pool(resource_group_name, pool_name, num_hosts,
                         formula = build_autoscaling_formula(num_hosts, datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)))
         # Run the command and capture its output
         cmdstr = f"az deployment group create --name {pool_name} --resource-group {resource_group_name} --template-file {bicep_file} --parameters {modified_parameters_file}"
+        logger.debug(cmdstr)
         result = subprocess.check_output(cmdstr, shell=True).decode('utf-8').strip()
         # Print the output -- for debug ---
-        #print(result)
+        logger.debug(result)
+        logger.info('created pool {}'.format(pool_name))
         return pool_name
+    except Exception as e:
+        logger.error('Error creating pool {}'.format(pool_name))
+        logger.error(e.output)
+        raise e
     finally:
         # delete the modified parameters file
         os.remove(modified_parameters_file)
-        #print('removed the modified parameters file') # for debug 
+        logger.debug('removed the modified parameters file') # for debug 
 
 
 def estimate_cores_available(vm_size, num_hosts):
@@ -93,12 +106,14 @@ def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, stu
                                 study_dir=study_dir, setup_dirs=' '.join(setup_dirs),
                                 mpi_command=mpi_command_template.format(num_cores=num_cores, num_hosts=num_hosts, num_scribes=num_scribes))
     app_cmd = client.wrap_cmd_with_app_path(app_cmd, [], ostype='linux')
+    logger.debug('Application command: {}'.format(app_cmd))
     coordination_cmd = load_command_from_resourcepath(fname=coordination_command_template)
     coordination_cmd = coordination_cmd.format(num_cores=num_cores, num_scribes=num_scribes,
                                             num_hosts=num_hosts, 
                                             storage_container_name = storage_container_name, 
                                             study_dir=study_dir, setup_dirs=' '.join(setup_dirs))
     coordination_cmd = client.wrap_cmd_with_app_path(coordination_cmd, [], ostype='linux')
+    logger.debug('Coordination command: {}'.format(coordination_cmd))
     # output files should be saved to batch container
     sas_batch = get_sas(storage_account_name, storage_account_key, 'batch')
     output_file_specs = []
@@ -114,7 +129,7 @@ def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, stu
                                     coordination_cmdline=coordination_cmd,
                                     output_files=output_file_specs)
     client.submit_tasks(job_name, [schism_task])
-    print(f'Submitted task {job_name} to pool {pool_name}.')
+    logger.info(f'Submitted task {job_name} to pool {pool_name}.')
 
 
 def parse_yaml_file(config_file):
@@ -143,19 +158,27 @@ def submit_schism_job(config_file, pool_name=None):
         config_dict['storage_account_key'] = os.environ['STORAGE_ACCOUNT_KEY']
     else:
         config_dict['storage_account_key'] = get_storage_account_key(config_dict['resource_group'],config_dict['storage_account_name'])
+    if 'template_name' not in config_dict:
+        config_dict['template_name'] = 'centos7' # default
     if 'application_command_template' not in config_dict:
-        config_dict['application_command_template'] = 'application_command_template.sh'
+        config_dict['application_command_template'] = f'templates/{config_dict["template_name"]}/application_command_template.sh'
     if 'mpi_command_template' not in config_dict:
         config_dict['mpi_command_template'] = 'mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}'
     if 'coordination_command_template' not in config_dict:
-        config_dict['coordination_command_template'] = 'coordination_command_template.sh'
+        config_dict['coordination_command_template'] = f'templates/{config_dict["template_name"]}/coordination_command_template.sh'
     if 'num_cores' not in config_dict:
         config_dict['num_cores'] = estimate_cores_available(
             config_dict['vm_size'], config_dict['num_hosts'])
-    if 'pool_bicep_resource_file' not in config_dict:
-        config_dict['pool_bicep_resource_file'] = 'schismpool.bicep'
-    if 'pool_parameters_file' not in config_dict:
-        config_dict['pool_parameters_file'] = 'schismpool.parameters.json'
+    if 'pool_bicep_resource' not in config_dict:
+        config_dict['pool_bicep_resource'] = f'templates/{config_dict["template_name"]}/pool.bicep'
+    if 'pool_parameters_resource' not in config_dict:
+        config_dict['pool_parameters_resource'] = f'templates/{config_dict["template_name"]}/pool.parameters.json'
+    if 'app_insights_app_id' not in config_dict:
+        config_dict['app_insights_app_id'] = ''
+    if 'app_insights_instrumentation_key' not in config_dict:
+        config_dict['app_insights_instrumentation_key'] = ''
+    # log the config dict
+    logging.info(config_dict)
     #
     client = create_batch_client(
         config_dict['batch_account_name'], config_dict['batch_account_key'], config_dict['batch_account_url'])
@@ -167,8 +190,8 @@ def submit_schism_job(config_file, pool_name=None):
                                     config_dict['batch_account_name'], config_dict['storage_account_key'], 
                                     config_dict['storage_account_name'], config_dict['storage_container_name'],
                                     config_dict['app_insights_app_id'], config_dict['app_insights_instrumentation_key'], 
-                                    pool_bicep_resource=config_dict['pool_bicep_resource_file'],
-                                    pool_parameters_resource=config_dict['pool_parameters_file'])
+                                    pool_bicep_resource=config_dict['pool_bicep_resource'],
+                                    pool_parameters_resource=config_dict['pool_parameters_resource'])
     sas = get_sas(config_dict['storage_account_name'], config_dict['storage_account_key'], config_dict['storage_container_name'])
     submit_schism_task(client, pool_name, config_dict['num_hosts'], config_dict['num_cores'],
                        config_dict['num_scribes'], config_dict['study_dir'], config_dict['setup_dirs'],

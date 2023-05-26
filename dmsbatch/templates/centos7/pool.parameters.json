@@ -27,7 +27,7 @@
             "value": "batch.node.centos 7"
         },
         "startTaskScript": {
-            "value": "printenv && source $AZ_BATCH_NODE_MOUNTS_DIR/batch/schism_pool_nfs_start_with_insights.sh"
+            "value": "printenv && source $AZ_BATCH_NODE_MOUNTS_DIR/batch/pool_setup_centos7.sh all_v5.10.1"
         },
         "storageAccountKey": {
             "value": "storage_account_key"

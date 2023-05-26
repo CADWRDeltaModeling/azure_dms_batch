@@ -3,23 +3,22 @@ job_name: schism # job name, will be used to name the pool and the job
 batch_account_name: <<batch_account_name>> # batch account name
 storage_account_name: <<storage_account_name>> # this is the storage account containing batch and storage_container defined below
 storage_container_name: <<storage_container_name in storeage_account_name>> # this is mounted to $AZ_BATCH_MOUNTS_DIR/<<storage_container_name>> in addition to batch container which is mounted to $AZ_BATCH_MOUNTS_DIR/batch
-study_dir: <<directory path within container starting with the name of storage_container_name>> # e.g. for test container this is test/vansickle2020/base_barclinic # this is copied sans the outputs/ folder 
+study_dir: <<directory path within container>> # e.g. for test container this is vansickle2020/base_barclinic # this is copied sans the outputs/ folder 
 setup_dirs: # these are directories that are also copied in addition to the study_dir
- - <<directory path within container starting with the name of storage_container_name>> # e.g. for test container this is test/vansickle2020/ts
- - <<directory path within container starting with the name of storage_container_name>> # e.g. for test container this is test/vansickle2020/inputs
+ - <<directory path within container>> # e.g. for test container this is vansickle2020/ts
+ - <<directory path within container >> # e.g. for test container this is vansickle2020/inputs
 num_hosts: <<number of machines>> # number of nodes in the pool
 # num_cores: <<number of cores total>> # is optional as default is number of cores per host * number of hosts
 num_scribes: <<number of scribes, schism setup specific>> # This is used in the mpi_cmd template if referred to there
 # command to run , assume the study_dir is current directory
 mpi_command_template: "mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}"
-## optional parameters. All the files below are w.r.t the dmsbatch module. This allows these to be managed centrally away from the study directory
-# application command file, which templates the mpi_cmd above into itself as well as other variables
-#application_command_template: 'application_command_template.sh' # translates to pkg_resources.resource_filename('dmsbatch', 'application_command_template.sh')
-# coordination command file, which is used to setup the nodes
-#coordination_command_template: 'coordination_command_template.sh'
-# pool bicep file, which is used to create the pool
-#pool_bicep_resource: 'pool.bicep' # pkg_resources.resource_filename('dmsbatch', 'pool.bicep')
-# pool parameters file, which is used to create the pool
-#pool_parameters_resource: 'pool.parameters.json' # pkg_resources.resource_filename('dmsbatch', 'pool.parameters.json')
+# template for the pool name, which is used to create the pool with appropriate settings
+template_name: "centos7" # this is the template name for the pool, e.g. "centos7" or "alma8"
+# It looks for the standard names under templates/<template_name> resources for the following
+# application_command_template: 'application_command_template.sh' # translates to pkg_resources.resource_filename('dmsbatch', 'templates/<template_name>/application_command_template.sh')
+# coordination_command_template: 'coordination_command_template.sh'
+# pool_bicep_resource: 'pool.bicep' # pkg_resources.resource_filename('dmsbatch', 'templates/<template_name>/pool.bicep')
+# pool_parameters_resource: 'pool.parameters.json' # pkg_resources.resource_filename('dmsbatch', 'templates/<template_name>/pool.parameters.json')
+# nice to have to see CPU, memory, network, disk usage - sensitive so not enabled by default
 #app_insights_instrumentation_key: '' # this is the instrumentation key for the app insights instance
 #app_insights_app_id: '' # this is the app id for the app insights instance
