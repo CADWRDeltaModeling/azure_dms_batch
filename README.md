@@ -1,3 +1,5 @@
+
+> :warning: **This repo is moved to CADWRDeltaModeling/azure_dms_batch**: Further development will occur there.
 # Azure Batch runs for Models 
 
 Models are processes that take input and process via files and environment variables and run an exectuable producing output
