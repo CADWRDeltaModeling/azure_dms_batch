@@ -4,8 +4,8 @@ if [[ $(id -u) -ne 0 ]] ; then
     exit 1
 fi
 
-
-source $AZ_BATCH_NODE_MOUNTS_DIR/batch/azhpc-library.sh
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+source $SCRIPT_DIR/azhpc-library.sh
 
 read_os
 # Disable requiretty to allow run sudo within scripts
