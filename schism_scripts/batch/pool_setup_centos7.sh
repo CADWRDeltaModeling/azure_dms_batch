@@ -9,6 +9,7 @@ echo "Starting insights installation..."
 source $AZ_BATCH_NODE_MOUNTS_DIR/batch/appinsights_install.sh
 echo "Done pool start script."
 #
+source $AZ_BATCH_NODE_MOUNTS_DIR/batch/enable_sudo_for_batch.sh
 echo "Starting SCHISM installation..."
 source $AZ_BATCH_NODE_MOUNTS_DIR/batch/schism_install.sh
 install_schism $schism_version
