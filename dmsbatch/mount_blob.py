@@ -5,6 +5,7 @@ import pkg_resources
 import datetime
 import json
 import subprocess
+import tempfile
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
@@ -43,7 +44,9 @@ def mount_blob(resource_group_name, storage_account_name, container_name,
                                cache_size_mb=cache_size_mb)
     dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     try:
-        tmp_config_fname = f'temp_config_template_{dtstr}.yml'
+        # Create a temporary directory
+        temp_dir = tempfile.mkdtemp()
+        tmp_config_fname = f'{temp_dir}/temp_config_template_{dtstr}.yml'
         with open(tmp_config_fname,'w') as fh:
             fh.write(template)
         subprocess.check_output(f'sudo mkdir -p {mount_point}/.tmp{container_name}', shell=True)
