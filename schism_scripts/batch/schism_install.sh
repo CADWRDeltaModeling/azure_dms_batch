@@ -1,14 +1,15 @@
 # install schism
 
 function install_schism {
-    version=$1
+    schism_release=$1
+    schism_file=$2
     # assumes that schism...tar.gz contains an opt directory
     pushd /
-    cp $AZ_BATCH_NODE_MOUNTS_DIR/batch/apps/schism_${version}.tar.gz .
-    tar xvzf schism_${version}.tar.gz
-    rm schism_${version}.tar.gz
+    wget https://github.com/CADWRDeltaModeling/azure_dms_batch/releases/download/${schism_release}/${schism_file}.tar.gz
+    tar xvzf ${schism_file}.tar.gz
+    rm ${schism_file}.tar.gz
     popd
-    echo "Installed schism_${version}.tar.gz"
+    echo "Installed ${schism_file}.tar.gz"
 }
 
 

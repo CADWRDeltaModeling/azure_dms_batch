@@ -27,7 +27,7 @@
             "value": "batch.node.el 8"
         },
         "startTaskScript": {
-            "value": "printenv && source $AZ_BATCH_NODE_MOUNTS_DIR/batch/pool_setup_alma8.sh 5_10_1_alma_8_5_HPC_gen1"
+            "value": "printenv && source $AZ_BATCH_NODE_MOUNTS_DIR/batch/pool_setup.sh schism_v5.10.1 schism_5_10_1_alma_8_5_HPC_gen1"
         },
         "storageAccountKey": {
             "value": "storage_account_key"
