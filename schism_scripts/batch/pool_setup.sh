@@ -11,21 +11,20 @@ wget "https://github.com/CADWRDeltaModeling/azure_dms_batch/archive/refs/tags/${
 tar xvzf ${schism_release}.tar.gz
 pushd azure_dms_batch-${schism_release}/schism_scripts/batch
 echo "Starting pool install script..."
-source ./install-azcopy.sh
+(source ./install-azcopy.sh)
 echo "Starting Intel oneAPI installation..."
-source ./setup_intel_schism.sh
+(source ./setup_intel_schism.sh)
 echo "Starting NFS installation..."
-source ./nfs_install.sh
+(source ./nfs_install.sh)
 echo "Done with NFS install"
 echo "Starting insights installation..."
-source ./appinsights_install.sh
+(source ./appinsights_install.sh)
 echo "Done enabling insights"
 echo "Done with pool installs"
 #
-source ./enable_sudo_for_batch.sh
+(source ./enable_sudo_for_batch.sh)
 echo "Starting SCHISM installation..."
-source ./schism_install.sh
-install_schism $schism_release $schism_file
+(source ./schism_install.sh; install_schism $schism_release $schism_file)
 echo "Done with SCHISM install"
 popd
 rm -rf azure_dms_batch-${schism_release} ${schism_release}.tar.gz

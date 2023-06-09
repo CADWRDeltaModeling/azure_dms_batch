@@ -7,7 +7,7 @@ function install_schism {
     pushd /
     wget https://github.com/CADWRDeltaModeling/azure_dms_batch/releases/download/${schism_release}/${schism_file}.tar.gz
     tar xvzf ${schism_file}.tar.gz
-    rm ${schism_file}.tar.gz
+    rm -f ${schism_file}.tar.gz
     popd
     echo "Installed ${schism_file}.tar.gz"
 }
