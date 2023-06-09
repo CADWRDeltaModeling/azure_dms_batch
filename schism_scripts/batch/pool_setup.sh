@@ -11,6 +11,7 @@ wget "https://github.com/CADWRDeltaModeling/azure_dms_batch/archive/refs/tags/${
 tar xvzf ${schism_release}.tar.gz
 mkdir -p /opt && mv azure_dms_batch-${schism_release}/schism_scripts /opt
 pushd /opt/schism_scripts/batch
+chmod +x *.sh
 echo "Starting pool install script..."
 (source ./install-azcopy.sh)
 echo "Starting Intel oneAPI installation..."
