@@ -27,7 +27,7 @@
             "value": "batch.node.centos 7"
         },
         "startTaskScript": {
-            "value": "printenv && source $AZ_BATCH_NODE_MOUNTS_DIR/batch/pool_setup.sh schism_v5.10.1 schism_5_10_1_centos_7_9_HPC_gen2"
+            "value": "printenv && wget -qO - 'https://raw.githubusercontent.com/CADWRDeltaModeling/azure_dms_batch/main/schism_scripts/batch/pool_setup.sh' | bash -s schism_v5.10.1 schism_5_10_1_centos_7_9_HPC_gen2"
         },
         "storageAccountKey": {
             "value": "storage_account_key"

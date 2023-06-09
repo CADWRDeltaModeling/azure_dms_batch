@@ -23,7 +23,7 @@ done
 # change to study directory
 cd {study_dir};
 # start background copy script
-SAS="{sas}" bash $AZ_BATCH_NODE_MOUNTS_DIR/batch/copy_modified_loop.sh {study_dir} $AZ_BATCH_NODE_MOUNTS_DIR "{storage_account_name}" "{storage_container_name}"& 
+SAS="{sas}" bash /opt/batch/copy_modified_loop.sh {study_dir} $AZ_BATCH_NODE_MOUNTS_DIR "{storage_account_name}" "{storage_container_name}"& 
 pid=$!;
 echo "Running background copy_modified_loop.sh with pid $pid";
 # run schism

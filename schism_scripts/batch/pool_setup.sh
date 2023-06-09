@@ -9,7 +9,8 @@ echo "Downloading and installing from https://github.com/CADWRDeltaModeling/azur
 pushd /tmp
 wget "https://github.com/CADWRDeltaModeling/azure_dms_batch/archive/refs/tags/${schism_release}.tar.gz"
 tar xvzf ${schism_release}.tar.gz
-pushd azure_dms_batch-${schism_release}/schism_scripts/batch
+mkdir -p /opt && mv azure_dms_batch-${schism_release}/schism_scripts/batch /opt
+pushd /opt/batch
 echo "Starting pool install script..."
 (source ./install-azcopy.sh)
 echo "Starting Intel oneAPI installation..."
@@ -27,5 +28,5 @@ echo "Starting SCHISM installation..."
 (source ./schism_install.sh; install_schism $schism_release $schism_file)
 echo "Done with SCHISM install"
 popd
-rm -rf azure_dms_batch-${schism_release} ${schism_release}.tar.gz
 popd
+echo "Done with pool setup script"
