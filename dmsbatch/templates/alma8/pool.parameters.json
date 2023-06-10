@@ -9,9 +9,6 @@
             "value": "batch_storage_name"
         },
         "batchContainerName": {
-            "value": "batch"
-        },
-        "batchContainerName2": {
             "value": "batch_container_name"
         },
         "poolName": {

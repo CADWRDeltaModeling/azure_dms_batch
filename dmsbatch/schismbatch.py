@@ -44,7 +44,6 @@ def create_schism_pool(resource_group_name, pool_name, num_hosts,
     ''' create a schism pool with the given number of hosts.  The pool name is
     assumed to include the date and time after the last _ in the name.'''
     vm_size = 'standard_hb120rs_v2'  # hardwired for now
-    batch_scripts_dir = "batch"  # hardwired for now
     # pool_name has date and time appended after _
     dtstr = pool_name.split('_')[-1]
     bicep_file = pkg_resources.resource_filename(__name__, pool_bicep_resource)
@@ -54,7 +53,7 @@ def create_schism_pool(resource_group_name, pool_name, num_hosts,
         modify_json_file(parameters_file, modified_parameters_file,
                         poolName=pool_name, 
                         batchAccountName=batch_account_name, storageAccountKey=storage_account_key, 
-                        batchStorageName=storage_name, batchContainerName2=container_name,
+                        batchStorageName=storage_name, batchContainerName=container_name,
                         appInsightsAppId=app_insights_app_id, appInsightsInstrumentationKey=app_insights_instrumentation_key,
                         formula = build_autoscaling_formula(num_hosts, datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)))
         # Run the command and capture its output
@@ -115,11 +114,11 @@ def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, stu
     coordination_cmd = client.wrap_cmd_with_app_path(coordination_cmd, [], ostype='linux')
     logger.debug('Coordination command: {}'.format(coordination_cmd))
     # output files should be saved to batch container
-    sas_batch = get_sas(storage_account_name, storage_account_key, 'batch')
+    sas_batch = get_sas(storage_account_name, storage_account_key, storage_container_name)
     output_file_specs = []
     for upload_condition in [batchmodels.OutputFileUploadCondition.task_completion, batchmodels.OutputFileUploadCondition.task_failure]:
         spec = client.create_output_file_spec('../std*', 
-                            "https://{}.blob.core.windows.net/{}?{}".format(storage_account_name, 'batch', sas_batch), 
+                            "https://{}.blob.core.windows.net/{}?{}".format(storage_account_name, storage_container_name, sas_batch), 
                             f'jobs/{task_name}',
                             upload_condition=upload_condition)
         output_file_specs.append(spec)

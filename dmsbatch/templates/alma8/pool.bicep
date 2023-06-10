@@ -1,7 +1,6 @@
 param batchAccountName string
 param batchStorageName string
 param batchContainerName string
-param batchContainerName2 string
 @secure()
 param storageAccountKey string = ''
 // pool information
@@ -46,15 +45,6 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2022-10-01' = {
           accountKey: storageAccountKey
           containerName: batchContainerName
           relativeMountPath: batchContainerName
-          blobfuseOptions: '-o allow_other'
-        }
-      }
-      {
-        azureBlobFileSystemConfiguration: {
-          accountName: batchStorageName
-          accountKey: storageAccountKey
-          containerName: batchContainerName2
-          relativeMountPath: batchContainerName2
           blobfuseOptions: '-o allow_other'
         }
       }
