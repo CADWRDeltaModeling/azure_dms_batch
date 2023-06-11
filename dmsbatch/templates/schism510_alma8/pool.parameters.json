@@ -1,0 +1,42 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "batchAccountName": {
+            "value": "batch_account_name"
+        },
+        "batchStorageName": {
+            "value": "batch_storage_name"
+        },
+        "batchContainerName": {
+            "value": "batch_container_name"
+        },
+        "poolName": {
+            "value": "pool_name"
+        },
+        "vmSize": {
+            "value": "Standard_HB120rs_v2"
+        },
+        "taskSlotsPerNode": {
+            "value": 1
+        },
+        "nodeAgentSKUId": {
+            "value": "batch.node.el 8"
+        },
+        "startTaskScript": {
+            "value": "printenv && wget -qO - 'https://raw.githubusercontent.com/CADWRDeltaModeling/azure_dms_batch/main/schism_scripts/batch/enable_sudo_for_batch.sh' | bash && wget -qO - 'https://raw.githubusercontent.com/CADWRDeltaModeling/azure_dms_batch/main/schism_scripts/batch/make_root_ssh_passwordless.sh' | bash " 
+        },
+        "storageAccountKey": {
+            "value": "storage_account_key"
+        },
+        "formula": {
+            "value": "formula"
+        },
+        "appInsightsInstrumentationKey": {
+            "value": "app_insights_instrumentation_key"
+        },
+        "appInsightsAppId": {
+            "value": "app_insights_app_id"
+        }
+    }
+}
