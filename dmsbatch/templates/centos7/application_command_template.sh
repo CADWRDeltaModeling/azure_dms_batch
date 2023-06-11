@@ -1,8 +1,13 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 source /opt/intel/oneapi/setvars.sh intel64; # seems to conflict with the installed modules, try again with custom image
-export PATH=$PATH:/opt/netcdf-c/4.9.0_i2021.2/bin/:/opt/netcdf-fortran/4.6.0_i2021.2/bin/:/opt/hdf5/1.10.8_i2021.2/bin/:/opt/schism/5.10.1/;
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/netcdf-c/4.9.0_i2021.2/lib/:/opt/netcdf-fortran/4.6.0_i2021.2/lib/:/opt/hdf5/1.10.8_i2021.2/lib/:/opt/schism/5.10.1/lib/;
+export SCHISM_VERSION="5.10.1";
+export NETCDF_C_VERSION="4.9.2";
+export NETCDF_FORTRAN_VERSION="4.5.3"
+export HDF5_VERSION="1.14.0";
+# if the versions above are set then the following can be used
+export PATH=$PATH:/opt/netcdf-c/${{NETCDF_C_VERSION}}/bin/:/opt/netcdf-fortran/${{NETCDF_FORTRAN_VERSION}}/bin/:/opt/hdf5/${{HDF5_VERSION}}/bin/:/opt/schism/${{SCHISM_VERSION}}/;
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/netcdf-c/${{NETCDF_C_VERSION}}/lib/:/opt/netcdf-fortran/${{NETCDF_FORTRAN_VERSION}}/lib/:/opt/hdf5/${{HDF5_VERSION}}/lib/:/opt/schism/${{SCHISM_VERSION}}/lib/;
 ulimit -s unlimited;
 # already loaded by oneapi sourcing but cause segfault. Needs recompilation
 module load mpi/impi-2021;
