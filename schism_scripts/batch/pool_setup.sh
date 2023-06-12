@@ -12,6 +12,7 @@ tar xvzf ${schism_release}.tar.gz
 mkdir -p /opt && mv azure_dms_batch-${schism_release}/schism_scripts /opt
 pushd /opt/schism_scripts/batch
 chmod +x *.sh
+(source ./enable_sudo_for_batch.sh)
 echo "Starting pool install script..."
 (source ./install-azcopy.sh)
 echo "Starting Intel oneAPI installation..."
@@ -24,7 +25,6 @@ echo "Starting insights installation..."
 echo "Done enabling insights"
 echo "Done with pool installs"
 #
-(source ./enable_sudo_for_batch.sh)
 echo "Starting SCHISM installation..."
 (source ./schism_install.sh; install_schism $schism_release $schism_file)
 echo "Done with SCHISM install"
