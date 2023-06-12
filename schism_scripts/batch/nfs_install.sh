@@ -8,8 +8,6 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 source $SCRIPT_DIR/azhpc-library.sh
 
 read_os
-# Disable requiretty to allow run sudo within scripts
-sed -i -e 's/Defaults    requiretty.*/ #Defaults    requiretty/g' /etc/sudoers
 
 yum -y install epel-release
 
