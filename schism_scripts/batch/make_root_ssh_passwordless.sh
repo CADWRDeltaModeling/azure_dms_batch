@@ -1,8 +1,9 @@
-mkdir -p /root/.ssh
+## Enable RDMA communication for root user
+unalias cp
+cp -rv /home/_azbatch/.ssh /root/.
+sed -i 's/home\/_azbatch/root/g' /root/.ssh/config
 chmod 700 /root/.ssh
-pushd /root/.ssh
-cp ~_azbatch/.ssh/authorized_keys .
-cp ~_azbatch/.ssh/intra_pool_rsa id_rsa
-chmod 600 authorized_keys id_rsa
+chmod 644 /root/.ssh/config
+chmod 644 /root/.ssh/authorized_keys
 sed -i 's/PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
 systemctl reload sshd
