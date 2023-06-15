@@ -3,14 +3,46 @@
 # schism_file="schism_5_10_1_alma_8_5_HPC_gen1"
 # E.g. 
 # https://github.com/CADWRDeltaModeling/azure_dms_batch/releases/download/${schism_release}/${schism_file}.tar.gz
-schism_release=$1
-schism_file=$2
+
+# Default values for flags
+uselatest=false
+
+# Parse named arguments using getopts
+while getopts ":l" opt; do
+  case $opt in
+    l)
+      uselatest=true
+      ;;
+    *)
+      echo "Unknown parameter passed: $OPTARG"
+      exit 1
+      ;;
+  esac
+done
+
+# Shift the named arguments
+shift $((OPTIND - 1))
+
+# Access and use the arguments
+schism_release="$1"
+schism_file="$2"
 echo "Downloading and installing from https://github.com/CADWRDeltaModeling/azure_dms_batch/archive/refs/tags/${schism_release}.tar.gz"
-pushd /tmp
-wget "https://github.com/CADWRDeltaModeling/azure_dms_batch/archive/refs/tags/${schism_release}.tar.gz"
-tar xvzf ${schism_release}.tar.gz
-mkdir -p /opt && mv azure_dms_batch-${schism_release}/schism_scripts /opt
-pushd /opt/schism_scripts/batch
+pushd /tmp || exit
+mkdir -p /opt
+if [ "$uselatest" = true ]; then
+  echo "Using latest scripts from github"
+    # temporary way to get latest code into the pool
+    wget https://github.com/CADWRDeltaModeling/azure_dms_batch/archive/refs/heads/main.zip
+    unzip main.zip
+    mv azure_dms_batch-main/schism_scripts /opt
+else
+  echo "Using scripts from release ${schism_release}"
+    wget "https://github.com/CADWRDeltaModeling/azure_dms_batch/archive/refs/tags/${schism_release}.tar.gz"
+    tar xvzf "${schism_release}.tar.gz"
+    mv "azure_dms_batch-${schism_release}/schism_scripts" /opt
+fi
+#
+pushd /opt/schism_scripts/batch || exit
 chmod +x *.sh
 (source ./enable_sudo_for_batch.sh)
 echo "Starting pool install script..."
@@ -26,7 +58,7 @@ echo "Done enabling insights"
 echo "Done with pool installs"
 #
 echo "Starting SCHISM installation..."
-(source ./schism_install.sh; install_schism $schism_release $schism_file)
+(source ./schism_install.sh; install_schism "$schism_release" "$schism_file")
 echo "Done with SCHISM install"
 popd
 popd

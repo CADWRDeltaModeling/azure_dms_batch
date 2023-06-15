@@ -179,13 +179,20 @@ tune_nfs()
 {
     cores=$(grep processor /proc/cpuinfo | wc -l)
     nfs_proc=$(($cores * 4))
-    replace="s/#RPCNFSDCOUNT=16/RPCNFSDCOUNT=$nfs_proc/g"
-    sed -i -e "$replace" /etc/sysconfig/nfs
-
-    grep RPCNFSDCOUNT /etc/sysconfig/nfs
+    # fix for alma8, change in nfs config file location to /etc/nfs.conf
+    # https://access.redhat.com/solutions/2216
+    if [[ -f /etc/nfs.conf ]]; then
+        replace="s/# threads=8/threads=$nfs_proc/g"
+        sed -i -e "$replace" /etc/nfs.conf
+        grep threads /etc/nfs.conf
+        return
+    else
+        echo "nfs.conf not found, using /etc/sysconfig/nfs"
+        replace="s/#RPCNFSDCOUNT=16/RPCNFSDCOUNT=$nfs_proc/g"
+        sed -i -e "$replace" /etc/sysconfig/nfs
+        grep RPCNFSDCOUNT /etc/sysconfig/nfs
+    fi
 }
 
 # nfs server will be started when tasks are assigned as till then there is no $AZ_BATCH_NODE_LIST or $AZ_BATCH_MASTER_NODE
 # see nfs_start.sh
-
-
