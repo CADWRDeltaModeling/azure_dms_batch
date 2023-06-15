@@ -37,13 +37,12 @@ def build_autoscaling_formula(num_hosts, startTime):
     formula = formula.format(num_hosts=num_hosts, startTime=startTime.isoformat())
     return formula
 
-def create_schism_pool(resource_group_name, pool_name, num_hosts,
+def create_schism_pool(resource_group_name, pool_name, vm_size, num_hosts,
                        batch_account_name, storage_account_key, storage_name, container_name,
                        app_insights_app_id, app_insights_instrumentation_key,
                        pool_bicep_resource='schismpool.bicep', pool_parameters_resource='schismpool.parameters.json'):
     ''' create a schism pool with the given number of hosts.  The pool name is
     assumed to include the date and time after the last _ in the name.'''
-    vm_size = 'standard_hb120rs_v2'  # hardwired for now
     # pool_name has date and time appended after _
     dtstr = pool_name.split('_')[-1]
     bicep_file = pkg_resources.resource_filename(__name__, pool_bicep_resource)
@@ -51,7 +50,7 @@ def create_schism_pool(resource_group_name, pool_name, num_hosts,
     modified_parameters_file = f'temp_schismpool.parameters_{dtstr}.json'
     try:
         modify_json_file(parameters_file, modified_parameters_file,
-                        poolName=pool_name, 
+                        poolName=pool_name, vmSize=vm_size,
                         batchAccountName=batch_account_name, storageAccountKey=storage_account_key, 
                         batchStorageName=storage_name, batchContainerName=container_name,
                         appInsightsAppId=app_insights_app_id, appInsightsInstrumentationKey=app_insights_instrumentation_key,
@@ -75,7 +74,8 @@ def create_schism_pool(resource_group_name, pool_name, num_hosts,
 
 
 def estimate_cores_available(vm_size, num_hosts):
-    VM_CORE_MAP = {'standard_hc44rs': 44, 'standard_hb120rs_v2': 120}
+    vm_size = vm_size.lower()
+    VM_CORE_MAP = {'standard_hc44rs': 44, 'standard_hb120rs_v2': 120, 'standard_hb176rs_v4': 176}
     return num_hosts * (VM_CORE_MAP[vm_size] - 5)
 
 
@@ -145,7 +145,6 @@ def create_batch_client(name, key, url):
 def submit_schism_job(config_file, pool_name=None):
     config_dict = parse_yaml_file(config_file)
     config_dict['pool_name'] = config_dict['job_name']  # hardwired for now
-    config_dict['vm_size'] = 'standard_hb120rs_v2'  # hardwired for now
     location = 'eastus'  # hardwired for now
     # hardwired for now
     config_dict['batch_account_url'] = f'https://{config_dict["batch_account_name"]}.{location}.batch.azure.com'
@@ -159,6 +158,8 @@ def submit_schism_job(config_file, pool_name=None):
         config_dict['storage_account_key'] = get_storage_account_key(config_dict['resource_group'],config_dict['storage_account_name'])
     if 'template_name' not in config_dict:
         config_dict['template_name'] = 'centos7' # default
+    if 'vm_size' not in config_dict:
+        config_dict['vm_size'] = 'standard_hb120rs_v2' 
     if 'application_command_template' not in config_dict:
         config_dict['application_command_template'] = f'templates/{config_dict["template_name"]}/application_command_template.sh'
     if 'mpi_command_template' not in config_dict:
@@ -185,7 +186,7 @@ def submit_schism_job(config_file, pool_name=None):
     if pool_name is None:
         pool_name = config_dict['pool_name'] + f'_{dtstr}'
         # create pool 
-        pool_name = create_schism_pool(config_dict['resource_group'], pool_name, config_dict['num_hosts'],
+        pool_name = create_schism_pool(config_dict['resource_group'], pool_name, config_dict['vm_size'], config_dict['num_hosts'],
                                     config_dict['batch_account_name'], config_dict['storage_account_key'], 
                                     config_dict['storage_account_name'], config_dict['storage_container_name'],
                                     config_dict['app_insights_app_id'], config_dict['app_insights_instrumentation_key'], 
