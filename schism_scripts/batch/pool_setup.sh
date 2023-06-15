@@ -48,7 +48,7 @@ chmod +x *.sh
 echo "Starting pool install script..."
 (source ./install-azcopy.sh)
 echo "Starting Intel oneAPI installation..."
-(source ./setup_intel_schism.sh)
+(source ./setup_intel_schism.sh "2021.4.0.x86_64")
 echo "Starting NFS installation..."
 (source ./nfs_install.sh)
 echo "Done with NFS install"
