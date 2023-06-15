@@ -5,13 +5,13 @@
 # https://github.com/CADWRDeltaModeling/azure_dms_batch/releases/download/${schism_release}/${schism_file}.tar.gz
 
 # Default values for flags
-uselatest=false
+uselatest=true
 
 # Parse named arguments using getopts
-while getopts ":l" opt; do
+while getopts ":r" opt; do
   case $opt in
-    l)
-      uselatest=true
+    r)
+      uselatest=false # use release if -r is passed
       ;;
     *)
       echo "Unknown parameter passed: $OPTARG"
