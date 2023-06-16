@@ -1,3 +1,4 @@
+#!/bin/env bash
 if [[ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]]; then
     echo "This is the master node. $AZ_BATCH_NODE_ID"
     # only on master node

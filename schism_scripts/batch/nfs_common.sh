@@ -6,6 +6,8 @@ NFS_DATA=$NFS_MOUNT_POINT/data
 NFS_HOME=$NFS_MOUNT_POINT/home
 NFS_SCRATCH=/mnt/resource/scratch
 
+source ./azhpc-library.sh
+
 read_os()
 {
     os_release=$(cat /etc/os-release | grep "^ID\=" | cut -d'=' -f 2 | sed -e 's/^"//' -e 's/"$//')
@@ -134,7 +136,11 @@ setup_disks()
     rootDevice=$(mount | grep "on / type" | awk '{print $1}' | sed 's/[0-9]//g')
 
     # Get the TMP disk so we know which device and can ignore it later
-    tmpDevice=$(mount | grep "on /mnt/resource type" | awk '{print $1}' | sed 's/[0-9]//g')
+    if is_centos7; then
+        tmpDevice=$(mount | grep "on /mnt/resource type" | awk '{print $1}' | sed 's/[0-9]//g')
+    else
+        tmpDevice=$(mount | grep "on /mnt type" | awk '{print $1}' | sed 's/[0-9]//g')
+    fi
 
     # Get the data disk sizes from fdisk, we ignore the disks above
     dataDiskSize=$(fdisk -l | grep '^Disk /dev/' | grep -v $rootDevice | grep -v $tmpDevice | awk '{print $3}' | sort -n -r | tail -1)

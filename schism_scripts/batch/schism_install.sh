@@ -1,3 +1,4 @@
+#!/bin/env bash
 # install schism
 
 function install_schism {
