@@ -9,8 +9,8 @@ gpgkey=https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.
 EOF
 # install intel oneAPI
 mv /tmp/oneAPI.repo /etc/yum.repos.d
-
-if [[ -z "$1" ]]; then
+# check to see if atleast one argument is passed
+if [[ $# -eq 0 ]] ; then
     echo "No version specified, installing latest (blank)"
     VERSION=""
 else
