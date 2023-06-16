@@ -54,8 +54,6 @@ if [[ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]]; then
     echo "Started NFS server on $nfs_server, i.e. $ip_address"
 fi
 
-yum install -y nfs-utils
-
 mkdir -p /shared/scratch || echo "scratch already exists"
 mkdir -p /shared/apps || echo "apps already exists"
 mkdir -p /shared/data || echo "data already exists"
@@ -64,7 +62,8 @@ mkdir -p /shared/home || echo "home already exists"
 chmod 777 /shared/scratch
 
 # NFS mount options
-nfs_mount_options="rw,sync,rsize=131072,wsize=131072,noacl,nocto,noatime,nodiratime"
+#nfs_mount_options="rw,sync,rsize=131072,wsize=131072,noacl,nocto,noatime,nodiratime"
+nfs_mount_options="rw,sync,rsize=65536,wsize=65536,noatime,nodiratime"
 
 cat << EOF >> /etc/fstab
 $nfs_server:$nfs_share/home           /shared/home   nfs $nfs_mount_options 0 0
