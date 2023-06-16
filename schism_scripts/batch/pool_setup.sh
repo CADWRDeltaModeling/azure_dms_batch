@@ -44,16 +44,16 @@ fi
 #
 pushd /opt/schism_scripts/batch || exit
 chmod +x *.sh
-(source ./enable_sudo_for_batch.sh)
+./enable_sudo_for_batch.sh
 echo "Starting pool install script..."
-(source ./install-azcopy.sh)
+./install-azcopy.sh
 echo "Starting Intel oneAPI installation..."
-(source ./setup_intel_schism.sh) # "2021.4.0.x86_64"
+./setup_intel_schism.sh # "2021.4.0.x86_64"
 echo "Starting NFS installation..."
-(source ./nfs_install.sh)
+./nfs_install.sh
 echo "Done with NFS install"
 echo "Starting insights installation..."
-(source ./appinsights_install.sh "v1.3.0")
+./appinsights_install.sh "v1.3.0"
 echo "Done enabling insights"
 echo "Done with pool installs"
 #
