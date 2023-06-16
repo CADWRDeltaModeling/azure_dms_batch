@@ -131,19 +131,19 @@ setup_disks()
     lsscsi
 
     # Get the root/OS disk so we know which device it uses and can ignore it later
-    rootDevice=`mount | grep "on / type" | awk '{print $1}' | sed 's/[0-9]//g'`
+    rootDevice=$(mount | grep "on / type" | awk '{print $1}' | sed 's/[0-9]//g')
 
     # Get the TMP disk so we know which device and can ignore it later
-    tmpDevice=`mount | grep "on /mnt/resource type" | awk '{print $1}' | sed 's/[0-9]//g'`
+    tmpDevice=$(mount | grep "on /mnt/resource type" | awk '{print $1}' | sed 's/[0-9]//g')
 
     # Get the data disk sizes from fdisk, we ignore the disks above
-    dataDiskSize=`fdisk -l | grep '^Disk /dev/' | grep -v $rootDevice | grep -v $tmpDevice | awk '{print $3}' | sort -n -r | tail -1`
+    dataDiskSize=$(fdisk -l | grep '^Disk /dev/' | grep -v $rootDevice | grep -v $tmpDevice | awk '{print $3}' | sort -n -r | tail -1)
 
     # Compute number of disks
-    nbDisks=`fdisk -l | grep '^Disk /dev/' | grep -v $rootDevice | grep -v $tmpDevice | wc -l`
+    nbDisks=$(fdisk -l | grep '^Disk /dev/' | grep -v $rootDevice | grep -v $tmpDevice | wc -l)
     echo "nbDisks=$nbDisks"
 
-    dataDevices="`fdisk -l | grep '^Disk /dev/' | grep $dataDiskSize | awk '{print $2}' | awk -F: '{print $1}' | sort | head -$nbDisks | tr '\n' ' ' | sed 's|/dev/||g'`"
+    dataDevices="$(fdisk -l | grep '^Disk /dev/' | grep $dataDiskSize | awk '{print $2}' | awk -F: '{print $1}' | sort | head -$nbDisks | tr '\n' ' ' | sed 's|/dev/||g')"
 
     mkdir -p $NFS_MOUNT_POINT
 
@@ -178,19 +178,19 @@ setup_disks()
 tune_nfs()
 {
     cores=$(grep processor /proc/cpuinfo | wc -l)
-    nfs_proc=$(($cores * 4))
+    nfs_proc=$(($cores * 1))
     # fix for alma8, change in nfs config file location to /etc/nfs.conf
     # https://access.redhat.com/solutions/2216
-    if [[ -f /etc/nfs.conf ]]; then
-        replace="s/# threads=8/threads=$nfs_proc/g"
-        sed -i -e "$replace" /etc/nfs.conf
-        grep threads /etc/nfs.conf
-        return
-    else
-        echo "nfs.conf not found, using /etc/sysconfig/nfs"
+    if [[ -f /etc/sysconfig/nfs ]]; then
+        echo "using /etc/sysconfig/nfs"
         replace="s/#RPCNFSDCOUNT=16/RPCNFSDCOUNT=$nfs_proc/g"
         sed -i -e "$replace" /etc/sysconfig/nfs
         grep RPCNFSDCOUNT /etc/sysconfig/nfs
+    else
+        echo "using /etc/nfs.conf"
+        replace="s/# threads=8/threads=$nfs_proc/g"
+        sed -i -e "$replace" /etc/nfs.conf
+        grep threads /etc/nfs.conf
     fi
 }
 
