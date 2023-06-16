@@ -10,14 +10,15 @@ EOF
 # install intel oneAPI
 mv /tmp/oneAPI.repo /etc/yum.repos.d
 # check to see if atleast one argument is passed
+INTEL_VERSION=""
 if [[ $# -eq 0 ]] ; then
     echo "No version specified, installing latest (blank)"
-    VERSION=""
+    INTEL_VERSION=""
 else
     echo "Installing version $1"
-    VERSION="-$1" # argument of the form 2021.4.0.x86_64
+    INTEL_VERSION="-$1" # argument of the form 2021.4.0.x86_64
 fi
 
-yum install intel-basekit-runtime"$VERSION" -y
-yum install intel-oneapi-compiler-fortran-runtime"$VERSION" -y
-yum install intel-oneapi-mpi"$VERSION" -y
+yum install intel-basekit-runtime"$INTEL_VERSION" -y
+yum install intel-oneapi-compiler-fortran-runtime"$INTEL_VERSION" -y
+yum install intel-oneapi-mpi"$INTEL_VERSION" -y
