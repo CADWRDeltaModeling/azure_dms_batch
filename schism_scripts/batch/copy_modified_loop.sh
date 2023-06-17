@@ -62,7 +62,7 @@ do
     # OPTION2: azcopy (faster, but need to install azcopy and set up SAS). Also sync scans destination and source so is slower
     # use azcopy sync (not sure how preformance compares to cp))
     echo "syncing ${src_dir} to ${container}/${src_dir}"
-    azcopy sync "${src_dir}" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}"
+    azcopy sync "./" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}"
     # OPTION3: azcopy as exec from find but each file is copied separately (slower)
     # find "${src_dir}" -type f -mmin "-${modified_minutes}" -exec azcopy cp {} "https://${storage_account}.blob.core.windows.net/${container}/${dest_dir}?${SAS}" \;
     # OPTION 4: find files modified in the last modified_minutes minutes and then azcopy with list-of-files filter for faster copying times
