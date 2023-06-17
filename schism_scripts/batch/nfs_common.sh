@@ -6,7 +6,6 @@ NFS_DATA=$NFS_MOUNT_POINT/data
 NFS_HOME=$NFS_MOUNT_POINT/home
 NFS_SCRATCH=/mnt/resource/scratch
 
-source ./azhpc-library.sh
 
 read_os()
 {
