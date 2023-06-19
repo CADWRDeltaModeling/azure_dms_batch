@@ -68,8 +68,12 @@ do
     # OPTION 4: find files modified in the last modified_minutes minutes and then azcopy with list-of-files filter for faster copying times
     # MAJOR ASSUMPTION: current directory is the study directory
     # FIXME: $dest_dir is not used in the azcopy command as $src_dir is enough information to construct the destination path
-    find . -type f -mmin "-${modified_minutes}" -print > /tmp/azcopy_filelist.txt
-    azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --list-of-files /tmp/azcopy_filelist.txt
+    # UNDOCUMENTED WAY: use --list-of-files option to azcopy
+    #find . -type f -mmin "-${modified_minutes}" -print > /tmp/azcopy_filelist.txt
+    #azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --list-of-files /tmp/azcopy_filelist.txt
+    # DOCUMENTED WAY: construct a semi-colon separated list of files as an environment variable and use --include-path option to azcopy
+    azcopy_filelist=$(find . -type f -mmin "-${modified_minutes}" -print0 | tr '\0' ';')
+    azcopy copy "./" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --include-path ${azcopy_filelist}
     # find output directory under src directory and delete *.nc files older than ${delete_modified_minutes} minutes from it
     echo "Deleting files from ${src_dir} older than ${delete_modified_minutes} minutes"
     find . -type d -name "outputs" -exec find {} -type f -mmin +${delete_modified_minutes} -name "*.nc" -delete \;
