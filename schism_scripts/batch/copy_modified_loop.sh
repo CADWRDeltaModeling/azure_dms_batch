@@ -73,7 +73,12 @@ do
     #azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --list-of-files /tmp/azcopy_filelist.txt
     # DOCUMENTED WAY: construct a semi-colon separated list of files as an environment variable and use --include-path option to azcopy
     azcopy_filelist=$(find . -type f -mmin "-${modified_minutes}" -print0 | tr '\0' ';')
-    azcopy copy "./" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --include-path ${azcopy_filelist}
+    #if azcopy_filelist is not empty then azcopy
+    if [ -z "${azcopy_filelist}" ]; then
+      echo "No files to copy... skipping this time."
+    else
+      azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --include-path ${azcopy_filelist}
+    fi
     # find output directory under src directory and delete *.nc files older than ${delete_modified_minutes} minutes from it
     echo "Deleting files from ${src_dir} older than ${delete_modified_minutes} minutes"
     find . -type d -name "outputs" -exec find {} -type f -mmin +${delete_modified_minutes} -name "*.nc" -delete \;
