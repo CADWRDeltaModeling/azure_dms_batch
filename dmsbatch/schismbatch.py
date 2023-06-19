@@ -76,7 +76,7 @@ def create_schism_pool(resource_group_name, pool_name, vm_size, num_hosts,
 def estimate_cores_available(vm_size, num_hosts):
     vm_size = vm_size.lower()
     VM_CORE_MAP = {'standard_hc44rs': 44, 'standard_hb120rs_v2': 120, 'standard_hb176rs_v4': 176}
-    return num_hosts * (VM_CORE_MAP[vm_size] - 5)
+    return num_hosts * (VM_CORE_MAP[vm_size])
 
 
 def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, study_dir, setup_dirs,
@@ -86,8 +86,10 @@ def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, stu
                        coordination_command_template='coordination_command_template.sh'):
     # pool_name has date and time appended after _
     dtstr = pool_name.split('_')[-1]
+    # pre_pool_name is everything before the last _
+    pre_pool_name = '_'.join(pool_name.split('_')[0:-1])
     # name job and task with date and time
-    job_name = f'schism_job_{dtstr}'
+    job_name = f'{pre_pool_name}_job_{dtstr}'
     try:
         client.create_job(job_name, pool_name)
     except BatchErrorException as e:
@@ -95,7 +97,7 @@ def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, stu
             print('Job already exists')
         else:
             raise e
-    task_name = f'schism_{dtstr}'
+    task_name = f'{pre_pool_name}_task_{dtstr}'
     app_cmd = load_command_from_resourcepath(fname=application_command_template)
     app_cmd = app_cmd.format(num_cores=num_cores, num_scribes=num_scribes,
                                 num_hosts=num_hosts, 
@@ -166,6 +168,8 @@ def submit_schism_job(config_file, pool_name=None):
         config_dict['mpi_command_template'] = 'mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}'
     if 'coordination_command_template' not in config_dict:
         config_dict['coordination_command_template'] = f'templates/{config_dict["template_name"]}/coordination_command_template.sh'
+    if 'num_scribes' not in config_dict:
+        config_dict['num_scribes'] = 1
     if 'num_cores' not in config_dict:
         config_dict['num_cores'] = estimate_cores_available(
             config_dict['vm_size'], config_dict['num_hosts'])
