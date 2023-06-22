@@ -16,6 +16,7 @@ cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coor
 # setup study directory
 mkdir -p $(dirname {study_dir});
 rsync -av --exclude="outputs/" --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/{study_dir} $(dirname {study_dir});
+rm -rf {study_dir}/outputs; 
 mkdir -p {study_dir}/outputs;
 # add in other directories
 setup_dirs=({setup_dirs});
