@@ -170,10 +170,10 @@ setup_disks()
 
     ln -s $NFS_SCRATCH /scratch
 
-    echo "$NFS_APPS    *(rw,async,no_root_squash)" >> /etc/exports
-    echo "$NFS_DATA    *(rw,async,no_root_squash)" >> /etc/exports
-    echo "$NFS_HOME    *(rw,async,no_root_squash)" >> /etc/exports
-    echo "$NFS_SCRATCH    *(rw,async,no_root_squash)" >> /etc/exports
+    echo "$NFS_APPS    *(rw,async,no_subtree_check,no_root_squash)" >> /etc/exports
+    echo "$NFS_DATA    *(rw,async,no_subtree_check,no_root_squash)" >> /etc/exports
+    echo "$NFS_HOME    *(rw,async,no_subtree_check,no_root_squash)" >> /etc/exports
+    echo "$NFS_SCRATCH    *(rw,async,no_subtree_check,no_root_squash)" >> /etc/exports
 
     exportfs
     exportfs -a

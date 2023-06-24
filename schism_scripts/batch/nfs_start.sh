@@ -63,7 +63,7 @@ chmod 777 /shared/scratch
 
 # NFS mount options
 #nfs_mount_options="rw,sync,rsize=131072,wsize=131072,noacl,nocto,noatime,nodiratime"
-nfs_mount_options="rw,sync,rsize=65536,wsize=65536,noatime,nodiratime"
+nfs_mount_options="rw,rsize=65536,wsize=65536,noatime,nodiratime"
 
 cat << EOF >> /etc/fstab
 $nfs_server:$nfs_share/home           /shared/home   nfs $nfs_mount_options 0 0
