@@ -1,0 +1,42 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "batchAccountName": {
+            "value": "batch_account_name"
+        },
+        "batchStorageName": {
+            "value": "batch_storage_name"
+        },
+        "batchContainerName": {
+            "value": "batch_container_name"
+        },
+        "poolName": {
+            "value": "pool_name"
+        },
+        "vmSize": {
+            "value": "Standard_HB120rs_v2"
+        },
+        "taskSlotsPerNode": {
+            "value": 1
+        },
+        "nodeAgentSKUId": {
+            "value": "batch.node.centos 7"
+        },
+        "startTaskScript": {
+            "value": "printenv && wget -qO - 'https://raw.githubusercontent.com/CADWRDeltaModeling/azure_dms_batch/main/schism_scripts/batch/pool_setup.sh' | bash -s schism_v5.10.1 schism_5_10_1_centos_7_9_HPC_gen2"
+        },
+        "storageAccountKey": {
+            "value": "storage_account_key"
+        },
+        "formula": {
+            "value": "formula"
+        },
+        "appInsightsInstrumentationKey": {
+            "value": "app_insights_instrumentation_key"
+        },
+        "appInsightsAppId": {
+            "value": "app_insights_app_id"
+        }
+    }
+}

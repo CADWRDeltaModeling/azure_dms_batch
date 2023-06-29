@@ -48,6 +48,7 @@ function install_blobfuse2 {
     sudo apt-get install blobfuse2
 }
 
+# az account set --subscription "DWR BDO"
 function az_login {
     az login --use-device-code
 }
