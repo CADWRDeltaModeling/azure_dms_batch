@@ -15,7 +15,7 @@ echo "Copying from blob to local for the setup first time";
 cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
 # setup study directory
 mkdir -p $(dirname {study_dir});
-rsync -av --exclude="outputs/" --exclude="outputs.tropic/" --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/{study_dir} $(dirname {study_dir});
+azcopy cp "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --preserve-symlinks --exclude-regex=".*outputs.*/.*nc" || true;
 rm -rf {study_dir}/outputs && mkdir -p {study_dir}/outputs;
 # add in other directories
 setup_dirs=({setup_dirs});
@@ -23,12 +23,12 @@ setup_dirs=({setup_dirs});
 for dir in "${{setup_dirs[@]}}"; do
     echo "Copying $dir";
     mkdir -p $(dirname $dir);
-    rsync -av --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/$dir $(dirname $dir);
+    azcopy cp "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/$dir?{sas}" $(dirname $dir) --recursive --preserve-symlinks || true;
 done
 # change to study directory
 cd {study_dir};
 # start background copy script
-SAS="{sas}" bash /opt/schism_scripts/batch/copy_modified_loop.sh {study_dir} $AZ_BATCH_NODE_MOUNTS_DIR "{storage_account_name}" "{storage_container_name}"& 
+SAS="{sas}" bash /opt/schism_scripts/batch/copy_modified_loop.sh {study_dir} $AZ_BATCH_NODE_MOUNTS_DIR "{storage_account_name}" "{storage_container_name}"&
 pid=$!;
 echo "Running background copy_modified_loop.sh with pid $pid";
 # run schism
@@ -38,7 +38,7 @@ export I_MPI_OFI_PROVIDER=mlx;
 {mpi_command};
 echo Schism Run Done;
 sleep 300;
-echo "Killing background copy_modified_loop.sh with pid $pid";
-kill $pid;
+echo "Sending signal to background copy_modified_loop.sh with pid $pid";
+kill -SIGUSR1 $pid;
 # no semicolon for last command
 echo "Done with everything. Shutting down"

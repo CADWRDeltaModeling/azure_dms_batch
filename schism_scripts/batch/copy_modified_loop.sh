@@ -47,14 +47,18 @@ if [[ -z "${SAS}" ]]; then
   echo "SAS needs to be defined in the environment of calling script"
   exit 1
 fi
-# copy from src_dir to dest_dir excluding the output directory
-echo "Starting copy loop from ${src_dir} to ${dest_dir}"
 modified_minutes=${max_modified_minutes}
 wait_seconds=$((wait_minutes * 60))
+# loop until finish is set to 1 by SIGUSR1
+finish=0
+exit_after_copy=0
+trap 'finish=1' SIGUSR1
 # 
 echo "Waiting for ${max_modified_minutes} minutes before starting copy loop for the first time!"
 sleep $((max_modified_minutes * 60))
-# loop forever
+#
+# copy from src_dir to dest_dir excluding the output directory
+echo "Starting copy loop from ${src_dir} to ${dest_dir}"
 while true
 do
     start_time=$(date +%s)
@@ -77,11 +81,20 @@ do
     #azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --list-of-files /tmp/azcopy_filelist.txt
     # DOCUMENTED WAY: construct a semi-colon separated list of files as an environment variable and use --include-path option to azcopy
     azcopy_filelist=$(find . -type f -mmin "-${modified_minutes}" -print0 | tr '\0' ';')
+    # 
+    if [ $finish -eq 1 ]; then
+      echo "Received SIGUSR1... exiting after this copy!"
+      exit_after_copy=1
+    fi
     #if azcopy_filelist is not empty then azcopy
     if [ -z "${azcopy_filelist}" ]; then
       echo "No files to copy... skipping this time."
     else
       azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --include-path ${azcopy_filelist} --preserve-symlinks;
+    fi
+    if [ $exit_after_copy -eq 1 ]; then
+      echo "Exiting after last copy after receiving signal!"
+      exit 0
     fi
     # find output directory under src directory and delete *.nc files older than ${delete_modified_minutes} minutes from it
     echo "Deleting files from ${src_dir} older than ${delete_modified_minutes} minutes"

@@ -28,7 +28,7 @@ done
 # change to study directory
 cd {study_dir};
 # start background copy script
-SAS="{sas}" bash /opt/schism_scripts/batch/copy_modified_loop.sh {study_dir} $AZ_BATCH_NODE_MOUNTS_DIR "{storage_account_name}" "{storage_container_name}"& 
+SAS="{sas}" bash /opt/schism_scripts/batch/copy_modified_loop.sh {study_dir} $AZ_BATCH_NODE_MOUNTS_DIR "{storage_account_name}" "{storage_container_name}"&
 pid=$!;
 echo "Running background copy_modified_loop.sh with pid $pid";
 # run schism
@@ -38,7 +38,7 @@ export I_MPI_OFI_PROVIDER=mlx;
 {mpi_command};
 echo Util Run Done;
 sleep 300;
-echo "Killing background copy_modified_loop.sh with pid $pid";
-kill $pid;
+echo "Sending signal to background copy_modified_loop.sh with pid $pid";
+kill -SIGUSR1 $pid;
 # no semicolon for last command
 echo "Done with everything. Shutting down"

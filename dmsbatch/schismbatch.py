@@ -162,6 +162,8 @@ def submit_schism_job(config_file, pool_name=None):
         config_dict['template_name'] = 'centos7' # default
     if 'vm_size' not in config_dict:
         config_dict['vm_size'] = 'standard_hb120rs_v2' 
+    if 'setup_dirs' not in config_dict:
+        config_dict['setup_dirs'] = []
     if 'application_command_template' not in config_dict:
         config_dict['application_command_template'] = f'templates/{config_dict["template_name"]}/application_command_template.sh'
     if 'mpi_command_template' not in config_dict:
