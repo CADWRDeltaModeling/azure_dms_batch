@@ -18,17 +18,15 @@ mkdir -p $(dirname {study_dir});
 set +e;
 azcopy cp "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --preserve-symlinks;
 set -e;
-# rsync -av --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/{study_dir} $(dirname {study_dir});
-# rm -rf {study_dir}/outputs; 
-# mkdir -p {study_dir}/outputs;
+
 # add in other directories
 setup_dirs=({setup_dirs});
 # loop over a array of directories, note double braces to escape for f-string substitution via python
-# for dir in "${{setup_dirs[@]}}"; do
-    # echo "Copying $dir";
-    # mkdir -p $(dirname $dir);
-    # rsync -av --exclude="outputs/" --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/$dir $(dirname $dir);
-# done
+for dir in "${{setup_dirs[@]}}"; do
+    echo "Copying $dir";
+    mkdir -p $(dirname $dir);
+    rsync -av --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/$dir $(dirname $dir);
+done
 # change to study directory
 cd {study_dir};
 # start background copy script
