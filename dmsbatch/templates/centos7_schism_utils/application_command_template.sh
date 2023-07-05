@@ -15,9 +15,7 @@ echo "Copying from blob to local for the setup first time";
 cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
 # setup study directory
 mkdir -p $(dirname {study_dir});
-set +e;
-azcopy cp "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --preserve-symlinks;
-set -e;
+azcopy cp "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --preserve-symlinks --exclude-regex=".*outputs.*/.*nc" || true;
 
 # add in other directories
 setup_dirs=({setup_dirs});
@@ -25,7 +23,7 @@ setup_dirs=({setup_dirs});
 for dir in "${{setup_dirs[@]}}"; do
     echo "Copying $dir";
     mkdir -p $(dirname $dir);
-    rsync -av --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/$dir $(dirname $dir);
+    azcopy cp "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/$dir?{sas}" $(dirname $dir) --recursive --preserve-symlinks || true;
 done
 # change to study directory
 cd {study_dir};
