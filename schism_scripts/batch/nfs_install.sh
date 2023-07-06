@@ -9,7 +9,6 @@ source $SCRIPT_DIR/azhpc-library.sh
 
 read_os
 
-yum -y install epel-release
 
 case "$os_maj_ver" in
     7)
@@ -22,4 +21,12 @@ case "$os_maj_ver" in
         yum_list="nfs-utils"
     ;;
 esac
-yum -y install $yum_list
+
+[[ ! -v USE_CACHED_INSTALL ]] && yumdownloader --resolve --destdir ${LOCAL_INSTALL_DIR}/nfs-rpms epel-release ${yum_list} -y
+# if env var of USE_LOCAL_INSTALL defined
+if [ -e "${USE_LOCAL_INSTALL}" ]; then
+    yum localinstall --nogpgcheck ${LOCAL_INSTALL_DIR}/nfs-rpms/*.rpm -y
+    echo "Using local install of NFS rpms"
+    exit 0
+fi
+
