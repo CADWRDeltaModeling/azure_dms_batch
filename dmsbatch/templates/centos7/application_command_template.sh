@@ -13,18 +13,20 @@ ulimit -s unlimited;
 module load mpi/impi-2021;
 echo "Copying from blob to local for the setup first time";
 cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
-# setup study directory
-mkdir -p $(dirname {study_dir});
-azcopy cp "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --preserve-symlinks --exclude-regex=".*outputs.*/.*nc" || true;
-rm -rf {study_dir}/outputs && mkdir -p {study_dir}/outputs;
-# add in other directories
+# do setup directories first to avoid link issues 
 setup_dirs=({setup_dirs});
 # loop over a array of directories, note double braces to escape for f-string substitution via python
 for dir in "${{setup_dirs[@]}}"; do
     echo "Copying $dir";
     mkdir -p $(dirname $dir);
-    azcopy cp "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/$dir?{sas}" $(dirname $dir) --recursive --preserve-symlinks || true;
+    rsync -av --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/$dir $(dirname $dir);
 done
+
+# setup study directory
+mkdir -p $(dirname {study_dir});
+rsync -av --exclude="outputs*/*.nc" --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/{study_dir} $(dirname {study_dir});
+mkdir -p {study_dir}/outputs;
+
 # change to study directory
 cd {study_dir};
 # start background copy script
@@ -35,10 +37,11 @@ echo "Running background copy_modified_loop.sh with pid $pid";
 echo "Running schism with {num_cores} cores and {num_hosts} hosts";
 export I_MPI_FABRICS=shm:ofi;
 export I_MPI_OFI_PROVIDER=mlx;
-{mpi_command};
+# allow script to continue if schism fails
+{mpi_command} || true;
 echo Schism Run Done;
-sleep 300;
 echo "Sending signal to background copy_modified_loop.sh with pid $pid";
 kill -SIGUSR1 $pid;
 # no semicolon for last command
+sleep 300;
 echo "Done with everything. Shutting down"
