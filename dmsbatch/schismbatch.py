@@ -40,7 +40,8 @@ def build_autoscaling_formula(num_hosts, startTime):
 def create_schism_pool(resource_group_name, pool_name, vm_size, num_hosts,
                        batch_account_name, storage_account_key, storage_name, container_name,
                        app_insights_app_id, app_insights_instrumentation_key,
-                       pool_bicep_resource='schismpool.bicep', pool_parameters_resource='schismpool.parameters.json'):
+                       pool_bicep_resource='schismpool.bicep', pool_parameters_resource='schismpool.parameters.json',
+                       start_task_script='printenv'):
     ''' create a schism pool with the given number of hosts.  The pool name is
     assumed to include the date and time after the last _ in the name.'''
     # pool_name has date and time appended after _
@@ -54,7 +55,8 @@ def create_schism_pool(resource_group_name, pool_name, vm_size, num_hosts,
                         batchAccountName=batch_account_name, storageAccountKey=storage_account_key, 
                         batchStorageName=storage_name, batchContainerName=container_name,
                         appInsightsAppId=app_insights_app_id, appInsightsInstrumentationKey=app_insights_instrumentation_key,
-                        formula = build_autoscaling_formula(num_hosts, datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)))
+                        formula = build_autoscaling_formula(num_hosts, datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)),
+                        startTaskScript=start_task_script)
         # Run the command and capture its output
         cmdstr = f"az deployment group create --name {pool_name} --resource-group {resource_group_name} --template-file {bicep_file} --parameters {modified_parameters_file}"
         logger.debug(cmdstr)
@@ -170,6 +172,8 @@ def submit_schism_job(config_file, pool_name=None):
         config_dict['mpi_command_template'] = 'mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}'
     if 'coordination_command_template' not in config_dict:
         config_dict['coordination_command_template'] = f'templates/{config_dict["template_name"]}/coordination_command_template.sh'
+    if 'start_task_script' not in config_dict:
+        config_dict['start_task_script'] = "printenv && wget -qO - 'https://raw.githubusercontent.com/CADWRDeltaModeling/azure_dms_batch/main/schism_scripts/batch/pool_setup.sh' | bash -s schism_v5.10.1 schism_5_10_1_centos_7_9_HPC_gen2"
     if 'num_scribes' not in config_dict:
         config_dict['num_scribes'] = 1
     if 'num_cores' not in config_dict:
@@ -197,7 +201,8 @@ def submit_schism_job(config_file, pool_name=None):
                                     config_dict['storage_account_name'], config_dict['storage_container_name'],
                                     config_dict['app_insights_app_id'], config_dict['app_insights_instrumentation_key'], 
                                     pool_bicep_resource=config_dict['pool_bicep_resource'],
-                                    pool_parameters_resource=config_dict['pool_parameters_resource'])
+                                    pool_parameters_resource=config_dict['pool_parameters_resource'],
+                                    start_task_script=config_dict['start_task_script'].format(**config_dict))
     sas = get_sas(config_dict['storage_account_name'], config_dict['storage_account_key'], config_dict['storage_container_name'])
     submit_schism_task(client, pool_name, config_dict['num_hosts'], config_dict['num_cores'],
                        config_dict['num_scribes'], config_dict['study_dir'], config_dict['setup_dirs'],
