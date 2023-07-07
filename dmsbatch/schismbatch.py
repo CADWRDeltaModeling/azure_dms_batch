@@ -81,7 +81,7 @@ def estimate_cores_available(vm_size, num_hosts):
     return num_hosts * (VM_CORE_MAP[vm_size])
 
 
-def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, study_dir, setup_dirs,
+def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, study_dir, study_rsync_flags, setup_dirs,
                        storage_account_name, storage_container_name, sas, storage_account_key,
                        application_command_template='application_command_template.sh',
                        mpi_command_template='mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}',
@@ -106,7 +106,9 @@ def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, stu
                                 storage_account_name = storage_account_name,
                                 storage_container_name = storage_container_name,
                                 sas = sas,
-                                study_dir=study_dir, setup_dirs=' '.join(setup_dirs),
+                                study_dir=study_dir, 
+                                study_rsync_flags=study_rsync_flags,
+                                setup_dirs=' '.join(setup_dirs),
                                 mpi_command=mpi_command_template.format(num_cores=num_cores, num_hosts=num_hosts, num_scribes=num_scribes))
     app_cmd = client.wrap_cmd_with_app_path(app_cmd, [], ostype='linux')
     logger.debug('Application command: {}'.format(app_cmd))
@@ -179,6 +181,8 @@ def submit_schism_job(config_file, pool_name=None):
     if 'num_cores' not in config_dict:
         config_dict['num_cores'] = estimate_cores_available(
             config_dict['vm_size'], config_dict['num_hosts'])
+    if 'study_rsync_flags' not in config_dict:
+        config_dict['study_rsync_flags'] = '--exclude="outputs*/*.nc"'
     if 'pool_bicep_resource' not in config_dict:
         config_dict['pool_bicep_resource'] = f'templates/{config_dict["template_name"]}/pool.bicep'
     if 'pool_parameters_resource' not in config_dict:
@@ -205,7 +209,9 @@ def submit_schism_job(config_file, pool_name=None):
                                     start_task_script=config_dict['start_task_script'].format(**config_dict))
     sas = get_sas(config_dict['storage_account_name'], config_dict['storage_account_key'], config_dict['storage_container_name'])
     submit_schism_task(client, pool_name, config_dict['num_hosts'], config_dict['num_cores'],
-                       config_dict['num_scribes'], config_dict['study_dir'], config_dict['setup_dirs'],
+                       config_dict['num_scribes'], 
+                       config_dict['study_dir'], config_dict['study_rsync_flags'],
+                       config_dict['setup_dirs'],
                        config_dict['storage_account_name'], config_dict['storage_container_name'], sas, config_dict['storage_account_key'],
                        config_dict['application_command_template'], config_dict['mpi_command_template'], config_dict['coordination_command_template'])
 

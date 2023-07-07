@@ -24,7 +24,7 @@ done
 
 # setup study directory
 mkdir -p $(dirname {study_dir});
-rsync -av --exclude="outputs*/*.nc" --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/{study_dir} $(dirname {study_dir});
+rsync -av {study_rsync_flags} --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/{study_dir} $(dirname {study_dir});
 mkdir -p {study_dir}/outputs;
 
 # change to study directory
