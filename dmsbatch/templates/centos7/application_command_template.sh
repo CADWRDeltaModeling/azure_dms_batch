@@ -38,10 +38,15 @@ echo "Running schism with {num_cores} cores and {num_hosts} hosts";
 export I_MPI_FABRICS=shm:ofi;
 export I_MPI_OFI_PROVIDER=mlx;
 # allow script to continue if schism fails
-{mpi_command} || true;
+set +e;
+{mpi_command} >  $AZ_BATCH_TASK_DIR/stdout_command.txt 2> $AZ_BATCH_TASK_DIR/stderr_command.txt;
+set -e;
+exit_code=$?;
 echo Schism Run Done;
 echo "Sending signal to background copy_modified_loop.sh with pid $pid";
 kill -SIGUSR1 $pid;
 # no semicolon for last command
 sleep 300;
-echo "Done with everything. Shutting down"
+wait;
+echo "Done with everything. Shutting down";
+exit $exit_code
