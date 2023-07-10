@@ -49,16 +49,16 @@ def mount_blob(resource_group_name, storage_account_name, container_name,
         tmp_config_fname = f'{temp_dir}/temp_config_template_{dtstr}.yml'
         with open(tmp_config_fname,'w') as fh:
             fh.write(template)
-        subprocess.check_output(f'sudo mkdir -p {mount_point}/.tmp{container_name}', shell=True)
-        subprocess.check_output(f'sudo mkdir -p {mount_point}/{container_name}', shell=True)
-        subprocess.check_output(f'sudo blobfuse2 mount {mount_point}/{container_name} --config-file={tmp_config_fname}', shell=True)
+        subprocess.check_output(f'mkdir -p {mount_point}/.tmp{container_name}', shell=True)
+        subprocess.check_output(f'mkdir -p {mount_point}/{container_name}', shell=True)
+        subprocess.check_output(f'blobfuse2 mount {mount_point}/{container_name} --config-file={tmp_config_fname}', shell=True)
         print(f'Blob container {container_name} mounted at {mount_point}/{container_name}')
     finally:
-        subprocess.check_output(f'sudo rm -f {tmp_config_fname}', shell=True)
+        subprocess.check_output(f'rm -f {tmp_config_fname}', shell=True)
 
 @click.command(name='unmount-all-blobs', help='Unmount all blobfus mounted containers')
 def unmount_all_blobs():
-    subprocess.check_output('sudo blobfuse2 unmount all', shell=True)
+    subprocess.check_output('blobfuse2 unmount all', shell=True)
 
 main.add_command(mount_blob)
 main.add_command(unmount_all_blobs)
