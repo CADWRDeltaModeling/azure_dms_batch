@@ -27,7 +27,11 @@ def modify_json_file(json_file, modified_file, **kwargs):
     with open(json_file, 'r') as f:
         json_dict = json.load(f)
     for key, value in kwargs.items():
-        json_dict['parameters'][key]['value'] = value
+        try:
+            json_dict['parameters'][key]['value'] = value
+        except KeyError:
+            logger.warn('key {} not found in json file'.format(key))
+            pass
     with open(modified_file, 'w') as f:
         json.dump(json_dict, f, indent=4)
 

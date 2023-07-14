@@ -1,0 +1,33 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "batchAccountName": {
+            "value": "batch_account_name"
+        },
+        "poolName": {
+            "value": "pool_name"
+        },
+        "vmSize": {
+            "value": "standard_l8as_v3"
+        },
+        "taskSlotsPerNode": {
+            "value": 1
+        },
+        "nodeAgentSKUId": {
+            "value": "batch.node.el 9"
+        },
+        "startTaskScript": {
+            "value": "printenv && wget -qO - 'https://raw.githubusercontent.com/CADWRDeltaModeling/azure_dms_batch/main/schism_scripts/batch/postprocess_pool_setup.sh' | bash"
+        },
+        "formula": {
+            "value": "formula"
+        },
+        "appInsightsInstrumentationKey": {
+            "value": "app_insights_instrumentation_key"
+        },
+        "appInsightsAppId": {
+            "value": "app_insights_app_id"
+        }
+    }
+}
