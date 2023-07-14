@@ -18,7 +18,7 @@
             "value": "batch.node.el 9"
         },
         "startTaskScript": {
-            "value": "printenv && wget -qO - 'https://raw.githubusercontent.com/CADWRDeltaModeling/azure_dms_batch/main/schism_scripts/batch/postprocess_pool_setup.sh' | bash"
+            "value": "printenv && yum install -y wget git && wget -qO - 'https://raw.githubusercontent.com/CADWRDeltaModeling/azure_dms_batch/main/schism_scripts/batch/postprocess_pool_setup.sh' | bash"
         },
         "formula": {
             "value": "formula"

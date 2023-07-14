@@ -1,22 +1,23 @@
 echo Main task $(pwd);
 ulimit -s unlimited;
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh 
-bash ./Miniconda3-latest-Linux-x86_64.sh -b -p ~/miniconda3 
-~/miniconda3/bin/conda init bash 
-source ~/miniconda3/etc/profile.d/conda.sh 
-conda update -y conda 
-conda install -y -n base conda-libmamba-solver 
-conda create -n suxarray -c conda-forge --solver=libmamba -y python=3.10 shapely holoviews uxarray=2023.06 datashader netcdf4 click
-git clone https://github.com/CADWRDeltaModeling/suxarray 
-pushd suxarray 
-conda activate suxarray
-pip install --no-deps . 
-pop
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh;
+bash ./Miniconda3-latest-Linux-x86_64.sh -b -p ~/miniconda3;
+~/miniconda3/bin/conda init bash;
+source ~/miniconda3/etc/profile.d/conda.sh;
+conda update -y conda;
+conda install -y -n base conda-libmamba-solver;
+conda create -n suxarray -c conda-forge --solver=libmamba -y python=3.10 shapely holoviews uxarray=2023.06 datashader netcdf4 click;
+git clone https://github.com/CADWRDeltaModeling/suxarray;
+pushd suxarray;
+conda activate suxarray;
+pip install --no-deps .;
+popd;
 # setup local disk
 ln -s /mnt/local $AZ_BATCH_TASK_WORKING_DIR/simulations;
 cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
 # setup study directory
 mkdir -p $(dirname {study_dir});
+# download the results, can be improved by downloading only a subset of files if known.
 azcopy copy "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --include-regex="(out2d|salinity|horizontalVel(X|Y)|zCoordinates)_\d+\.nc";
 # change to study directory
 cd {study_dir};
