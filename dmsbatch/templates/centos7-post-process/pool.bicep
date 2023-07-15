@@ -7,7 +7,7 @@ param taskSlotsPerNode int = 1 // number of tasks per node to be changed with vm
 param imageReference object = {
   publisher: 'almalinux'
   offer: 'almalinux'
-  sku: '9-gen1'
+  sku: '9-gen2'
   version: 'latest'
 }
 param nodeAgentSKUId string = 'batch.node.el 9'

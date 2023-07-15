@@ -15,10 +15,11 @@ popd;
 # setup local disk
 ln -s /mnt/local $AZ_BATCH_TASK_WORKING_DIR/simulations;
 cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
+git clone https://github.com/kjnam/BayDeltaSCHISM.git baydeltaschism;
 # setup study directory
 mkdir -p $(dirname {study_dir});
 # download the results, can be improved by downloading only a subset of files if known.
-azcopy copy "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --include-regex="(out2d|salinity|horizontalVel(X|Y)|zCoordinates)_\d+\.nc";
+azcopy copy "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --include-regex="outputs/(out2d|salinity|horizontalVel(X|Y)|zCoordinates)_\d+\.nc";
 # change to study directory
 cd {study_dir};
 # download the post-processing script

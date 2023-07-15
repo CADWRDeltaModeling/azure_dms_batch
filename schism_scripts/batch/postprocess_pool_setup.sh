@@ -12,7 +12,13 @@ function install_azcopy {
 install_azcopy
 # mount the local disk
 mkdir /mnt/local 
-parted /dev/nvme0n1 --script mklabel gpt mkpart xfspart xfs 0% 100% 
-mkfs.xfs /dev/nvme0n1p1 
-mount /dev/nvme0n1p1 /mnt/local 
+git clone https://github.com/Azure/azurehpc.git /opt/azurehpc
+sudo yum install -y mdadm
+# create raid0 with all nvme disks
+/opt/azurehpc/scripts/create_raid0.sh /dev/md10 /dev/nvme*n1
+mkfs.xfs /dev/md10
+mount /dev/md10 /mnt/local
+#parted /dev/nvme0n1 --script mklabel gpt mkpart xfspart xfs 0% 100% 
+#mkfs.xfs /dev/nvme0n1p1 
+#mount /dev/nvme0n1p1 /mnt/local 
 chmod 1777 /mnt/local
