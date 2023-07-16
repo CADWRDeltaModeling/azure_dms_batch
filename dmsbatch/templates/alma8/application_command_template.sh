@@ -40,5 +40,5 @@ echo Schism Run Done;
 sleep 300;
 echo "Killing background copy_modified_loop.sh with pid $pid";
 kill $pid;
-# no semicolon for last command
+# no semicolon for last command and new newline either
 echo "Done with everything. Shutting down"

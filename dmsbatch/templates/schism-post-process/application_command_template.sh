@@ -34,5 +34,5 @@ cd {study_dir};
 echo "Post-processing Done!";
 # upload the results: TBD
 azcopy copy "./*.nc" "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/ppbatch/{study_dir}?{sas}";
-# no semicolon for last command
+# no semicolon for last command and no new line either
 echo "Done with everything. Shutting down"
