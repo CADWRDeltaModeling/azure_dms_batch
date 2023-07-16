@@ -1,3 +1,4 @@
+*.yml
 *.config
 # jupyter notebooks temp dir
 **/.ipynb_checkpoints

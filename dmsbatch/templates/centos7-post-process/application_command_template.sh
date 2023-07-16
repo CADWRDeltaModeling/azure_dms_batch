@@ -1,4 +1,5 @@
 echo Main task $(pwd);
+set +x;
 ulimit -s unlimited;
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh;
 bash ./Miniconda3-latest-Linux-x86_64.sh -b -p ~/miniconda3;
@@ -15,20 +16,23 @@ popd;
 # setup local disk
 ln -s /mnt/local $AZ_BATCH_TASK_WORKING_DIR/simulations;
 cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
-git clone https://github.com/kjnam/BayDeltaSCHISM.git baydeltaschism;
+git clone -b wip --single-branch https://github.com/kjnam/BayDeltaSCHISM.git baydeltaschism;
+# common files from container
+azcopy copy "https://dwrbdoschismsa.blob.core.windows.net/itp202306/postprocess/hsi_common.tar.gz?{sas}" .;
+tar -xzf hsi_common.tar.gz;
+azcopy copy "https://dwrbdoschismsa.blob.core.windows.net/itp202306/postprocess/2016_base/grid_mapping_and_weight.nc?{sas}" common;
 # setup study directory
 mkdir -p $(dirname {study_dir});
 # download the results, can be improved by downloading only a subset of files if known.
-azcopy copy "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --include-regex="outputs/(out2d|salinity|horizontalVel(X|Y)|zCoordinates)_\d+\.nc";
+export NC_REGEX="outputs/(out2d|salinity|horizontalVel(X|Y)|zCoordinates)_\d+\.nc";
+azcopy copy "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --include-regex=$NC_REGEX;
 # change to study directory
 cd {study_dir};
-# download the post-processing script
-wget https://raw.githubusercontent.com/CADWRDeltaModeling/BayDeltaSCHISM/4cb8720258b01e462e95048b575484ca04a651a3/bdschism/bdschism/calculate_depth_average.py 
 #
-{mpi_command};
+({mpi_command});
 #
 echo "Post-processing Done!";
 # upload the results: TBD
-#azcopy copy $(dirname {study_dir}) "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}"" --recursive --exclude-path="*" --include-path="*depth_average*" --overwrite=ifSourceNewer;
+azcopy copy "./*.nc" "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/ppbatch/{study_dir}?{sas}";
 # no semicolon for last command
 echo "Done with everything. Shutting down"
