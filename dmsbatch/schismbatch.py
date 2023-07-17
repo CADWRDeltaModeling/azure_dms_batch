@@ -30,7 +30,7 @@ def modify_json_file(json_file, modified_file, **kwargs):
         try:
             json_dict['parameters'][key]['value'] = value
         except KeyError:
-            logger.warn('key {} not found in json file'.format(key))
+            logger.debug('key {} not found in json file'.format(key))
             pass
     with open(modified_file, 'w') as f:
         json.dump(json_dict, f, indent=4)

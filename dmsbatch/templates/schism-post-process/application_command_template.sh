@@ -1,10 +1,11 @@
 echo Main task $(pwd);
-set +x;
+set -x;
 ulimit -s unlimited;
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh;
-bash ./Miniconda3-latest-Linux-x86_64.sh -b -p ~/miniconda3;
-~/miniconda3/bin/conda init bash;
-source ~/miniconda3/etc/profile.d/conda.sh;
+export TMPHOME=/home/_azbatch; # fix for the fact that azure batch runs under different home directory
+bash ./Miniconda3-latest-Linux-x86_64.sh -b -p $TMPHOME/miniconda3;
+$TMPHOME/miniconda3/bin/conda init bash;
+source $TMPHOME/miniconda3/etc/profile.d/conda.sh;
 conda update -y conda;
 conda install -y -n base conda-libmamba-solver;
 conda create -n suxarray -c conda-forge --solver=libmamba -y python=3.10 shapely holoviews uxarray=2023.06 datashader netcdf4 click;
