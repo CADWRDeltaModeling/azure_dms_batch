@@ -22,3 +22,4 @@ template_name: "centos7" # this is the template name for the pool, e.g. "centos7
 # nice to have to see CPU, memory, network, disk usage - sensitive so not enabled by default
 #app_insights_instrumentation_key: '' # this is the instrumentation key for the app insights instance
 #app_insights_app_id: '' # this is the app id for the app insights instance
+#start_task_script: "printenv; wget -qO - 'https://raw.githubusercontent.com/CADWRDeltaModeling/azure_dms_batch/main/schism_scripts/batch/pool_setup.sh' | bash -s schism_v5.10.1 schism_5_10_1_centos_7_9_HPC_gen2; rsync -T /tmp -av /tmp/localinstalls/* \"$AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/.batch\""

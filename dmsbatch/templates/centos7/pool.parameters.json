@@ -5,11 +5,14 @@
         "batchAccountName": {
             "value": "batch_account_name"
         },
-        "batchStorageName": {
-            "value": "batch_storage_name"
+        "storageAccountName": {
+            "value": "storage_account_name"
         },
-        "batchContainerName": {
-            "value": "batch_container_name"
+        "storageAccountKey": {
+            "value": "storage_account_key"
+        },
+        "storageContainerName": {
+            "value": "storage_container_name"
         },
         "poolName": {
             "value": "pool_name"
@@ -25,9 +28,6 @@
         },
         "startTaskScript": {
             "value": "printenv && wget -qO - 'https://raw.githubusercontent.com/CADWRDeltaModeling/azure_dms_batch/main/schism_scripts/batch/pool_setup.sh' | bash -s schism_v5.10.1 schism_5_10_1_centos_7_9_HPC_gen2"
-        },
-        "storageAccountKey": {
-            "value": "storage_account_key"
         },
         "formula": {
             "value": "formula"

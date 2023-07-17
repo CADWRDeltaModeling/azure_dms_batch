@@ -56,7 +56,9 @@ trap 'finish=1' SIGUSR1
 # 
 echo "Waiting for ${max_modified_minutes} minutes before starting copy loop for the first time!"
 sleep $((max_modified_minutes * 60))
-#
+# mount ramdisk (128GB)
+/opt/schism_scripts/batch/ramdisk_mount.sh
+export TMP_DIR=/tmp/azcopyprep
 # copy from src_dir to dest_dir excluding the output directory
 echo "Starting copy loop from ${src_dir} to ${dest_dir}"
 while true
@@ -66,7 +68,8 @@ do
     echo "Copying files modified upto ${modified_minutes} minutes ago"
     # find files modified in the last modified_minutes minutes and copy them to dest_dir
     # OPTION1: cp with blobfuse mounted dir (slower due to writeback cache)
-    # find "${src_dir}" -type f -mmin "-${modified_minutes}" -exec cp -v --parents {} "${dest_dir}" \;
+    mkdir -p $TMP_DIR
+    find . -type f -mmin "-${modified_minutes}" -exec cp -v --parents {} $TMP_DIR \;
     # OPTION2: azcopy (faster, but need to install azcopy and set up SAS). Also sync scans destination and source so is slower
     # use azcopy sync (not sure how preformance compares to cp))
     #echo "syncing ${src_dir} to ${container}/${src_dir}"
@@ -80,7 +83,9 @@ do
     #find . -type f -mmin "-${modified_minutes}" -print > /tmp/azcopy_filelist.txt
     #azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --list-of-files /tmp/azcopy_filelist.txt
     # DOCUMENTED WAY: construct a semi-colon separated list of files as an environment variable and use --include-path option to azcopy
-    azcopy_filelist=$(find . -type f -mmin "-${modified_minutes}" -print0 | tr '\0' ';')
+    #azcopy_filelist=$(find . -type f -mmin "-${modified_minutes}" -print0 | tr '\0' ';')
+    pushd $TMP_DIR;
+    azcopy_filelist=$(find . -type f -print0 | tr '\0' ';')
     # 
     if [ $finish -eq 1 ]; then
       echo "Received SIGUSR1... exiting after this copy!"
@@ -92,6 +97,8 @@ do
     else
       azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --include-path ${azcopy_filelist} --preserve-symlinks;
     fi
+    popd;
+    rm -rf $TMP_DIR;
     if [ $exit_after_copy -eq 1 ]; then
       echo "Exiting after last copy after receiving signal!"
       exit 0

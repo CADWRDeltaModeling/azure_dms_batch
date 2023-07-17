@@ -25,8 +25,7 @@ azcopy copy "https://dwrbdoschismsa.blob.core.windows.net/itp202306/postprocess/
 # setup study directory
 mkdir -p $(dirname {study_dir});
 # download the results, can be improved by downloading only a subset of files if known.
-export NC_REGEX="outputs/(out2d|salinity|horizontalVel(X|Y)|zCoordinates)_\d+\.nc";
-azcopy copy "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --include-regex=$NC_REGEX;
+azcopy copy "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) --recursive --include-regex="{input_file_pattern}";
 # change to study directory
 cd {study_dir};
 #
@@ -34,6 +33,6 @@ cd {study_dir};
 #
 echo "Post-processing Done!";
 # upload the results: TBD
-azcopy copy "./*.nc" "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/ppbatch/{study_dir}?{sas}";
+azcopy copy "{output_file_pattern}" "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{output_folder}/{study_dir}?{sas}";
 # no semicolon for last command and no new line either
 echo "Done with everything. Shutting down"

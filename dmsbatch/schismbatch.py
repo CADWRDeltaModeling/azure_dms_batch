@@ -13,10 +13,6 @@ from dmsbatch.commands import AzureBatch
 import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-# configure logger to print to stdout
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-logger.addHandler(ch)
 
 def load_command_from_resourcepath(fname):
     return pkg_resources.resource_string(__name__, fname).decode('utf-8')
@@ -28,6 +24,7 @@ def modify_json_file(json_file, modified_file, **kwargs):
         json_dict = json.load(f)
     for key, value in kwargs.items():
         try:
+            logger.debug(key,value)
             json_dict['parameters'][key]['value'] = value
         except KeyError:
             logger.debug('key {} not found in json file'.format(key))
@@ -41,26 +38,62 @@ def build_autoscaling_formula(num_hosts, startTime):
     formula = formula.format(num_hosts=num_hosts, startTime=startTime.isoformat())
     return formula
 
-def create_schism_pool(resource_group_name, pool_name, vm_size, num_hosts,
-                       batch_account_name, storage_account_key, storage_name, container_name,
-                       app_insights_app_id, app_insights_instrumentation_key,
-                       pool_bicep_resource='schismpool.bicep', pool_parameters_resource='schismpool.parameters.json',
-                       start_task_script='printenv'):
+def convert_to_camel_case(variable_name):
+    parts = variable_name.split('_')
+    camel_case_name = parts[0] + ''.join(word.title() for word in parts[1:])
+    return camel_case_name
+
+def convert_keys_to_camel_case(config_dict):
+    camel_case_dict = {}
+    for key, value in config_dict.items():
+        camel_case_key = convert_to_camel_case(key)
+        camel_case_dict[camel_case_key] = value
+    return camel_case_dict
+
+
+def create_substituted_dict(config_dict, **kwargs):
+    config_dict = config_dict.copy()
+    config_dict.update(kwargs)
+    # string substitution for the config_dict values with itself
+    for key in config_dict:
+        value = config_dict[key]
+        if isinstance(value, str):
+            config_dict[key] = value.format(**config_dict)
+        elif isinstance(value, list):
+            config_dict[key] = ' '.join(value)
+        else:
+            config_dict[key] = value
+    return config_dict
+
+
+def create_schism_pool(pool_name, config_dict):
     ''' create a schism pool with the given number of hosts.  The pool name is
     assumed to include the date and time after the last _ in the name.'''
-    # pool_name has date and time appended after _
-    dtstr = pool_name.split('_')[-1]
+    # assign the variables below to the values in the config file
+    config_dict = create_substituted_dict(config_dict, pool_name=pool_name)
+    resource_group_name = config_dict['resource_group']
+    pool_name = config_dict['pool_name']
+    num_hosts = config_dict['num_hosts']
+    batch_account_name = config_dict['batch_account_name']
+    storage_account_key = config_dict['storage_account_key']
+    storage_name = config_dict['storage_account_name']
+    container_name = config_dict['storage_container_name']
+    app_insights_app_id = config_dict['app_insights_app_id']
+    app_insights_instrumentation_key = config_dict['app_insights_instrumentation_key']
+    pool_bicep_resource = config_dict['pool_bicep_resource']
+    pool_parameters_resource = config_dict['pool_parameters_resource']
+    start_task_script = config_dict['start_task_script']
+
     bicep_file = pkg_resources.resource_filename(__name__, pool_bicep_resource)
     parameters_file = pkg_resources.resource_filename(__name__, pool_parameters_resource)
+    dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     modified_parameters_file = f'temp_schismpool.parameters_{dtstr}.json'
+    json_config_dict = convert_keys_to_camel_case(config_dict)
     try:
+        # build json file from template using config_dict values
         modify_json_file(parameters_file, modified_parameters_file,
-                        poolName=pool_name, vmSize=vm_size,
-                        batchAccountName=batch_account_name, storageAccountKey=storage_account_key, 
-                        batchStorageName=storage_name, batchContainerName=container_name,
-                        appInsightsAppId=app_insights_app_id, appInsightsInstrumentationKey=app_insights_instrumentation_key,
                         formula = build_autoscaling_formula(num_hosts, datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)),
-                        startTaskScript=start_task_script)
+                        **json_config_dict)
         # Run the command and capture its output
         cmdstr = f"az deployment group create --name {pool_name} --resource-group {resource_group_name} --template-file {bicep_file} --parameters {modified_parameters_file}"
         logger.debug(cmdstr)
@@ -71,7 +104,7 @@ def create_schism_pool(resource_group_name, pool_name, vm_size, num_hosts,
         return pool_name
     except Exception as e:
         logger.error('Error creating pool {}'.format(pool_name))
-        logger.error(e.output)
+        logger.error(e)
         raise e
     finally:
         # delete the modified parameters file
@@ -85,11 +118,22 @@ def estimate_cores_available(vm_size, num_hosts):
     return num_hosts * (VM_CORE_MAP[vm_size])
 
 
-def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, study_dir, study_rsync_flags, setup_dirs,
-                       storage_account_name, storage_container_name, sas, storage_account_key,
-                       application_command_template='application_command_template.sh',
-                       mpi_command_template='mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}',
-                       coordination_command_template='coordination_command_template.sh'):
+def submit_schism_task(client, pool_name, config_dict):
+    config_dict = create_substituted_dict(config_dict, pool_name=pool_name)
+    # assign the variables below to the values in the config file
+    num_hosts = config_dict['num_hosts']
+    num_cores = config_dict['num_cores']
+    num_scribes = config_dict['num_scribes']
+    study_dir = config_dict['study_dir']
+    study_rsync_flags = config_dict['study_rsync_flags']
+    setup_dirs = config_dict['setup_dirs']
+    storage_account_name = config_dict['storage_account_name']
+    storage_container_name = config_dict['storage_container_name']
+    sas = config_dict['sas']
+    storage_account_key = config_dict['storage_account_key']
+    application_command_template = config_dict['application_command_template']
+    mpi_command = config_dict['mpi_command']
+    coordination_command_template = config_dict['coordination_command_template']
     # pool_name has date and time appended after _
     dtstr = pool_name.split('_')[-1]
     # pre_pool_name is everything before the last _
@@ -104,23 +148,14 @@ def submit_schism_task(client, pool_name, num_hosts, num_cores, num_scribes, stu
         else:
             raise e
     task_name = f'{pre_pool_name}_task_{dtstr}'
+    #
     app_cmd = load_command_from_resourcepath(fname=application_command_template)
-    app_cmd = app_cmd.format(num_cores=num_cores, num_scribes=num_scribes,
-                                num_hosts=num_hosts, 
-                                storage_account_name = storage_account_name,
-                                storage_container_name = storage_container_name,
-                                sas = sas,
-                                study_dir=study_dir, 
-                                study_rsync_flags=study_rsync_flags,
-                                setup_dirs=' '.join(setup_dirs),
-                                mpi_command=mpi_command_template.format(num_cores=num_cores, num_hosts=num_hosts, num_scribes=num_scribes))
+    app_cmd = app_cmd.format(**config_dict) # do we need an order for substitution?
     app_cmd = client.wrap_cmd_with_app_path(app_cmd, [], ostype='linux')
     logger.debug('Application command: {}'.format(app_cmd))
+    #
     coordination_cmd = load_command_from_resourcepath(fname=coordination_command_template)
-    coordination_cmd = coordination_cmd.format(num_cores=num_cores, num_scribes=num_scribes,
-                                            num_hosts=num_hosts, 
-                                            storage_container_name = storage_container_name, 
-                                            study_dir=study_dir, setup_dirs=' '.join(setup_dirs))
+    coordination_cmd = coordination_cmd.format(**config_dict)
     coordination_cmd = client.wrap_cmd_with_app_path(coordination_cmd, [], ostype='linux')
     logger.debug('Coordination command: {}'.format(coordination_cmd))
     # output files should be saved to batch container
@@ -174,8 +209,8 @@ def submit_schism_job(config_file, pool_name=None):
         config_dict['setup_dirs'] = []
     if 'application_command_template' not in config_dict:
         config_dict['application_command_template'] = f'templates/{config_dict["template_name"]}/application_command_template.sh'
-    if 'mpi_command_template' not in config_dict:
-        config_dict['mpi_command_template'] = 'mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}'
+    if 'mpi_command' not in config_dict:
+        config_dict['mpi_command'] = 'mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}'
     if 'coordination_command_template' not in config_dict:
         config_dict['coordination_command_template'] = f'templates/{config_dict["template_name"]}/coordination_command_template.sh'
     if 'start_task_script' not in config_dict:
@@ -200,24 +235,16 @@ def submit_schism_job(config_file, pool_name=None):
     #
     client = create_batch_client(
         config_dict['batch_account_name'], config_dict['batch_account_key'], config_dict['batch_account_url'])
+    # get sas token so that substitution can happen
+    sas = get_sas(config_dict['storage_account_name'], config_dict['storage_account_key'], config_dict['storage_container_name'])
+    config_dict['sas'] = sas
+    # TODO: pool name substitution should be improved
     dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     if pool_name is None:
         pool_name = config_dict['pool_name'] + f'_{dtstr}'
         # create pool 
-        pool_name = create_schism_pool(config_dict['resource_group'], pool_name, config_dict['vm_size'], config_dict['num_hosts'],
-                                    config_dict['batch_account_name'], config_dict['storage_account_key'], 
-                                    config_dict['storage_account_name'], config_dict['storage_container_name'],
-                                    config_dict['app_insights_app_id'], config_dict['app_insights_instrumentation_key'], 
-                                    pool_bicep_resource=config_dict['pool_bicep_resource'],
-                                    pool_parameters_resource=config_dict['pool_parameters_resource'],
-                                    start_task_script=config_dict['start_task_script'].format(**config_dict))
-    sas = get_sas(config_dict['storage_account_name'], config_dict['storage_account_key'], config_dict['storage_container_name'])
-    submit_schism_task(client, pool_name, config_dict['num_hosts'], config_dict['num_cores'],
-                       config_dict['num_scribes'], 
-                       config_dict['study_dir'], config_dict['study_rsync_flags'],
-                       config_dict['setup_dirs'],
-                       config_dict['storage_account_name'], config_dict['storage_container_name'], sas, config_dict['storage_account_key'],
-                       config_dict['application_command_template'], config_dict['mpi_command_template'], config_dict['coordination_command_template'])
+        pool_name = create_schism_pool(pool_name, config_dict)
+    submit_schism_task(client, pool_name, config_dict)
 
 
 def generate_schism_job_yaml(config_file):
