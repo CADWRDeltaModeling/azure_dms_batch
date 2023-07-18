@@ -67,6 +67,7 @@ echo "Starting NFS installation..."
 echo "Done with NFS install"
 echo "Starting insights installation..."
 ./appinsights_install.sh "v1.3.0"
+./appinsights_start.sh
 echo "Done enabling insights"
 echo "Done with pool installs"
 #
