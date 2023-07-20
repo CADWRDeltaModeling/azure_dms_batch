@@ -56,9 +56,9 @@ trap 'finish=1' SIGUSR1
 # 
 echo "Waiting for ${max_modified_minutes} minutes before starting copy loop for the first time!"
 sleep $((max_modified_minutes * 60))
-# mount ramdisk (128GB)
+# mount ramdisk (128GB) - this is a temporary solution to speed up copying FIXME:
 /opt/schism_scripts/batch/ramdisk_mount.sh
-export TMP_DIR=/tmp/azcopyprep
+export TMP_DIR=/mnt/ramdisk
 # copy from src_dir to dest_dir excluding the output directory
 echo "Starting copy loop from ${src_dir} to ${dest_dir}"
 while true
