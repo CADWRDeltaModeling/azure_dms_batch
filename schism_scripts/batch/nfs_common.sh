@@ -40,7 +40,7 @@ t
 fd
 w
 EOF
-           createdPartitions="$createdPartitions /dev/${disk}1"
+           createdPartitions="$createdPartitions /dev/${disk}p1"
        done
     else
         disk=$(echo $devices | tr -d [:space:])
@@ -54,7 +54,7 @@ p
 
 w
 EOF
-        createdPartitions="$createdPartitions /dev/${disk}1"
+        createdPartitions="$createdPartitions /dev/${disk}p1"
     fi
 
     sleep 10
