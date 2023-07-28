@@ -23,10 +23,5 @@ case "$os_maj_ver" in
 esac
 
 [[ ! -v USE_CACHED_INSTALL ]] && yumdownloader --resolve --destdir ${LOCAL_INSTALL_DIR}/nfs-rpms epel-release ${yum_list} -y
-# if env var of USE_LOCAL_INSTALL defined
-if [ -e "${USE_LOCAL_INSTALL}" ]; then
-    yum localinstall --nogpgcheck ${LOCAL_INSTALL_DIR}/nfs-rpms/*.rpm -y
-    echo "Using local install of NFS rpms"
-    exit 0
-fi
+yum localinstall --nogpgcheck ${LOCAL_INSTALL_DIR}/nfs-rpms/*.rpm -y
 
