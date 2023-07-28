@@ -87,7 +87,7 @@ EOF
         fi
 
         sleep 10
-        mount -a
+        mount /dev/$raidDevice $mountPoint # mount -a is not working ?
     fi
 }
 
