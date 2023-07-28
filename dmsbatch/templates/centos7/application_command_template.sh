@@ -1,6 +1,6 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
-source /opt/intel/oneapi/setvars.sh intel64 --config=/tmp/intel-config.txt;
+source /opt/intel/oneapi/setvars.sh intel64; # --config=/tmp/intel-config.txt;
 export SCHISM_VERSION="5.10.1";
 export NETCDF_C_VERSION="4.9.2";
 export NETCDF_FORTRAN_VERSION="4.5.3"
