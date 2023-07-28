@@ -98,7 +98,7 @@ do
       azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --include-path ${azcopy_filelist} --preserve-symlinks;
     fi
     popd;
-    rm -rf $TMP_DIR;
+    rm -rf $TMP_DIR/*;
     if [ $exit_after_copy -eq 1 ]; then
       echo "Exiting after last copy after receiving signal!"
       exit 0
