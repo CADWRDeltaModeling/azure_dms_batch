@@ -8,7 +8,7 @@ import logging
 
 client = create_batch_client('path_to_the_configuration_file')
 blob_client = create_blob_client('path_to_the_configuration_file')
-app_pkgs = [('ecoptmlinux', '8.2.54a9cc3c', 'DSM2-8.2.54a9cc3c-Linux/bin')]
+app_pkgs = [('ecoptmlinux', '8.2.54a9cc3c', 'DSM2-8.2.54a9cc3c-Linux/bin'), ('dsm2_linux_rpms', '1.0.0','')]
 pool_name = 'pool_name'
 container_name='container_name'
 tidefile_folder = 'tidefiles'
@@ -16,10 +16,12 @@ output_folder = 'outputs'
 
 def create_pool():
     pool_start_cmds = ['printenv',
-                       'yum install -y glibc.i686 libstdc++.i686 glibc.x86_64 libstdc++.x86_64',# --setopt=protected_multilib=false',
-                       'yum-config-manager --add-repo https://yum.repos.intel.com/2019/setup/intel-psxe-runtime-2019.repo',
-                       'rpm --import https://yum.repos.intel.com/2019/setup/RPM-GPG-KEY-intel-psxe-runtime-2019',
-                       'yum install -y intel-icc-runtime-32bit intel-ifort-runtime-32bit']
+                       'yum localinstall --nogpgcheck $AZ_BATCH_APP_PACKAGE_dsm2_linux_rpms_1_0_0/rpms/*.rpm -y']
+#                       'yum install -y glibc.i686 libstdc++.i686 glibc.x86_64 libstdc++.x86_64',# --setopt=protected_multilib=false',
+ #                      'yum-config-manager --add-repo https://yum.repos.intel.com/2019/setup/intel-psxe-runtime-2019.repo',
+ #                      'rpm --import https://yum.repos.intel.com/2019/setup/RPM-GPG-KEY-intel-psxe-runtime-2019',
+ #                      'yum install -y intel-icc-runtime-32bit intel-ifort-runtime-32bit',
+ #                       'yum install libgfortran4 -y']
     new_pool = client.create_pool(pool_name,
                         1,
                         app_packages=[(app,version) for app,version,_ in app_pkgs], 
@@ -38,7 +40,7 @@ def upload_prepare(blob_dir, study_folder, study_name, upload_tide_file=False):
     tide_file_local = '../%s/%s.h5' % (tidefile_folder, study_name)
     study_path = blob_dir + '/' + study_folder + '/' + study_name
     study_local_dir = './%s/%s' % (study_folder, study_name)
-    job_name = '%s_%s' % (study_folder, study_name)
+    job_name = '%s_%s_local' % (study_folder, study_name)
     # upload the tide file before the model run. 
     if upload_tide_file:
         # slow - 9 mins so use max_connections > 2 (default). Using 12 which seems to be a good fit here
@@ -51,11 +53,11 @@ def upload_prepare(blob_dir, study_folder, study_name, upload_tide_file=False):
 
 def create_ptm_single_task(release_day, envvars, study_path, study_name):
     input_file = client.create_input_file_spec(container_name,blob_prefix='%s/%s.zip'%(study_path,study_name),file_path='.')
-    output_dir_sas_url = blob_client.get_container_sas_url(container_name)
+    #output_dir_sas_url = blob_client.get_container_sas_url(container_name)
     #std_out_files = client.create_output_file_spec(
         #'../std*.txt', output_dir_sas_url, blob_path=f'{study_path}/{output_folder}/{release_day}')
     #permissions = dmsbatch.commands.azureblob.BlobPermissions.WRITE
-    output_dir_sas_url = blob_client.get_container_sas_url(container_name)
+    output_dir_sas_url = blob_client.get_container_sas_url(container_name, timeout=datetime.timedelta(days=3))
     output_dir = client.create_output_file_spec(
         f'{study_path}/studies/output/*', output_dir_sas_url, blob_path=f'{study_path}/{output_folder}/{release_day}')
     set_path_string = client.set_path_to_apps(app_pkgs, ostype='linux')
@@ -128,7 +130,7 @@ if __name__ == '__main__':
     parser.add_argument('--start', type=int, nargs=3, required=True, help='start year start month and start day, e.g., 1999 2 1')
     parser.add_argument('--end', type=int, nargs=3, required=True, help='end year end month and end day, e.g., 2016 6 30')
     parser.add_argument('--months', nargs='+', type=int, default=[
-                        1, 2, 3, 4, 5, 6, 10, 11, 12], help='list of months 1-12 for which to run simulations, e.g. 1 2 3 for JAN FEB MAR')
+                        1, 2, 3, 4, 5, 6, 9, 10, 11, 12], help='list of months 1-12 for which to run simulations, e.g. 1 2 3 for JAN FEB MAR')
     parser.add_argument('--simulation-days', type=int, default=92,
                         help='simulation days, e.g. 150')
     parser.add_argument('--study-name', type=str, required=True,
@@ -153,6 +155,7 @@ if __name__ == '__main__':
     tasks = create_tasks(simulation_start_year,simulation_end_year,simulation_start_month,simulation_end_month,
                         simulation_start_day,simulation_end_day,args.months,args.simulation_days,study_path,study_folder,study_name)
     # Azure batch limits to submitting 100 tasks at a time.
+    i=0                                            
     for i in range(0,round(len(tasks)/100)):
         client.submit_tasks(job_name,tasks[i*100:i*100+100])
     client.submit_tasks(job_name,tasks[i*100:])

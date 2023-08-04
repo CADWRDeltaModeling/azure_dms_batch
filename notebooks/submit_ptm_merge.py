@@ -7,7 +7,7 @@ import logging
 
 client = create_batch_client('path_to_the_configuration')
 blob_client = create_blob_client('path_to_the_configuration')
-app_pkgs = [('ecoptmlinux', '8.2.54a9cc3c', 'DSM2-8.2.54a9cc3c-Linux/bin')]
+app_pkgs = [('ecoptmlinux', '8.2.54a9cc3c', 'DSM2-8.2.54a9cc3c-Linux/bin'), ('dsm2_linux_rpms', '1.0.0','')]
 pool_name = 'pool_name'
 container_name='container_name'
 output_folder = 'outputs'

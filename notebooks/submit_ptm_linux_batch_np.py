@@ -8,7 +8,7 @@ import logging
 
 client = create_batch_client('path_to_the_configuration')
 blob_client = create_blob_client('path_to_the_configuration')
-app_pkgs = [('ecoptmlinux', '8.2.54a9cc3c', 'DSM2-8.2.54a9cc3c-Linux/bin')]
+app_pkgs = [('ecoptmlinux', '8.2.54a9cc3c', 'DSM2-8.2.54a9cc3c-Linux/bin'), ('dsm2_linux_rpms', '1.0.0','')]
 pool_name = 'pool_name'
 container_name='container_name'
 tidefile_folder = 'tidefiles'
@@ -19,11 +19,12 @@ dss_read_script = 'ptm_fate_postpro_single.py'
 
 def create_pool():
     pool_start_cmds = ['printenv',
-                       'yum install -y glibc.i686 libstdc++.i686 glibc.x86_64 libstdc++.x86_64',# --setopt=protected_multilib=false',
-                       'yum-config-manager --add-repo https://yum.repos.intel.com/2019/setup/intel-psxe-runtime-2019.repo',
-                       'rpm --import https://yum.repos.intel.com/2019/setup/RPM-GPG-KEY-intel-psxe-runtime-2019',
-                       'yum install -y intel-icc-runtime-32bit intel-ifort-runtime-32bit',
-                       'yum install libgfortran4 -y']
+                       'yum localinstall --nogpgcheck $AZ_BATCH_APP_PACKAGE_dsm2_linux_rpms_1_0_0/rpms/*.rpm -y']                                                                                                                 
+#                       'yum install -y glibc.i686 libstdc++.i686 glibc.x86_64 libstdc++.x86_64',# --setopt=protected_multilib=false',
+#                       'yum-config-manager --add-repo https://yum.repos.intel.com/2019/setup/intel-psxe-runtime-2019.repo',
+#                       'rpm --import https://yum.repos.intel.com/2019/setup/RPM-GPG-KEY-intel-psxe-runtime-2019',
+#                       'yum install -y intel-icc-runtime-32bit intel-ifort-runtime-32bit',
+#                       'yum install libgfortran4 -y']
     new_pool = client.create_pool(pool_name,
                         1,
                         app_packages=[(app,version) for app,version,_ in app_pkgs], 
@@ -42,7 +43,7 @@ def upload_prepare(blob_dir, study_folder, study_name, upload_tide_file=False):
     tide_file_local = '../%s/%s.h5' % (tidefile_folder, study_name)
     study_path = blob_dir + '/' + study_folder + '/' + study_name
     study_local_dir = './%s/%s' % (study_folder, study_name)
-    job_name = '%s_%s' % (study_folder, study_name)
+    job_name = '%s_%s_local' % (study_folder, study_name)
     # upload the tide file before the model run. 
     if upload_tide_file:
         # slow - 9 mins so use max_connections > 2 (default). Using 12 which seems to be a good fit here
@@ -68,7 +69,7 @@ def upload_prepare(blob_dir, study_folder, study_name, upload_tide_file=False):
 
 def create_ptm_single_task(release_day, run_no, envvars, study_path, study_name):
     input_file = client.create_input_file_spec(container_name,blob_prefix='%s/%s.zip'%(study_path,study_name),file_path='.')
-    output_dir_sas_url = blob_client.get_container_sas_url(container_name)
+    output_dir_sas_url = blob_client.get_container_sas_url(container_name, timeout=datetime.timedelta(days=3))
     #std_out_files = client.create_output_file_spec(
     #    '../std*.txt', output_dir_sas_url, blob_path=f'{study_path}/{output_folder}/{release_day}/{run_no}')
     #permissions = dmsbatch.commands.azureblob.BlobPermissions.WRITE
@@ -190,6 +191,7 @@ if __name__ == '__main__':
     tasks = create_tasks(args.start_year,args.end_year,args.start_day,
                     args.months,args.run_length,study_path,study_folder,study_name,args.insertion_file,args.duration,args.delay)
     # Azure batch limits to submitting 100 tasks at a time.
+    i=0   
     for i in range(0,round(len(tasks)/100)):
         client.submit_tasks(job_name,tasks[i*100:i*100+100])
     client.submit_tasks(job_name,tasks[i*100:])
