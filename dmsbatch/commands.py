@@ -229,7 +229,7 @@ class AzureBatch:
             resource_files=None,
             elevation_level=batchmodels.ElevationLevel.admin,
             enable_inter_node_communication=False,
-            wait_for_success=False):
+            wait_for_success=True):
         """
         Create or if exists then resize pool to desired pool_size
         The vm_size should be selected based on the kind of workload. For cpu intensive tasks, the F or D series work well.
