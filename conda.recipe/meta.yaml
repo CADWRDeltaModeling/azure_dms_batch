@@ -47,7 +47,7 @@ test:
   imports:
    - dmsbatch
 about:
-  home: https://github.com/dwr-psandhu/azure_dms_batch
+  home: https://github.com/CADWRDeltaModeling/azure_dms_batch
   summary: Azure Batch for Delta Modeling Section 
   license: {{ data.get('license') }}
   license_file: LICENSE

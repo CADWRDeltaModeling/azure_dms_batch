@@ -16,7 +16,7 @@ setup(
     license="MIT",
     author="Nicky Sandhu",
     author_email='psandhu@water.ca.gov',
-    url='https://github.com/dwr-psandhu/azure_dms_batch',
+    url='https://github.com/CADWRDeltaModeling/azure_dms_batch',
     packages=['dmsbatch'],
     entry_points={
         'console_scripts': [

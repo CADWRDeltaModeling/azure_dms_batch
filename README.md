@@ -19,7 +19,7 @@ conda env create -f environment.yml
 ```
 Git clone this project
 ```
-git clone https://github.com/dwr-psandhu/azure_dms_batch.git
+git clone https://github.com/CADWRDeltaModeling/azure_dms_batch.git
 ```
 Change directory to the location of this project and then install using
 ```

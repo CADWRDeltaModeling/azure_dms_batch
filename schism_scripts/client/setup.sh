@@ -19,7 +19,7 @@ function install_miniconda3 {
 }
 
 function install_dmsbatch {
-    git clone https://github.com/dwr-psandhu/azure_dms_batch.git
+    git clone https://github.com/CADWRDeltaModeling/azure_dms_batch.git
     cd azure_dms_batch
     conda env create -f environment.yml 
     conda activate azure
