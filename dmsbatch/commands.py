@@ -16,9 +16,14 @@ import azure.batch.models as batchmodels
 from azure.batch import BatchServiceClient
 from azure.core.exceptions import ResourceExistsError
 from azure.storage import blob
-from azure.storage.blob import (BlobSasPermissions, BlobServiceClient,
-                                ContainerSasPermissions, generate_account_sas,
-                                generate_blob_sas, generate_container_sas)
+from azure.storage.blob import (
+    BlobSasPermissions,
+    BlobServiceClient,
+    ContainerSasPermissions,
+    generate_account_sas,
+    generate_blob_sas,
+    generate_container_sas,
+)
 
 
 def generate_blank_config(config_file: str):
@@ -36,9 +41,10 @@ def generate_blank_config(config_file: str):
     Exception if config file already exists. Move it out of the way or generate with another name
     """
     if os.path.exists(config_file):
-        raise f'Config file: {config_file} exists! Please delete or move out of the way to generate'
-    with open(config_file, 'w') as fh:
-        fh.write("""# Update the Batch and Storage account credential strings below with the values
+        raise f"Config file: {config_file} exists! Please delete or move out of the way to generate"
+    with open(config_file, "w") as fh:
+        fh.write(
+            """# Update the Batch and Storage account credential strings below with the values
 # unique to your accounts. These are used when constructing connection strings
 # for the Batch and Storage client objects.
 # Replace the <xxxxxx> with actual values from your account
@@ -50,7 +56,8 @@ _BATCH_ACCOUNT_URL = https://<batch_account_name>.<location>.batch.azure.com
 _STORAGE_ACCOUNT_NAME = <storage_account_name>
 _STORAGE_ACCOUNT_KEY = <storage_account_key>
 _STORAGE_ACCOUNT_DOMAIN = blob.core.windows.net
-        """)
+        """
+        )
 
 
 def load_config(config_file: str):
@@ -73,7 +80,7 @@ def load_config(config_file: str):
     parser = configparser.ConfigParser()
     parser.optionxform = str
     parser.read(config_file)
-    config = dict(parser['DEFAULT'].items())
+    config = dict(parser["DEFAULT"].items())
     return config
 
 
@@ -93,7 +100,12 @@ def create_batch_client(config_file: str):
     """
     config = load_config(config_file)
     # Create a Batch service client. We'll now be interacting with the Batch
-    return AzureBatch(config['_BATCH_ACCOUNT_NAME'], config['_BATCH_ACCOUNT_KEY'], config['_BATCH_ACCOUNT_URL'])
+    return AzureBatch(
+        config["_BATCH_ACCOUNT_NAME"],
+        config["_BATCH_ACCOUNT_KEY"],
+        config["_BATCH_ACCOUNT_URL"],
+    )
+
 
 def create_blob_client(config_file: str):
     """
@@ -112,7 +124,11 @@ def create_blob_client(config_file: str):
     config = load_config(config_file)
     # Create the blob client, for use in obtaining references to
     # blob storage containers and uploading files to containers.
-    return AzureBlob(config['_STORAGE_ACCOUNT_NAME'], config['_STORAGE_ACCOUNT_KEY'], config['_STORAGE_ACCOUNT_DOMAIN'])
+    return AzureBlob(
+        config["_STORAGE_ACCOUNT_NAME"],
+        config["_STORAGE_ACCOUNT_KEY"],
+        config["_STORAGE_ACCOUNT_DOMAIN"],
+    )
 
 
 class AzureBatch:
@@ -124,10 +140,13 @@ class AzureBatch:
 
     The config file with the needed values are defined in a config file use :py:func:`generate_blank_config`
     """
-    _STANDARD_OUT_FILE_NAME = 'stdout.txt'
-    _STANDARD_ERROR_FILE_NAME = 'stderr.txt'
 
-    def __init__(self, batch_account_name: str, batch_account_key: str, batch_account_url: str):
+    _STANDARD_OUT_FILE_NAME = "stdout.txt"
+    _STANDARD_ERROR_FILE_NAME = "stderr.txt"
+
+    def __init__(
+        self, batch_account_name: str, batch_account_key: str, batch_account_url: str
+    ):
         """
         Initializes the batch account client
 
@@ -140,11 +159,12 @@ class AzureBatch:
         batch_account_url : str
             batch accont url
         """
-        self.credentials = batchauth.SharedKeyCredentials(batch_account_name,
-                                                    batch_account_key)
+        self.credentials = batchauth.SharedKeyCredentials(
+            batch_account_name, batch_account_key
+        )
         self.batch_client = BatchServiceClient(
-            self.credentials,
-            batch_url=batch_account_url)
+            self.credentials, batch_url=batch_account_url
+        )
 
     def create_pool_if_not_exist(self, pool: batchmodels.PoolAddParameter) -> bool:
         """
@@ -173,9 +193,11 @@ class AzureBatch:
                 logging.info("Pool {!r} already exists".format(pool.id))
                 return False
 
-    def resize_pool(self, pool_id: str, pool_size: int, node_deallocation_option='taskCompletion'):
+    def resize_pool(
+        self, pool_id: str, pool_size: int, node_deallocation_option="taskCompletion"
+    ):
         """
-        Resize pool with pool_id to pool_size. This method starts the resizing but that could take a couple of minutes 
+        Resize pool with pool_id to pool_size. This method starts the resizing but that could take a couple of minutes
         to finish. See :py:func:`wait_for_pool_nodes`
 
         Parameters
@@ -187,7 +209,8 @@ class AzureBatch:
         """
         pool_resize_param = batchmodels.PoolResizeParameter(
             target_dedicated_nodes=pool_size,
-            node_deallocation_option=node_deallocation_option)  # scale it down to zero
+            node_deallocation_option=node_deallocation_option,
+        )  # scale it down to zero
         self.batch_client.pool.resize(pool_id, pool_resize_param)
 
     def wait_for_pool_nodes(self, pool_id: str):
@@ -208,28 +231,37 @@ class AzureBatch:
         nodes = self.wait_for_all_nodes_state(
             pool_id,
             frozenset(
-                (batchmodels.ComputeNodeState.start_task_failed,
-                batchmodels.ComputeNodeState.unusable,
-                batchmodels.ComputeNodeState.idle)
-            )
+                (
+                    batchmodels.ComputeNodeState.start_task_failed,
+                    batchmodels.ComputeNodeState.unusable,
+                    batchmodels.ComputeNodeState.idle,
+                )
+            ),
         )
         # ensure all node are idle
         if any(node.state != batchmodels.ComputeNodeState.idle for node in nodes):
-            raise RuntimeError('node(s) of pool {} not in idle state'.format(
-                pool_id))
+            raise RuntimeError("node(s) of pool {} not in idle state".format(pool_id))
 
-    def create_pool(self, pool_id: str, pool_size: int,
-            vm_size='standard_f2s_v2',
-            tasks_per_vm=2,
-            os_image_data=('microsoftwindowsserver', 'windowsserver', '2019-datacenter-core'),
-            os_image_reference=None,
-            app_packages=[],
-            start_task_cmd="cmd /c set",
-            start_task_admin=False,
-            resource_files=None,
-            elevation_level=batchmodels.ElevationLevel.admin,
-            enable_inter_node_communication=False,
-            wait_for_success=True):
+    def create_pool(
+        self,
+        pool_id: str,
+        pool_size: int,
+        vm_size="standard_f2s_v2",
+        tasks_per_vm=2,
+        os_image_data=(
+            "microsoftwindowsserver",
+            "windowsserver",
+            "2019-datacenter-core",
+        ),
+        os_image_reference=None,
+        app_packages=[],
+        start_task_cmd="cmd /c set",
+        start_task_admin=False,
+        resource_files=None,
+        elevation_level=batchmodels.ElevationLevel.admin,
+        enable_inter_node_communication=False,
+        wait_for_success=True,
+    ):
         """
         Create or if exists then resize pool to desired pool_size
         The vm_size should be selected based on the kind of workload. For cpu intensive tasks, the F or D series work well.
@@ -273,21 +305,28 @@ class AzureBatch:
         vm_count = pool_size
         # choosing windows machine here (just the core windows, it has no other apps on it including explorer)
         if os_image_reference == None:
-            sku_to_use, image_ref_to_use = self.select_latest_verified_vm_image_with_node_agent_sku(
-                *os_image_data)
+            sku_to_use, image_ref_to_use = (
+                self.select_latest_verified_vm_image_with_node_agent_sku(*os_image_data)
+            )
         else:
             sku_to_use, image_ref_to_use = os_image_reference
         vmconfig = batchmodels.VirtualMachineConfiguration(
-            image_reference=image_ref_to_use,
-            node_agent_sku_id=sku_to_use)
+            image_reference=image_ref_to_use, node_agent_sku_id=sku_to_use
+        )
         # applications needed here
-        app_references = [batchmodels.ApplicationPackageReference(
-            application_id=app[0], version=app[1]) for app in app_packages]
+        app_references = [
+            batchmodels.ApplicationPackageReference(
+                application_id=app[0], version=app[1]
+            )
+            for app in app_packages
+        ]
         if start_task_admin:
             user_identity = batchmodels.UserIdentity(
                 auto_user=batchmodels.AutoUserSpecification(
                     scope=batchmodels.AutoUserScope.pool,
-                    elevation_level=elevation_level))
+                    elevation_level=elevation_level,
+                )
+            )
         else:
             user_identity = batchmodels.UserIdentity()
         pool = batchmodels.PoolAddParameter(
@@ -296,31 +335,45 @@ class AzureBatch:
             vm_size=vm_size,
             target_dedicated_nodes=vm_count,
             # not understood but carried from an example maybe outdated ?
-            #max_tasks_per_node=1 if enable_inter_node_communication else tasks_per_vm,
+            # max_tasks_per_node=1 if enable_inter_node_communication else tasks_per_vm,
             task_slots_per_node=1 if enable_inter_node_communication else tasks_per_vm,
             resize_timeout=datetime.timedelta(minutes=15),
             enable_inter_node_communication=enable_inter_node_communication,
             application_package_references=app_references,
-            start_task=batchmodels.StartTask(command_line=start_task_cmd,
-                                            user_identity=user_identity,
-                                            wait_for_success=wait_for_success,
-                                            resource_files=resource_files) if start_task_cmd else None
+            start_task=(
+                batchmodels.StartTask(
+                    command_line=start_task_cmd,
+                    user_identity=user_identity,
+                    wait_for_success=wait_for_success,
+                    resource_files=resource_files,
+                )
+                if start_task_cmd
+                else None
+            ),
         )
         pool_created = self.create_pool_if_not_exist(pool)
         return pool_created
 
-    def create_or_resize_pool(self, pool_id, pool_size,
-            vm_size='standard_f4s_v2',
-            tasks_per_vm=2,
-            os_image_data=('microsoftwindowsserver', 'windowsserver', '2019-datacenter-core'),
-            os_image_reference = None,
-            app_packages=[],
-            start_task_cmd="cmd /c set",
-            start_task_admin=False,
-            resource_files=None,
-            elevation_level=batchmodels.ElevationLevel.admin,
-            enable_inter_node_communication=False,
-            wait_for_success=False):
+    def create_or_resize_pool(
+        self,
+        pool_id,
+        pool_size,
+        vm_size="standard_f4s_v2",
+        tasks_per_vm=2,
+        os_image_data=(
+            "microsoftwindowsserver",
+            "windowsserver",
+            "2019-datacenter-core",
+        ),
+        os_image_reference=None,
+        app_packages=[],
+        start_task_cmd="cmd /c set",
+        start_task_admin=False,
+        resource_files=None,
+        elevation_level=batchmodels.ElevationLevel.admin,
+        enable_inter_node_communication=False,
+        wait_for_success=False,
+    ):
         """Create or if exists then resize pool to desired pool_size
 
         Args:
@@ -329,7 +382,9 @@ class AzureBatch:
             vm_size: name of vm, default standard_f4s_v2
             tasks_per_vm (default 4): this is tied to the number of cores on the vm_size above. if your task needs 1 cpu per task set this to number of cores
         """
-        pool_created = self.create_pool(pool_id, pool_size,
+        pool_created = self.create_pool(
+            pool_id,
+            pool_size,
             vm_size,
             tasks_per_vm,
             os_image_data,
@@ -340,7 +395,8 @@ class AzureBatch:
             resource_files,
             elevation_level,
             enable_inter_node_communication,
-            wait_for_success)
+            wait_for_success,
+        )
         if not pool_created:
             self.resize_pool(pool_id, pool_size)
 
@@ -387,7 +443,12 @@ class AzureBatch:
         while self.exists_pool(pool_id):
             time.sleep(polling_interval_secs)
 
-    def create_job(self, job_id: str, pool_id: str, prep_task: batchmodels.JobPreparationTask = None):
+    def create_job(
+        self,
+        job_id: str,
+        pool_id: str,
+        prep_task: batchmodels.JobPreparationTask = None,
+    ):
         """
         Creates a job with the specified ID, associated with the specified pool.
 
@@ -400,12 +461,13 @@ class AzureBatch:
         prep_task : batchmodels.JobPreparationTask, optional
             a preperation task to be run before any tasks, by default None
         """
-        logging.info('Creating job [{}]...'.format(job_id))
+        logging.info("Creating job [{}]...".format(job_id))
 
         job = batch.models.JobAddParameter(
             id=job_id,
             job_preparation_task=prep_task,
-            pool_info=batch.models.PoolInformation(pool_id=pool_id))
+            pool_info=batch.models.PoolInformation(pool_id=pool_id),
+        )
 
         self.batch_client.job.add(job)
 
@@ -436,9 +498,12 @@ class AzureBatch:
         """
         self.batch_client.job.delete(job_id)
 
-    def wait_for_job_under_job_schedule(self, job_schedule_id: str,
-            timeout: datetime.timedelta,
-            polling_interval_secs: int = 10) -> batchmodels.CloudJob:
+    def wait_for_job_under_job_schedule(
+        self,
+        job_schedule_id: str,
+        timeout: datetime.timedelta,
+        polling_interval_secs: int = 10,
+    ) -> batchmodels.CloudJob:
         """
         Waits for a job schedule to run
 
@@ -447,7 +512,7 @@ class AzureBatch:
         job_schedule_id : str
             job schedule id
         timeout : datetime.timedelta
-            how long to wait 
+            how long to wait
         polling_interval_secs: int
             how often to poll
 
@@ -465,17 +530,24 @@ class AzureBatch:
 
         while datetime.datetime.now() < time_to_timeout_at:
             cloud_job_schedule = self.batch_client.job_schedule.get(
-                job_schedule_id=job_schedule_id)
+                job_schedule_id=job_schedule_id
+            )
 
             logging.info("Checking if job exists...")
             if (cloud_job_schedule.execution_info.recent_job) and (
-                    cloud_job_schedule.execution_info.recent_job.id is not None):
+                cloud_job_schedule.execution_info.recent_job.id is not None
+            ):
                 return cloud_job_schedule.execution_info.recent_job.id
             time.sleep(polling_interval_secs)
 
         raise TimeoutError("Timed out waiting for tasks to complete")
 
-    def wait_for_job_schedule_to_complete(self, job_schedule_id: str, timeout: datetime.timedelta, polling_interval_secs: int = 10):
+    def wait_for_job_schedule_to_complete(
+        self,
+        job_schedule_id: str,
+        timeout: datetime.timedelta,
+        polling_interval_secs: int = 10,
+    ):
         """
         Waits for a job schedule to complete.
 
@@ -489,7 +561,8 @@ class AzureBatch:
         """
         while datetime.datetime.now() < timeout:
             cloud_job_schedule = self.batch_client.job_schedule.get(
-                job_schedule_id=job_schedule_id)
+                job_schedule_id=job_schedule_id
+            )
 
             logging.info("Checking if job schedule is complete...")
             state = cloud_job_schedule.state
@@ -498,17 +571,23 @@ class AzureBatch:
             time.sleep(polling_interval_secs)
         return
 
-    def create_input_file_spec(self, container_name: str, blob_prefix: str, file_path: str = '.', container_name_is_sas_url: bool = False) -> batchmodels.ResourceFile:
+    def create_input_file_spec(
+        self,
+        container_name: str,
+        blob_prefix: str,
+        file_path: str = ".",
+        container_name_is_sas_url: bool = False,
+    ) -> batchmodels.ResourceFile:
         """
         input file specs are information for the batch task to download these files
-        to the task before starting the task. 
+        to the task before starting the task.
 
         Parameters
         ----------
         container_name : str
             name of container
         blob_prefix : str
-            path to blob 
+            path to blob
         file_path : str, optional
             where to place the contents of the blob_prefix; appends this value to the blob_prefix, by default '.'
 
@@ -519,20 +598,24 @@ class AzureBatch:
         """
         if container_name_is_sas_url:
             return batchmodels.ResourceFile(
-                http_url=container_name,
-                file_path=file_path)
+                http_url=container_name, file_path=file_path
+            )
         else:
             return batchmodels.ResourceFile(
                 auto_storage_container_name=container_name,
                 blob_prefix=blob_prefix,
-                file_path=file_path)
+                file_path=file_path,
+            )
 
-    def create_output_file_spec(self, file_pattern: str, 
-        output_container_sas_url: str, 
-        blob_path: str = '.', 
-        upload_condition=batchmodels.OutputFileUploadCondition.task_completion) -> batchmodels.OutputFile:
+    def create_output_file_spec(
+        self,
+        file_pattern: str,
+        output_container_sas_url: str,
+        blob_path: str = None,
+        upload_condition=batchmodels.OutputFileUploadCondition.task_completion,
+    ) -> batchmodels.OutputFile:
         """
-        create an output file spec that is information for uploading the output of the task matching the file_pattern to be 
+        create an output file spec that is information for uploading the output of the task matching the file_pattern to be
         uploaded to the container as defined by the output_container_sas_url and the blob_path
 
         Parameters
@@ -553,15 +636,23 @@ class AzureBatch:
             file_pattern=file_pattern,
             destination=batchmodels.OutputFileDestination(
                 container=batchmodels.OutputFileBlobContainerDestination(
-                    container_url=output_container_sas_url, path=blob_path)),
+                    container_url=output_container_sas_url, path=blob_path
+                )
+            ),
             upload_options=batchmodels.OutputFileUploadOptions(
-                upload_condition=upload_condition)
+                upload_condition=upload_condition
+            ),
         )
 
-    def create_prep_task(self, task_name: str, commands: str,
-            resource_files: list = None, ostype: str = 'windows') -> batchmodels.JobPreparationTask:
+    def create_prep_task(
+        self,
+        task_name: str,
+        commands: str,
+        resource_files: list = None,
+        ostype: str = "windows",
+    ) -> batchmodels.JobPreparationTask:
         """
-        Creates a task to run on a node before any tasks for a job are run. This creates the the task that is then 
+        Creates a task to run on a node before any tasks for a job are run. This creates the the task that is then
         used to create a job with this prep task specified. See :py:func:`create_job`
 
         Parameters
@@ -584,15 +675,23 @@ class AzureBatch:
             id=task_name,
             command_line=cmdline,
             resource_files=resource_files,
-            wait_for_success=True)
+            wait_for_success=True,
+        )
 
         return prep_task
 
-    def create_task_copy_file_to_shared_dir(self, container: str, blob_path: str, file_path: str,
-            shared_dir: str = 'AZ_BATCH_NODE_SHARED_DIR', ostype: str = 'windows', container_is_sas_url = False) -> batchmodels.JobPreparationTask:
+    def create_task_copy_file_to_shared_dir(
+        self,
+        container: str,
+        blob_path: str,
+        file_path: str,
+        shared_dir: str = "AZ_BATCH_NODE_SHARED_DIR",
+        ostype: str = "windows",
+        container_is_sas_url=False,
+    ) -> batchmodels.JobPreparationTask:
         """
         A special job prep task for the common use case of copying file from container blob to shared directory on node.
-        This is designed to be run as preperation task for a job to have this shared file available to the tasks that will subsequently run 
+        This is designed to be run as preperation task for a job to have this shared file available to the tasks that will subsequently run
         on the node
 
         Parameters
@@ -615,27 +714,38 @@ class AzureBatch:
         """
         if container_is_sas_url:
             input_file = batchmodels.ResourceFile(
-                http_url=container,
-                file_path=file_path)
+                http_url=container, file_path=file_path
+            )
         else:
             input_file = batchmodels.ResourceFile(
                 auto_storage_container_name=container,
                 blob_prefix=blob_path,
-                file_path=file_path)
+                file_path=file_path,
+            )
 
-        cmdline = ''
-        if ostype == 'windows':
-            cmdline = f'move {file_path}\\{blob_path}* %AZ_BATCH_NODE_SHARED_DIR%'
+        cmdline = ""
+        if ostype == "windows":
+            cmdline = f"move {file_path}\\{blob_path}* %AZ_BATCH_NODE_SHARED_DIR%"
         else:
-            cmdline = f'mv {file_path}/{blob_path}*' + ' ${AZ_BATCH_NODE_SHARED_DIR}'
+            cmdline = f"mv {file_path}/{blob_path}*" + " ${AZ_BATCH_NODE_SHARED_DIR}"
 
-        prep_task = self.create_prep_task('copy_file_task', [cmdline], resource_files=[
-                                        input_file], ostype=ostype)
+        prep_task = self.create_prep_task(
+            "copy_file_task", [cmdline], resource_files=[input_file], ostype=ostype
+        )
         return prep_task
 
-
-    def create_task(self, task_id: str, command: str, resource_files: list = None, output_files: list = None, env_settings: dict = None,
-            elevation_level: str = None, num_instances: int = 1, coordination_cmdline: str = None, coordination_files: list = None):
+    def create_task(
+        self,
+        task_id: str,
+        command: str,
+        resource_files: list = None,
+        output_files: list = None,
+        env_settings: dict = None,
+        elevation_level: str = None,
+        num_instances: int = 1,
+        coordination_cmdline: str = None,
+        coordination_files: list = None,
+    ):
         """
         Create a task for the given input_file, command, output file specs and environment settings.
         You need to add :py:func:'submit_task' to send it to batch service to run.
@@ -651,7 +761,7 @@ class AzureBatch:
         task_id : str
             The ID of the task to be added.
         command : str
-            command line for the application. 
+            command line for the application.
         resource_files : list, optional
             list of input files to be downloaded before running task. batchmodels.ResourceFile
         output_files : list, optional
@@ -670,33 +780,40 @@ class AzureBatch:
         Returns
         -------
         batchmodels.TaskAddParameter
-            The task definition 
+            The task definition
         """
-        environment_settings = None if env_settings is None else [
-            batch.models.EnvironmentSetting(name=key, value=env_settings[key]) for key in env_settings]
+        environment_settings = (
+            None
+            if env_settings is None
+            else [
+                batch.models.EnvironmentSetting(name=key, value=env_settings[key])
+                for key in env_settings
+            ]
+        )
         multi_instance_settings = None
         if coordination_cmdline or (num_instances and num_instances > 1):
             multi_instance_settings = batchmodels.MultiInstanceSettings(
                 number_of_instances=num_instances,
                 coordination_command_line=coordination_cmdline,
-                common_resource_files=coordination_files)
-        user = batchmodels.AutoUserSpecification(
-            scope=batchmodels.AutoUserScope.pool,
-            elevation_level=elevation_level)
-        return batchmodels.TaskAddParameter(
-                id=task_id,
-                command_line=command,
-                user_identity=batchmodels.UserIdentity(auto_user=user),
-                resource_files=resource_files,
-                environment_settings=environment_settings,
-                output_files=output_files,
-                multi_instance_settings=multi_instance_settings
+                common_resource_files=coordination_files,
             )
+        user = batchmodels.AutoUserSpecification(
+            scope=batchmodels.AutoUserScope.pool, elevation_level=elevation_level
+        )
+        return batchmodels.TaskAddParameter(
+            id=task_id,
+            command_line=command,
+            user_identity=batchmodels.UserIdentity(auto_user=user),
+            resource_files=resource_files,
+            environment_settings=environment_settings,
+            output_files=output_files,
+            multi_instance_settings=multi_instance_settings,
+        )
 
     def submit_tasks(self, job_id: str, tasks: list, tasks_per_request: int = 100):
         """
-        submit tasks as a list. 
-        There are limitations on size of request and also timeout. For this reason this task 
+        submit tasks as a list.
+        There are limitations on size of request and also timeout. For this reason this task
         submits tasks upto task_per_request
 
         Parameters
@@ -710,18 +827,30 @@ class AzureBatch:
         """
         for i in range(0, math.ceil(len(tasks) / tasks_per_request)):
             try:
-                self.batch_client.task.add_collection(job_id, list(
-                    tasks[i * tasks_per_request:i * tasks_per_request + tasks_per_request]))
+                self.batch_client.task.add_collection(
+                    job_id,
+                    list(
+                        tasks[
+                            i * tasks_per_request : i * tasks_per_request
+                            + tasks_per_request
+                        ]
+                    ),
+                )
             except batchmodels.BatchErrorException as err:
                 self.print_batch_exception(err)
                 raise
 
-    def submit_tasks_and_wait(self, job_id: str, tasks: list,
-            tasks_per_request: int = 100,
-            timeout: datetime.timedelta = datetime.timedelta(minutes=30), polling_interval_secs: int = 10):
+    def submit_tasks_and_wait(
+        self,
+        job_id: str,
+        tasks: list,
+        tasks_per_request: int = 100,
+        timeout: datetime.timedelta = datetime.timedelta(minutes=30),
+        polling_interval_secs: int = 10,
+    ):
         """
-        submit tasks as a list. 
-        There are limitations on size of request and also timeout. For this reason this task 
+        submit tasks as a list.
+        There are limitations on size of request and also timeout. For this reason this task
         submits tasks upto task_per_request
 
         Parameters
@@ -732,7 +861,7 @@ class AzureBatch:
             list of batchmodels.TaskAddParameter. See :py:func:`create_task`
         tasks_per_request : int, optional
             tasks per request (grouped requests), by default 100
-        timeout : datetime.timedelta, 
+        timeout : datetime.timedelta,
             how long to wait in minutes, by default 30 minutes
         polling_interval_secs:
             how often to check, by default 10 seconds
@@ -740,10 +869,12 @@ class AzureBatch:
         try:
             self.submit_tasks(self.batch_client, job_id, tasks)
             # Pause execution until tasks reach Completed state.
-            self.wait_for_tasks_to_complete(job_id,
-                                            timeout, polling_interval_secs=polling_interval_secs)
-            logging.info("Success! All tasks completed within the timeout period:",
-                         timeout)
+            self.wait_for_tasks_to_complete(
+                job_id, timeout, polling_interval_secs=polling_interval_secs
+            )
+            logging.info(
+                "Success! All tasks completed within the timeout period:", timeout
+            )
         except batchmodels.BatchErrorException as err:
             self.print_batch_exception(err)
             raise
@@ -762,8 +893,12 @@ class AzureBatch:
         self.batch_client.task.delete(job_name, task_name)
 
     def wait_for_subtasks_to_complete(
-            self, job_id: str, task_id: str,
-            timeout: datetime.timedelta, polling_interval_secs: int = 10):
+        self,
+        job_id: str,
+        task_id: str,
+        timeout: datetime.timedelta,
+        polling_interval_secs: int = 10,
+    ):
         """
         Returns when all subtasks in the specified task reach the Completed state.
 
@@ -785,14 +920,20 @@ class AzureBatch:
         """
         timeout_expiration = datetime.datetime.now() + timeout
 
-        logging.debug("Monitoring all tasks for 'Completed' state, timeout in {}..."
-            .format(timeout), end='')
+        logging.debug(
+            "Monitoring all tasks for 'Completed' state, timeout in {}...".format(
+                timeout
+            ),
+            end="",
+        )
 
         while datetime.datetime.now() < timeout_expiration:
             subtasks = self.batch_client.task.list_subtasks(job_id, task_id)
-            incomplete_subtasks = [subtask for subtask in subtasks.value if
-                                subtask.state !=
-                                batchmodels.TaskState.completed]
+            incomplete_subtasks = [
+                subtask
+                for subtask in subtasks.value
+                if subtask.state != batchmodels.TaskState.completed
+            ]
             if not incomplete_subtasks:
                 return True
             else:
@@ -800,11 +941,15 @@ class AzureBatch:
 
         raise RuntimeError(
             "ERROR: Subtasks did not reach 'Completed' state within "
-            "timeout period of " + str(timeout))
+            "timeout period of " + str(timeout)
+        )
 
-    def wait_for_tasks_to_complete(self, job_id: str,
-            timeout: datetime.timedelta = datetime.timedelta(minutes=10),
-            polling_interval_secs: int = 10):
+    def wait_for_tasks_to_complete(
+        self,
+        job_id: str,
+        timeout: datetime.timedelta = datetime.timedelta(minutes=10),
+        polling_interval_secs: int = 10,
+    ):
         """
          Returns when all tasks in the specified job reach the Completed state.
 
@@ -831,20 +976,28 @@ class AzureBatch:
             for task in tasks:
                 if task.state == batchmodels.TaskState.completed:
                     # Pause execution until subtasks reach Completed state.
-                    incomplete_tasks.append(self.wait_for_subtasks_to_complete(job_id,
-                                                task.id,
-                                                datetime.timedelta(minutes=10), polling_interval_secs=polling_interval_secs))
+                    incomplete_tasks.append(
+                        self.wait_for_subtasks_to_complete(
+                            job_id,
+                            task.id,
+                            datetime.timedelta(minutes=10),
+                            polling_interval_secs=polling_interval_secs,
+                        )
+                    )
                 else:
                     incomplete_tasks.append(False)
             if not all(incomplete_tasks):
                 time.sleep(polling_interval_secs)
             else:
                 return True
-        raise RuntimeError("ERROR: Tasks did not reach 'Completed' state within "
-                        "timeout period of " + str(timeout))
+        raise RuntimeError(
+            "ERROR: Tasks did not reach 'Completed' state within "
+            "timeout period of " + str(timeout)
+        )
 
-    def wait_for_all_nodes_state(self, pool_id: str, node_state: list,
-            polling_interval_secs: int = 10):
+    def wait_for_all_nodes_state(
+        self, pool_id: str, node_state: list, polling_interval_secs: int = 10
+    ):
         """
         Waits for all nodes in pool to reach any specified state in set
 
@@ -867,26 +1020,35 @@ class AzureBatch:
         RuntimeError
             incase the nodes don't achieve the desired state within the timeout
         """
-        logging.info('waiting for all nodes in pool {} to reach one of: {!r}'.format(
-            pool_id, node_state))
+        logging.info(
+            "waiting for all nodes in pool {} to reach one of: {!r}".format(
+                pool_id, node_state
+            )
+        )
         i = 0
         while True:
             # refresh pool to ensure that there is no resize error
             pool = self.batch_client.pool.get(pool_id)
-            if pool.allocation_state == 'steady':
+            if pool.allocation_state == "steady":
                 if pool.resize_errors is not None:
                     resize_errors = "\n".join([repr(e) for e in pool.resize_errors])
                     raise RuntimeError(
-                        'resize error encountered for pool {}:\n{}'.format(
-                            pool.id, resize_errors))
+                        "resize error encountered for pool {}:\n{}".format(
+                            pool.id, resize_errors
+                        )
+                    )
                 nodes = list(self.batch_client.compute_node.list(pool.id))
-                if (len(nodes) >= pool.target_dedicated_nodes and
-                        all(node.state in node_state for node in nodes)):
+                if len(nodes) >= pool.target_dedicated_nodes and all(
+                    node.state in node_state for node in nodes
+                ):
                     return nodes
                 i += 1
                 if i % 3 == 0:
-                    logging.info('waiting for {} nodes to reach desired state...'.format(
-                        pool.target_dedicated_nodes))
+                    logging.info(
+                        "waiting for {} nodes to reach desired state...".format(
+                            pool.target_dedicated_nodes
+                        )
+                    )
             time.sleep(polling_interval_secs)
 
     def print_batch_exception(self, batch_exception: Exception):
@@ -898,18 +1060,21 @@ class AzureBatch:
         batch_exception : Exception
 
         """
-        logging.info('-------------------------------------------')
-        logging.info('Exception encountered:')
-        if (batch_exception.error and batch_exception.error.message and
-                batch_exception.error.message.value):
+        logging.info("-------------------------------------------")
+        logging.info("Exception encountered:")
+        if (
+            batch_exception.error
+            and batch_exception.error.message
+            and batch_exception.error.message.value
+        ):
             logging.info(batch_exception.error.message.value)
             if batch_exception.error.values:
                 logging.info()
                 for mesg in batch_exception.error.values:
-                    logging.info('{}:\t{}'.format(mesg.key, mesg.value))
-        logging.info('-------------------------------------------')
+                    logging.info("{}:\t{}".format(mesg.key, mesg.value))
+        logging.info("-------------------------------------------")
 
-    def wrap_commands_in_shell(self, commands, ostype: str = 'windows') -> str:
+    def wrap_commands_in_shell(self, commands, ostype: str = "windows") -> str:
         """
         Wrap commands in a shell
 
@@ -930,15 +1095,16 @@ class AzureBatch:
         ValueError
             if ostype is unknown
         """
-        if ostype.lower() == 'linux':
-            return '/bin/bash -c \'set -e; set -o pipefail; {}; wait\''.format(
-                ';'.join(commands))
-        elif ostype.lower() == 'windows':
-            return 'cmd.exe /c "{}"'.format('&'.join(commands))
+        if ostype.lower() == "linux":
+            return "/bin/bash -c 'set -e; set -o pipefail; {}; wait'".format(
+                ";".join(commands)
+            )
+        elif ostype.lower() == "windows":
+            return 'cmd.exe /c "{}"'.format("&".join(commands))
         else:
-            raise ValueError('unknown ostype: {}'.format(ostype))
+            raise ValueError("unknown ostype: {}".format(ostype))
 
-    def set_path_to_apps(self, apps: list, ostype='windows') -> str:
+    def set_path_to_apps(self, apps: list, ostype="windows") -> str:
         """
         create cmd to set path to apps binary locations
 
@@ -966,24 +1132,38 @@ class AzureBatch:
         'set "PATH=%AZ_BATCH_APP_PACKAGE_dsm2#8.2.c5aacef7%/DSM2-8.2.c5aacef7-win32/bin;%AZ_BATCH_APP_PACKAGE_vista#1.0-v2019-05-28%/bin;%AZ_BATCH_APP_PACKAGE_unzip#5.51-1%/bin;%PATH%"'
         `
         """
-        if ostype == 'windows':
-            app_loc_var = ['%AZ_BATCH_APP_PACKAGE_{app_name}#{app_version}%/{bin_loc}'.format(
-                app_name=name, app_version=version, bin_loc=bin_loc) for name, version, bin_loc in apps]
+        if ostype == "windows":
+            app_loc_var = [
+                "%AZ_BATCH_APP_PACKAGE_{app_name}#{app_version}%/{bin_loc}".format(
+                    app_name=name, app_version=version, bin_loc=bin_loc
+                )
+                for name, version, bin_loc in apps
+            ]
             env_var_path = ";".join(app_loc_var)
             cmd = 'set "PATH={env_var_path};%PATH%"'.format(env_var_path=env_var_path)
-        elif ostype == 'linux':
-            app_loc_var = ['${' + 'AZ_BATCH_APP_PACKAGE_{app_name}_{app_version}{brace}/{bin_loc}'.format(
-                app_name=name.replace('.', '_'), app_version=version.replace('.', '_'), brace='}', bin_loc=bin_loc) for name, version, bin_loc in apps]
+        elif ostype == "linux":
+            app_loc_var = [
+                "${"
+                + "AZ_BATCH_APP_PACKAGE_{app_name}_{app_version}{brace}/{bin_loc}".format(
+                    app_name=name.replace(".", "_"),
+                    app_version=version.replace(".", "_"),
+                    brace="}",
+                    bin_loc=bin_loc,
+                )
+                for name, version, bin_loc in apps
+            ]
             env_var_path = ":".join(app_loc_var)
             if len(env_var_path) > 0:
-                cmd = "export PATH={env_var_path}:$PATH".format(env_var_path=env_var_path)
+                cmd = "export PATH={env_var_path}:$PATH".format(
+                    env_var_path=env_var_path
+                )
             else:
-                cmd= "export PATH=$PATH" # do nothing
+                cmd = "export PATH=$PATH"  # do nothing
         else:
-            raise Exception(f'unknown ostype: {ostype}')
+            raise Exception(f"unknown ostype: {ostype}")
         return cmd
 
-    def wrap_cmd_with_app_path(self, cmd, app_pkgs: list, ostype='windows'):
+    def wrap_cmd_with_app_path(self, cmd, app_pkgs: list, ostype="windows"):
         """
         wraps cmd with a shell and set to the application packages paths before calling this cmd string
 
@@ -1038,16 +1218,28 @@ class AzureBatch:
         list
             skus available for usage
         """
-        options = batchmodels.AccountListSupportedImagesOptions(
-            filter=filter)
+        options = batchmodels.AccountListSupportedImagesOptions(filter=filter)
         images = self.batch_client.account.list_supported_images(
-            account_list_supported_images_options=options)
-        skus_to_use = [(image.node_agent_sku_id, image.image_reference.publisher,
-                        image.image_reference.offer, image.image_reference.sku) for image in images]
+            account_list_supported_images_options=options
+        )
+        skus_to_use = [
+            (
+                image.node_agent_sku_id,
+                image.image_reference.publisher,
+                image.image_reference.offer,
+                image.image_reference.sku,
+            )
+            for image in images
+        ]
         return skus_to_use
 
     def select_latest_verified_vm_image_with_node_agent_sku(
-            self, publisher: str, offer: str, sku_starts_with: str, filter="verificationType eq 'verified'"):
+        self,
+        publisher: str,
+        offer: str,
+        sku_starts_with: str,
+        filter="verificationType eq 'verified'",
+    ):
         """
         Select the latest verified image that Azure Batch supports given
         a publisher, offer and sku (starts with filter).
@@ -1071,13 +1263,15 @@ class AzureBatch:
         # get verified vm image list and node agent sku ids from service
         options = batchmodels.AccountListSupportedImagesOptions(filter=filter)
         images = self.batch_client.account.list_supported_images(
-            account_list_supported_images_options=options)
+            account_list_supported_images_options=options
+        )
         # pick the latest supported sku
         skus_to_use = [
-            (image.node_agent_sku_id, image.image_reference) for image in images
-            if image.image_reference.publisher.lower() == publisher.lower() and
-            image.image_reference.offer.lower() == offer.lower() and
-            image.image_reference.sku.startswith(sku_starts_with)
+            (image.node_agent_sku_id, image.image_reference)
+            for image in images
+            if image.image_reference.publisher.lower() == publisher.lower()
+            and image.image_reference.offer.lower() == offer.lower()
+            and image.image_reference.sku.startswith(sku_starts_with)
         ]
 
         # pick first
@@ -1100,23 +1294,23 @@ class AzureBatch:
         """
         for task_id in task_ids:
             file_text = self.read_task_file_as_string(
-                job_id,
-                task_id,
-                AzureBatch._STANDARD_OUT_FILE_NAME,
-                encoding)
-            logging.info("{} content for task {}: ".format(
-                AzureBatch._STANDARD_OUT_FILE_NAME,
-                task_id))
+                job_id, task_id, AzureBatch._STANDARD_OUT_FILE_NAME, encoding
+            )
+            logging.info(
+                "{} content for task {}: ".format(
+                    AzureBatch._STANDARD_OUT_FILE_NAME, task_id
+                )
+            )
             logging.info(file_text)
 
             file_text = self.read_task_file_as_string(
-                job_id,
-                task_id,
-                AzureBatch._STANDARD_ERROR_FILE_NAME,
-                encoding)
-            logging.info("{} content for task {}: ".format(
-                AzureBatch._STANDARD_ERROR_FILE_NAME,
-                task_id))
+                job_id, task_id, AzureBatch._STANDARD_ERROR_FILE_NAME, encoding
+            )
+            logging.info(
+                "{} content for task {}: ".format(
+                    AzureBatch._STANDARD_ERROR_FILE_NAME, task_id
+                )
+            )
             logging.info(file_text)
 
     def print_configuration(self, config: str):
@@ -1128,19 +1322,20 @@ class AzureBatch:
         config : str
             The configuration.
         """
-        configuration_dict = {s: dict(config.items(s)) for s in
-                            config.sections() + ['DEFAULT']}
+        configuration_dict = {
+            s: dict(config.items(s)) for s in config.sections() + ["DEFAULT"]
+        }
 
         logging.info("Configuration is:")
         logging.info(configuration_dict)
 
-    def _read_stream_as_string(self, stream, encoding: str = 'utf-8'):
+    def _read_stream_as_string(self, stream, encoding: str = "utf-8"):
         """
         Read stream as string
 
         Parameters
         ----------
-        stream : 
+        stream :
             input stream generator
         encoding : str, optional
             The encoding of the file., by default 'utf-8'
@@ -1161,14 +1356,15 @@ class AzureBatch:
             for data in stream:
                 output.write(data)
             if encoding is None:
-                encoding = 'utf-8'
+                encoding = "utf-8"
             return output.getvalue().decode(encoding)
         finally:
             output.close()
-        raise RuntimeError('could not write data to stream or decode bytes')
+        raise RuntimeError("could not write data to stream or decode bytes")
 
     def read_task_file_as_string(
-            self, job_id: str, task_id: str, file_name: str, encoding: str = None):
+        self, job_id: str, task_id: str, file_name: str, encoding: str = None
+    ):
         """
         Reads the specified file as a string.
 
@@ -1192,7 +1388,8 @@ class AzureBatch:
         return self._read_stream_as_string(stream, encoding)
 
     def read_compute_node_file_as_string(
-            self, pool_id: str, node_id: str, file_name: str, encoding: str = None):
+        self, pool_id: str, node_id: str, file_name: str, encoding: str = None
+    ):
         """
         Reads the specified file as a string.
 
@@ -1213,8 +1410,11 @@ class AzureBatch:
             The file content.
         """
         stream = self.batch_client.file.get_from_compute_node(
-            pool_id, node_id, file_name)
+            pool_id, node_id, file_name
+        )
         return self._read_stream_as_string(stream, encoding)
+
+
 #################################################################################
 
 
@@ -1223,7 +1423,12 @@ class AzureBlob:
     Azure Blob service client. Gets SAS tokens and URLs for uploading and downloading files and directories to blobs
     """
 
-    def __init__(self, storage_account_name: str, storage_account_key: str, storage_account_domain: str):
+    def __init__(
+        self,
+        storage_account_name: str,
+        storage_account_key: str,
+        storage_account_domain: str,
+    ):
         """
         Create the blob client, for use in obtaining references to blob storage containers and uploading files to containers.
 
@@ -1232,21 +1437,28 @@ class AzureBlob:
         storage_account_name : str
             storage account name, e.g. mystorageaccount
         storage_account_key : str
-            storage account key, e.g. dkkd3l==3ldldkdk....... 
+            storage account key, e.g. dkkd3l==3ldldkdk.......
         storage_account_domain : str
             storage account domain, e.g. blob.core.windows.net
         """
         # C
         self.blob_client = BlobServiceClient(
-        account_url="https://{}.{}/".format(storage_account_name, storage_account_domain),
-        credential=storage_account_key
+            account_url="https://{}.{}/".format(
+                storage_account_name, storage_account_domain
+            ),
+            credential=storage_account_key,
         )
         self.storage_account_name = storage_account_name
         self.storage_account_key = storage_account_key
         self.storage_account_domain = storage_account_domain
 
-    def get_container_sas_token(self, container_name: str, permission=BlobSasPermissions(write=True),
-            expiry: datetime = None, timeout=datetime.timedelta(days=1)) -> str:
+    def get_container_sas_token(
+        self,
+        container_name: str,
+        permission=BlobSasPermissions(write=True),
+        expiry: datetime = None,
+        timeout=datetime.timedelta(days=1),
+    ) -> str:
         """
         get token for container with permissions (write is default) which expires after expiry date or after timeout.
         Note: If expiry is non None, timeout is ignored
@@ -1271,16 +1483,23 @@ class AzureBlob:
         # Obtain the SAS token for the container.ontainer_client(container_name)
         if expiry == None:  # if expiry not defined, use timeout
             expiry = datetime.datetime.utcnow() + timeout
-        return generate_container_sas(self.storage_account_name, container_name,
-                               account_key=self.storage_account_key, permission=permission, expiry=expiry)
+        return generate_container_sas(
+            self.storage_account_name,
+            container_name,
+            account_key=self.storage_account_key,
+            permission=permission,
+            expiry=expiry,
+        )
 
-    def get_container_sas_url(self,
-                            container_name: str,
-                            permission=BlobSasPermissions(write=True),
-                            expiry: datetime = None,
-                            timeout=datetime.timedelta(days=1)) -> str:
+    def get_container_sas_url(
+        self,
+        container_name: str,
+        permission=BlobSasPermissions(write=True),
+        expiry: datetime = None,
+        timeout=datetime.timedelta(days=1),
+    ) -> str:
         """
-        Obtains a shared access signature URL that provides write (default permission) access to the container 
+        Obtains a shared access signature URL that provides write (default permission) access to the container
         with an expiry or timeout from current time (expiry takes precedence)
 
         Parameters
@@ -1302,19 +1521,23 @@ class AzureBlob:
         """
         # Obtain the SAS token for the container.
         sas_token = self.get_container_sas_token(
-            container_name, permission=permission, expiry=expiry, timeout=timeout)
+            container_name, permission=permission, expiry=expiry, timeout=timeout
+        )
 
         # Construct SAS URL for the container
         container_sas_url = "https://{}.blob.core.windows.net/{}?{}".format(
-            self.storage_account_name, container_name, sas_token)
+            self.storage_account_name, container_name, sas_token
+        )
 
         return container_sas_url
 
     def create_container_and_create_sas(
-                self, container_name: str,
-            permission=BlobSasPermissions(write=True),
-            expiry: datetime = None,
-            timeout=datetime.timedelta(days=1)) -> str:
+        self,
+        container_name: str,
+        permission=BlobSasPermissions(write=True),
+        expiry: datetime = None,
+        timeout=datetime.timedelta(days=1),
+    ) -> str:
         """
         Creates a container if it doesn't exist and returns a SAS url with given permissions and expiry to it
 
@@ -1340,17 +1563,18 @@ class AzureBlob:
                 timeout = 1
             expiry = datetime.datetime.utcnow() + datetime.timedelta(days=timeout)
 
-        self.blob_client.create_container(
-            container_name,
-            fail_on_exist=False)
+        self.blob_client.create_container(container_name, fail_on_exist=False)
 
         self.get_container_sas_url(container_name, permission=permission, expiry=expiry)
 
-    def get_blob_sas_token(self,
-                            container_name: str, blob_name: str,
-                            permission=BlobSasPermissions(read=True),
-                            expiry: datetime = None,
-                            timeout=datetime.timedelta(days=1)) -> str:
+    def get_blob_sas_token(
+        self,
+        container_name: str,
+        blob_name: str,
+        permission=BlobSasPermissions(read=True),
+        expiry: datetime = None,
+        timeout=datetime.timedelta(days=1),
+    ) -> str:
         """
         Obtains a shared access signature granting the specified permissions to the
         container.
@@ -1381,15 +1605,19 @@ class AzureBlob:
             account_key=self.storage_account_key,
             permission=permission,
             expiry=expiry,
-            timeout=timeout
+            timeout=timeout,
         )
 
         return blob_sas_token
 
-    def get_blob_sas_url(self, container_name: str, blob_name: str,
-                        permission=BlobSasPermissions(read=True),
-                        expiry: datetime = None,
-                        timeout=datetime.timedelta(days=1)) -> str:
+    def get_blob_sas_url(
+        self,
+        container_name: str,
+        blob_name: str,
+        permission=BlobSasPermissions(read=True),
+        expiry: datetime = None,
+        timeout=datetime.timedelta(days=1),
+    ) -> str:
         """
         Obtains a shared access signature granting the specified permissions to the
         container.
@@ -1412,23 +1640,32 @@ class AzureBlob:
             sas url with the permissions and expiry
         """
         sas_token = self.get_blob_sas_token(
-            container_name, blob_name, permission=permission, expiry=expiry, timeout=timeout)
+            container_name,
+            blob_name,
+            permission=permission,
+            expiry=expiry,
+            timeout=timeout,
+        )
 
         sas_url = "https://{}.{}/{}/{}?{}".format(
             self.storage_account_name,
             self.storage_account_domain,
             container_name,
             blob_name,
-            sas_token
+            sas_token,
         )
 
         return sas_url
 
     def upload_blob_and_create_sas(
-            self, container_name: str, blob_name: str, file_name: str,
-            expiry: datetime = None,
-            timeout=datetime.timedelta(days=1),
-            max_concurrency=2):
+        self,
+        container_name: str,
+        blob_name: str,
+        file_name: str,
+        expiry: datetime = None,
+        timeout=datetime.timedelta(days=1),
+        max_concurrency=2,
+    ):
         """
         Uploads a file from local disk to Azure Storage and creates
         a SAS for it.
@@ -1461,7 +1698,8 @@ class AzureBlob:
         try:
             with open(file_name, "rb") as data:
                 local_blob_client.upload_blob(
-                    data, overwrite=True, timeout=1800, max_concurrency=max_concurrency)
+                    data, overwrite=True, timeout=1800, max_concurrency=max_concurrency
+                )
                 # timeout
         except ResourceExistsError:
             pass
@@ -1469,10 +1707,14 @@ class AzureBlob:
         return self.get_blob_sas_url(container_name, blob_name, expiry, timeout)
 
     def upload_file_to_container(
-            self, container_name: str, blob_name: str, file_name: str,
-            expiry: datetime = None,
-            timeout=datetime.timedelta(days=1),
-            max_concurrency=2):
+        self,
+        container_name: str,
+        blob_name: str,
+        file_name: str,
+        expiry: datetime = None,
+        timeout=datetime.timedelta(days=1),
+        max_concurrency=2,
+    ):
         """
         Uploads a local file to an Azure Blob storage container.
 
@@ -1495,17 +1737,28 @@ class AzureBlob:
         str
             sas url with the permissions and expiry
         """
-        logging.info('Uploading file {} to container [{}]...'.format(
-            file_name, container_name))
+        logging.info(
+            "Uploading file {} to container [{}]...".format(file_name, container_name)
+        )
         sas_url = self.upload_blob_and_create_sas(
-            container_name, blob_name, file_name, expiry=expiry,
-            timeout=timeout, max_concurrency=max_concurrency)
+            container_name,
+            blob_name,
+            file_name,
+            expiry=expiry,
+            timeout=timeout,
+            max_concurrency=max_concurrency,
+        )
         return sas_url
 
-    def zip_and_upload(self, container_name: str, blob_name: str, dirname: str,
-            expiry: datetime = None,
-            timeout=datetime.timedelta(days=1),
-            max_concurrency=2):
+    def zip_and_upload(
+        self,
+        container_name: str,
+        blob_name: str,
+        dirname: str,
+        expiry: datetime = None,
+        timeout=datetime.timedelta(days=1),
+        max_concurrency=2,
+    ):
         """
         Zips and uploads to the container with the blob_name appended to the dirname(basename) +.zip
 
@@ -1531,17 +1784,24 @@ class AzureBlob:
         """
         try:
             zipfile = os.path.basename(os.path.normpath(dirname))
-            shutil.make_archive(zipfile, 'zip', dirname)
-            zipfname = zipfile + '.zip'
+            shutil.make_archive(zipfile, "zip", dirname)
+            zipfname = zipfile + ".zip"
             if blob_name is None:
                 blob_name = zipfname
-            return self.upload_file_to_container(container_name, blob_name, zipfname,
-                expiry=expiry, timeout=timeout, max_concurrency=max_concurrency)
+            return self.upload_file_to_container(
+                container_name,
+                blob_name,
+                zipfname,
+                expiry=expiry,
+                timeout=timeout,
+                max_concurrency=max_concurrency,
+            )
         finally:
             os.remove(zipfname)
 
     def download_blob_from_container(
-            self, container_name:str, blob_name:str, directory_path:str):
+        self, container_name: str, blob_name: str, directory_path: str
+    ):
         """
         Downloads specified blob from the specified Azure Blob storage container.
 
@@ -1550,9 +1810,10 @@ class AzureBlob:
         container_name : str
         blob_name : str
         directory_path : str
-        """            
-        logging.info('Downloading result file from container [{}]...'.format(
-            container_name))
+        """
+        logging.info(
+            "Downloading result file from container [{}]...".format(container_name)
+        )
 
         destination_file_path = os.path.join(directory_path, blob_name)
         local_blob_client = self.blob_client.get_blob_client(container_name, blob_name)
@@ -1561,13 +1822,17 @@ class AzureBlob:
             blob_data = local_blob_client.download_blob()
             blob_data.readinto(my_blob)
 
-        logging.info('  Downloaded blob [{}] from container [{}] to {}'.format(
-            blob_name, container_name, destination_file_path))
+        logging.info(
+            "  Downloaded blob [{}] from container [{}] to {}".format(
+                blob_name, container_name, destination_file_path
+            )
+        )
 
-        logging.info('  Download complete!')
+        logging.info("  Download complete!")
+
     #
 
-    def delete_blob(self, container_name:str, blob_name:str):
+    def delete_blob(self, container_name: str, blob_name: str):
         """
         Deletes the blob
 
@@ -1575,7 +1840,7 @@ class AzureBlob:
         ----------
         container_name : str
         blob_name : str
-        """        
+        """
         local_blob_client = self.blob_client.get_blob_client(container_name, blob_name)
         local_blob_client.delete_blob()
 
@@ -1592,7 +1857,7 @@ class AzureBlob:
         return container_client.exists()
 
 
-def query_yes_no(question:str, default="yes") -> str:
+def query_yes_no(question: str, default="yes") -> str:
     """
     Prompts the user for yes/no input, displaying the specified question text.
 
@@ -1612,14 +1877,14 @@ def query_yes_no(question:str, default="yes") -> str:
     Raises
     ------
     ValueError
-    """    
-    valid = {'y': 'yes', 'n': 'no'}
+    """
+    valid = {"y": "yes", "n": "no"}
     if default is None:
-        prompt = ' [y/n] '
-    elif default == 'yes':
-        prompt = ' [Y/n] '
-    elif default == 'no':
-        prompt = ' [y/N] '
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
     else:
         raise ValueError("Invalid default answer: '{}'".format(default))
 
