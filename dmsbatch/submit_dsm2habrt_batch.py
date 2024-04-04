@@ -46,6 +46,7 @@ def create_job(batch_client, job_id, pool_id):
         batch_client.create_job(job_id, pool_id)
     except Exception as err:
         print(f"Job {job_id} already exists. Delete it and try again.")
+        raise err
 
 
 def add_tasks_all(batch_client, job_id, sns, output_container_sas_url):
@@ -84,12 +85,6 @@ def add_tasks_all(batch_client, job_id, sns, output_container_sas_url):
     batch_client.submit_tasks(job_id, tasks)
 
 
-def read_times():
-    """read time pairs (start, end)
-    from text file
-    """
-
-
 import argparse
 
 if __name__ == "__main__":
@@ -104,6 +99,13 @@ if __name__ == "__main__":
         "--job_id", type=str, required=False, default="postp-habs", help="job id"
     )
     parser.add_argument("--sns", nargs="+", help="list of scenarios", required=True)
+    parser.add_argument(
+        "--wait-time",
+        type=int,
+        required=False,
+        default=30,
+        help="wait time for task in minutes",
+    )
     args = parser.parse_args()
     config_file = args.config_file
     batch_client = create_batch_client(config_file)
@@ -124,14 +126,14 @@ if __name__ == "__main__":
 
         # Pause execution until tasks reach Completed state.
         batch_client.wait_for_tasks_to_complete(
-            args.job_id, datetime.timedelta(minutes=30)
+            args.job_id, datetime.timedelta(minutes=args.wait_time)
         )
         print(
             """Success! All tasks reached the 'Completed' state within the specified timeout period."""
         )
-        # batch_client.resize_pool(args.pool_id, 0)
+        batch_client.resize_pool(args.pool_id, 0)
 
-        # print(" Resizing pool to 0 ")
+        print(" Resizing pool to 0 ")
     except Exception as err:
         batch_client.print_batch_exception(err)
         raise

@@ -72,6 +72,7 @@ def create_job(batch_client, job_id, pool_id):
         batch_client.create_job(job_id, pool_id, prep_task=prep_task)
     except Exception as err:
         print(f"Job {job_id} already exists. Delete it and try again.")
+        raise err
 
 
 def add_tasks(batch_client, job_id, times, input_file, commands, output_file):
@@ -162,7 +163,13 @@ if __name__ == "__main__":
     parser.add_argument("--pool_id", type=str, required=True, help="pool id")
     parser.add_argument("--pool_size", type=int, required=True, help="pool size")
     parser.add_argument("--job_id", type=str, required=True, help="job id")
-
+    parser.add_argument(
+        "--wait-time",
+        type=int,
+        required=False,
+        default=30,
+        help="wait time for task in minutes",
+    )
     args = parser.parse_args()
     config_file = args.config_file
     batch_client = create_batch_client(config_file)
@@ -182,7 +189,7 @@ if __name__ == "__main__":
         add_tasks_all(batch_client, args.job_id, times, output_container_sas_url)
         # Pause execution until tasks reach Completed state.
         batch_client.wait_for_tasks_to_complete(
-            args.job_id, datetime.timedelta(minutes=30)
+            args.job_id, datetime.timedelta(minutes=args.wait_time)
         )
         print(
             """Success! All tasks reached the 'Completed' state within the specified timeout period."""
