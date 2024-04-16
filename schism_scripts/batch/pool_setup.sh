@@ -1,11 +1,5 @@
 #!/bin/bash
-# schism release identifier. E.g. schism_release="schismv5.10.1". Used with name of the url from github release
-# schism_file="schism_5_10_1_alma_8_5_HPC_gen1"
-# E.g. 
-# https://github.com/CADWRDeltaModeling/azure_dms_batch/releases/download/${schism_release}/${schism_file}.tar.gz
-
-# Default values for flags
-uselatest=true
+# Pool setup scripts are from the blob
 export LOCAL_INSTALL_DIR="/tmp/localinstalls"
 
 if [ -v USE_CACHED_INSTALL ]; then

@@ -32,5 +32,5 @@ EOF
     INTEL_VERSION="-$1" # argument of the form 2021.4.0.x86_64
 fi
 
-[[ ! -v USE_CACHED_INSTALL ]] && yumdownloader --resolve --destdir ${LOCAL_INSTALL_DIR}/intel-rpms intel-basekit-runtime"$INTEL_VERSION" intel-oneapi-compiler-fortran-runtime"$INTEL_VERSION" intel-oneapi-mpi"$INTEL_VERSION" -y
+#[[ ! -v USE_CACHED_INSTALL ]] && yumdownloader --resolve --destdir ${LOCAL_INSTALL_DIR}/intel-rpms intel-basekit-runtime"$INTEL_VERSION" intel-oneapi-compiler-fortran-runtime"$INTEL_VERSION" intel-oneapi-mpi"$INTEL_VERSION" -y
 yum localinstall --nogpgcheck ${LOCAL_INSTALL_DIR}/intel-rpms/*.rpm -y
