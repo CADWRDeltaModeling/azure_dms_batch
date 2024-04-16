@@ -1,0 +1,42 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "batchAccountName": {
+            "value": "batch_account_name"
+        },
+        "storageAccountName": {
+            "value": "storage_account_name"
+        },
+        "storageAccountKey": {
+            "value": "storage_account_key"
+        },
+        "storageContainerName": {
+            "value": "storage_container_name"
+        },
+        "poolName": {
+            "value": "pool_name"
+        },
+        "vmSize": {
+            "value": "Standard_HB120rs_v2"
+        },
+        "taskSlotsPerNode": {
+            "value": 1
+        },
+        "nodeAgentSKUId": {
+            "value": "batch.node.el 8"
+        },
+        "startTaskScript": {
+            "value": "printenv && $AZ_BATCH_APP_PACKAGE_batch_setup_alma8_7/pool_setup.sh"
+        },
+        "formula": {
+            "value": "formula"
+        },
+        "appInsightsInstrumentationKey": {
+            "value": "app_insights_instrumentation_key"
+        },
+        "appInsightsAppId": {
+            "value": "app_insights_app_id"
+        }
+    }
+}
