@@ -1,6 +1,7 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 source /opt/intel/oneapi/setvars.sh intel64;
+export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup_alma8_7;
 export SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_schism_5_11_alma8_7;
 export PATH=$PATH:$SCHISM_HOME;
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SCHISM_HOME;
@@ -24,7 +25,7 @@ mkdir -p {study_dir}/outputs;
 # change to study directory
 cd {study_dir};
 # start background copy script
-SAS="{sas}" bash /opt/schism_scripts/batch/copy_modified_loop.sh {study_dir} $AZ_BATCH_NODE_MOUNTS_DIR "{storage_account_name}" "{storage_container_name}"&
+SAS="{sas}" bash $SCHISM_SCRIPTS_HOME/copy_modified_loop.sh {study_dir} $AZ_BATCH_NODE_MOUNTS_DIR "{storage_account_name}" "{storage_container_name}"&
 pid=$!;
 echo "Running background copy_modified_loop.sh with pid $pid";
 # run schism
