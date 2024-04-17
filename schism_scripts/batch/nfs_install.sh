@@ -22,6 +22,6 @@ case "$os_maj_ver" in
     ;;
 esac
 
-[[ ! -v USE_CACHED_INSTALL ]] && yumdownloader --resolve --destdir ${LOCAL_INSTALL_DIR}/nfs-rpms epel-release ${yum_list} -y
-yum localinstall --nogpgcheck ${LOCAL_INSTALL_DIR}/nfs-rpms/*.rpm -y
+#[[ ! -v USE_CACHED_INSTALL ]] && yumdownloader --resolve --destdir ${LOCAL_INSTALL_DIR}/nfs-rpms epel-release ${yum_list} -y
+yum localinstall --nogpgcheck ${AZ_BATCH_APP_PACKAGE_nfs_alma8_7}/*.rpm -y
 

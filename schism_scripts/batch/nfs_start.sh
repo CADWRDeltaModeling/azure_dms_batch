@@ -1,7 +1,7 @@
 #!/bin/bash
 # set -e
 # arg: $1 = nfsserver
-source /opt/schism_scripts/batch/azhpc-library.sh
+source $SCHISM_SCRIPTS_HOME/batch/azhpc-library.sh
 
 master_node=$AZ_BATCH_MASTER_NODE
 ip_address=$(echo $master_node | cut -d: -f1)
@@ -25,7 +25,7 @@ fi
 if [[ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]]; then
 
     echo "Current nodes is master node so starting NFS server"
-    source /opt/schism_scripts/batch/nfs_common.sh
+    source $SCHISM_SCRIPTS_HOME/batch/nfs_common.sh
     systemctl enable rpcbind
     systemctl enable nfs-server
     if is_centos7; then
