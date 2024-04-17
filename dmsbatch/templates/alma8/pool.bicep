@@ -87,6 +87,14 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
         id: '${batchAccount.id}/applications/batch_setup'
         version: 'alma8.7'
       }
+      {
+        id: '${batchAccount.id}/applications/nfs'
+        version: 'alma8.7'
+      }
+      {
+        id: '${batchAccount.id}/applications/intel-oneapi-fortran-runtime'
+        version: '2023.1.0'
+      }
     ]
   }
 }
