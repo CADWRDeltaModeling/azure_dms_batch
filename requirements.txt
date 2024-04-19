@@ -1,0 +1,8 @@
+#pip install -r requirements.txt
+azure-batch
+azure-storage-blob
+azure-mgmt-resource
+azure-identity
+msrest
+click
+pyyaml
