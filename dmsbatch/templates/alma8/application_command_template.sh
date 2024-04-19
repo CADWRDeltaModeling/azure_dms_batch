@@ -1,11 +1,10 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 source /opt/intel/oneapi/setvars.sh intel64;
+source $AZ_BATCH_APP_PACKAGE_schism_with_deps_5_11_alma8_7hpc/schism/setup_paths.sh;
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup_alma8_7;
-export SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_schism_5_11_alma8_7;
-export PATH=$PATH:$SCHISM_HOME;
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$SCHISM_HOME;
 ulimit -s unlimited;
+printenv;
 echo "Copying from blob to local for the setup first time";
 cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
 # do setup directories first to avoid link issues 
