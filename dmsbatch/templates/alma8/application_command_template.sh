@@ -5,6 +5,17 @@ source $AZ_BATCH_APP_PACKAGE_schism_with_deps_5_11_alma8_7hpc_ucx/schism/setup_p
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup_alma8_7;
 ulimit -s unlimited;
 printenv;
+# Extract host list from AZ_BATCH_HOST_LIST
+IFS=',' read -r -a host_list <<< "$AZ_BATCH_HOST_LIST"
+
+# Create hostfile
+hostfile="hostfile"
+for host in "${{host_list[@]}}"; do
+    echo "$host" >> "$hostfile"
+done
+
+echo "Hostfile created: $hostfile"
+#
 echo "Copying from blob to local for the setup first time";
 cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
 # do setup directories first to avoid link issues 
@@ -29,8 +40,6 @@ pid=$!;
 echo "Running background copy_modified_loop.sh with pid $pid";
 # run schism
 echo "Running schism with {num_cores} cores and {num_hosts} hosts";
-export I_MPI_FABRICS=shm:ofi;
-export I_MPI_OFI_PROVIDER=mlx;
 # allow script to continue if schism fails
 set +e;
 {mpi_command} >  $AZ_BATCH_TASK_DIR/stdout_command.txt 2> $AZ_BATCH_TASK_DIR/stderr_command.txt;
