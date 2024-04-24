@@ -1,7 +1,7 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
-source /opt/intel/oneapi/setvars.sh intel64;
-source $AZ_BATCH_APP_PACKAGE_schism_with_deps_5_11_alma8_7hpc/schism/setup_paths.sh;
+export PATH=/opt/openmpi-4.1.5/bin/:$PATH;
+source $AZ_BATCH_APP_PACKAGE_schism_with_deps_5_11_alma8_7hpc_ucx/schism/setup_paths.sh;
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup_alma8_7;
 ulimit -s unlimited;
 printenv;
