@@ -14,12 +14,12 @@ setup_dirs=({setup_dirs});
 for dir in "${{setup_dirs[@]}}"; do
     echo "Copying $dir";
     mkdir -p $(dirname $dir);
-    rsync -av --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/$dir $(dirname $dir);
+    azcopy copy --recursive --preserve-symlinks "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/$dir?{sas}" $(dirname $dir) || true;
 done
 
 # setup study directory
 mkdir -p $(dirname {study_dir});
-rsync -av {study_rsync_flags} --no-perms $AZ_BATCH_NODE_MOUNTS_DIR/{storage_container_name}/{study_dir} $(dirname {study_dir});
+azcopy copy {study_copy_flags} "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}?{sas}" $(dirname {study_dir}) || true;
 mkdir -p {study_dir}/outputs;
 
 # change to study directory

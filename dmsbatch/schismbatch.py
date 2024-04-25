@@ -145,7 +145,7 @@ def submit_schism_task(client, pool_name, config_dict):
     num_cores = config_dict["num_cores"]
     num_scribes = config_dict["num_scribes"]
     study_dir = config_dict["study_dir"]
-    study_rsync_flags = config_dict["study_rsync_flags"]
+    study_copy_flags = config_dict["study_copy_flags"]
     setup_dirs = config_dict["setup_dirs"]
     storage_account_name = config_dict["storage_account_name"]
     storage_container_name = config_dict["storage_container_name"]
@@ -272,8 +272,8 @@ def submit_schism_job(config_file, pool_name=None):
         config_dict["num_cores"] = estimate_cores_available(
             config_dict["vm_size"], config_dict["num_hosts"]
         )
-    if "study_rsync_flags" not in config_dict:
-        config_dict["study_rsync_flags"] = '--exclude="outputs*/*.nc"'
+    if "study_copy_flags" not in config_dict:
+        config_dict["study_copy_flags"] = "--recursive --preserve-symlinks --exclude-regex='.*outputs.*nc'"
     if "pool_bicep_resource" not in config_dict:
         config_dict["pool_bicep_resource"] = (
             f'templates/{config_dict["template_name"]}/pool.bicep'
