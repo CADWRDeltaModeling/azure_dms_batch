@@ -13,10 +13,6 @@ echo "Starting pool install script..."
 echo "Starting NFS installation..."
 ./nfs_install.sh
 echo "Done with NFS install"
-#echo "Starting insights installation..."
-#./appinsights_install.sh "v1.3.0"
-#./appinsights_start.sh
-#echo "Done enabling insights"
 echo "Starting intel oneapi setup"
 ./setup_intel_oneapi.sh
 echo "Done with intel oneapi setup"

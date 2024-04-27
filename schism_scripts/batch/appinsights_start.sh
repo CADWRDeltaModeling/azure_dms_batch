@@ -1,1 +1,0 @@
-./batch-insights $AZ_BATCH_INSIGHTS_ARGS  > /tmp/batch-insights.log &
