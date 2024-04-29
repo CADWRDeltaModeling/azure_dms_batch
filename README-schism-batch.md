@@ -138,6 +138,10 @@ Use the command line to submit the job as shown below
 
 If the user is logged in with `az login --use-device-code` then the above command should after some time return the job id and pool id on which the job will run
 
+>[!WARNING]
+> Take a look at the output for the az login command. If your account belongs to multiple subscriptions, make sure the isDefault is true for the subscription that contains the batch account. 
+> Run command `az account set --subscription "<<Subscription Name or Id>>"`
+
 The running job can be monitored via the Azure portal or [Azure Batch Explorer](https://azure.github.io/BatchExplorer/). 
 
 The resulting new and changed files will show up in the "study_dir" as configured in the yaml file after a small delay (10-15 minutes). Once the job is finished the pool will
