@@ -10,6 +10,12 @@ tests/junit.xml
 # dss and h5 binary files
 *.dss
 *.h5
+# package binary files
+*.tgz
+*.targz
+*.tar.gz
+*.rpm*
+*.zip
 # dask workspace
 **/dask-worker-space
 # python pickled data

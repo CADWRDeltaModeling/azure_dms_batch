@@ -1,4 +1,5 @@
 #pip install -r requirements.txt
+#then pip install -e .
 azure-batch
 azure-storage-blob
 azure-mgmt-resource
