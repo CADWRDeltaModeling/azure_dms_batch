@@ -88,10 +88,6 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
         version: 'alma8.7'
       }
       {
-        id: '${batchAccount.id}/applications/intel-oneapi-fortran-runtime'
-        version: '2024.1.0'
-      }
-      {
         id: '${batchAccount.id}/applications/schism_with_deps'
         version: '5.11_alma8.7hpc_ucx'
       }
