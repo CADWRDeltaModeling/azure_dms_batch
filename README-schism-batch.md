@@ -56,7 +56,7 @@ slight delay to the same location as reference files (on the Blob container).
 ```
 
 Using the Azure portal upload the zip files with names (after /applications in the id) and the version (value in the version tag). E.g. upload batch_setup.zip as name batch_setup and version alma8.7
-
+These zip files are available for the alma8 template in [this release page.](https://github.com/CADWRDeltaModeling/azure_dms_batch/releases/tag/schism_5.11)
 
 
 #### Install azure_dms_batch from repo
