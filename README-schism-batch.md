@@ -1,5 +1,7 @@
 # Azure Batch Runs for SCHISM
 
+For general Azure Batch see this [README](README.md)
+
 SCHISM is an MPI program so requires some special settings unlike the non-communicating parallel batch jobs.
 For this purpose the schismbatch.py program expose a command line tool that takes a yaml file as an input
 

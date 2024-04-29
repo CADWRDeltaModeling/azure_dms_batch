@@ -177,6 +177,11 @@ A [slightly more involved example](./notebooks/sample_submit_dsm2_historical.ipy
  * Use multi-instance tasks using AZ_BATCH_HOST_LIST to get list of networked hosts available
  * Use H series VMs capable of leveraging Infiniband (though other VM/os combinations may work)
  * Use Linux OS with *HPC images with appropriate device drivers
+
+
+# SCHISM specific runs
+ SCHISM specific run setup [is documented in detail in this readme ](README-schism-batch.md)
+
  
 # References
 
