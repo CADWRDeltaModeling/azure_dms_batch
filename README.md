@@ -17,6 +17,10 @@ Use the environment.yml with conda to create an environment called azure
 ```
 conda env create -f environment.yml
 ```
+or
+```
+pip install -r requirements.txt
+```
 Git clone this project
 ```
 git clone https://github.com/CADWRDeltaModeling/azure_dms_batch.git
