@@ -12,4 +12,4 @@ EOF
 mv /tmp/oneAPI.repo /etc/yum.repos.d
 # check to see if atleast one argument is passed
 
-yum localinstall --nogpgcheck ${AZ_BATCH_APP_PACKAGE_intel_oneapi_fortran_runtime_2023_1_0}/*.rpm -y
+yum localinstall --nogpgcheck ${AZ_BATCH_APP_PACKAGE_intel_oneapi_fortran_runtime_2024_1_0}/*.rpm -y

@@ -15,7 +15,7 @@ echo "Starting NFS installation..."
 echo "Done with NFS install"
 echo "Starting intel oneapi setup"
 ./setup_intel_oneapi.sh
-echo "Done with intel oneapi setup"
+#echo "Done with intel oneapi setup"
 echo "Done with pool installs"
 popd
 echo "Done with pool setup script"
