@@ -1,0 +1,15 @@
+location: eastus # the location of the batch account
+pool_name: "{job_name}"
+num_hosts: 1
+vm_size: "standard_hb120rs_v2" # use any of the H series from https://learn.microsoft.com/en-us/azure/virtual-machines/sizes-hpc
+start_task_script: "printenv && $AZ_BATCH_APP_PACKAGE_batch_setup_alma8_7/batch/pool_setup.sh"
+study_copy_flags: "--recursive --preserve-symlinks --exclude-regex='.*outputs.*nc'"
+mpi_command: 'printenv; echo "define mpi_command in job config yaml file";'
+# translates to pkg_resources.resource_filename('dmsbatch', 'templates/<template_name>/a>
+application_command_template: 'templates/{template_name}/application_command_template.sh' 
+coordination_command_template: 'templates/{template_name}/coordination_command_template.sh'
+pool_bicep_resource: 'templates/{template_name}/pool.bicep' 
+pool_parameters_resource: 'templates/{template_name}/pool.parameters.json' 
+# nice to have to see CPU, memory, network, disk usage - sensitive so not enabled by default
+app_insights_instrumentation_key: '' # this is the instrumentation key for the app insights instance
+app_insights_app_id: '' # this is the app id for the app insights instance

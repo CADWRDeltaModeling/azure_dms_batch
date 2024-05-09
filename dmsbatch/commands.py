@@ -471,6 +471,17 @@ class AzureBatch:
 
         self.batch_client.job.add(job)
 
+    def mark_job_termination_on_task_completion(self, job_id: str):
+        """
+        Mark job for termination on all tasks completion
+
+        """
+        self.batch_client.job.patch(
+            job_id=job_id,
+            job_patch_parameter=batchmodels.JobPatchParameter(
+                on_all_tasks_complete=batchmodels.
+                OnAllTasksComplete.terminate_job))
+
     def get_job(self, job_id: str) -> batchmodels.CloudJob:
         """
         get job with matching id
@@ -486,7 +497,7 @@ class AzureBatch:
 
         """
         return self.batch_client.job.get(job_id)
-
+    
     def delete_job(self, job_id: str):
         """
         deletes the job
@@ -810,7 +821,7 @@ class AzureBatch:
             multi_instance_settings=multi_instance_settings,
         )
 
-    def submit_tasks(self, job_id: str, tasks: list, tasks_per_request: int = 100):
+    def submit_tasks(self, job_id: str, tasks: list, tasks_per_request: int = 100, auto_complete=True):
         """
         submit tasks as a list.
         There are limitations on size of request and also timeout. For this reason this task
@@ -839,6 +850,8 @@ class AzureBatch:
             except batchmodels.BatchErrorException as err:
                 self.print_batch_exception(err)
                 raise
+        if auto_complete:
+            self.mark_job_termination_on_task_completion(job_id)
 
     def submit_tasks_and_wait(
         self,

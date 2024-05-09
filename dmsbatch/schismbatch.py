@@ -74,6 +74,16 @@ def create_substituted_dict(config_dict, **kwargs):
     return config_dict
 
 
+def update_if_not_defined(config_dict, **kwargs):
+    for key, value in kwargs.items():
+        if key not in config_dict:
+            logger.info(
+                'Will use default config value "{}" for "{}"'.format(value, key)
+            )
+            config_dict[key] = value
+    return config_dict
+
+
 def create_schism_pool(pool_name, config_dict):
     """create a schism pool with the given number of hosts.  The pool name is
     assumed to include the date and time after the last _ in the name."""
@@ -133,6 +143,7 @@ def estimate_cores_available(vm_size, num_hosts):
     VM_CORE_MAP = {
         "standard_hc44rs": 44,
         "standard_hb120rs_v2": 120,
+        "standard_hb120rs_v3": 120,
         "standard_hb176rs_v4": 176,
     }
     return num_hosts * (VM_CORE_MAP[vm_size])
@@ -208,7 +219,8 @@ def submit_schism_task(client, pool_name, config_dict):
         coordination_cmdline=coordination_cmd,
         output_files=output_file_specs,
     )
-    client.submit_tasks(job_name, [schism_task])
+    # adding auto_complete so that job terminates when all these tasks are completed.
+    client.submit_tasks(job_name, [schism_task], auto_complete=True)
     logger.info(f"Submitted task {job_name} to pool {pool_name}.")
 
 
@@ -226,66 +238,62 @@ def create_batch_client(name, key, url):
 
 def submit_schism_job(config_file, pool_name=None):
     config_dict = parse_yaml_file(config_file)
-    config_dict["pool_name"] = config_dict["job_name"]  # hardwired for now
-    location = "eastus"  # hardwired for now
-    # hardwired for now
+    required_keys = ["template_name", "resource_group", "batch_account_name", "storage_account_name", "storage_container_name", "study_dir", "job_name", ]
+    for key in required_keys:
+        if key not in config_dict:
+            raise Exception(
+                "Required key {} not found in config file: {}".format(key, config_file)
+            )
+    # load defaults from default_config.yml and update undefined ones
+    default_config_file = pkg_resources.resource_filename(
+        __name__, "templates/default_config.yml"
+    )
+    default_config_dict = parse_yaml_file(default_config_file)
+    update_if_not_defined(config_dict, **default_config_dict)
+    # 
+    location = config_dict["location"]
     config_dict["batch_account_url"] = (
         f'https://{config_dict["batch_account_name"]}.{location}.batch.azure.com'
     )
     if "BATCH_ACCOUNT_KEY" in os.environ:
         config_dict["batch_account_key"] = os.environ["BATCH_ACCOUNT_KEY"]
+        logger.info("using batch account key from environment variable")
     else:
         config_dict["batch_account_key"] = get_batch_account_key(
             config_dict["resource_group"], config_dict["batch_account_name"]
         )
+        logger.info("using batch account key from az cli")
     if "STORAGE_ACCOUNT_KEY" in os.environ:
         config_dict["storage_account_key"] = os.environ["STORAGE_ACCOUNT_KEY"]
+        logger.info("using storage account key from environment variable")
     else:
         config_dict["storage_account_key"] = get_storage_account_key(
             config_dict["resource_group"], config_dict["storage_account_name"]
         )
-    if "template_name" not in config_dict:
-        config_dict["template_name"] = "centos7"  # default
-    if "vm_size" not in config_dict:
-        config_dict["vm_size"] = "standard_hb120rs_v2"
+        logger.info("using storage account key from az cli")
+    logger.info("using vm size", config_dict["vm_size"])
     if "setup_dirs" not in config_dict:
         config_dict["setup_dirs"] = []
-    if "application_command_template" not in config_dict:
-        config_dict["application_command_template"] = (
-            f'templates/{config_dict["template_name"]}/application_command_template.sh'
-        )
-    if "mpi_command" not in config_dict:
-        config_dict["mpi_command"] = (
-            "mpiexec -n {num_cores} -ppn {num_hosts} -hosts $AZ_BATCH_HOST_LIST pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}"
-        )
+        logger.info("using default setup dirs", config_dict["setup_dirs"])
     if "coordination_command_template" not in config_dict:
         config_dict["coordination_command_template"] = (
             f'templates/{config_dict["template_name"]}/coordination_command_template.sh'
         )
-    if "start_task_script" not in config_dict:
-        config_dict["start_task_script"] = (
-            "printenv && wget -qO - 'https://raw.githubusercontent.com/CADWRDeltaModeling/azure_dms_batch/main/schism_scripts/batch/pool_setup.sh' | bash -s schism_v5.10.1 schism_5_10_1_centos_7_9_HPC_gen2"
+        logger.info(
+            "using default coordination command template",
+            config_dict["coordination_command_template"],
         )
-    if "num_scribes" not in config_dict:
-        config_dict["num_scribes"] = 1
+    if "start_task_script" not in config_dict:
+        config_dict["start_task_script"] = "printenv"
+        logger.info("using default start task script", config_dict["start_task_script"])
     if "num_cores" not in config_dict:
         config_dict["num_cores"] = estimate_cores_available(
             config_dict["vm_size"], config_dict["num_hosts"]
         )
-    if "study_copy_flags" not in config_dict:
-        config_dict["study_copy_flags"] = "--recursive --preserve-symlinks --exclude-regex='.*outputs.*nc'"
-    if "pool_bicep_resource" not in config_dict:
-        config_dict["pool_bicep_resource"] = (
-            f'templates/{config_dict["template_name"]}/pool.bicep'
+        logger.info(
+            f"using calculated number of cores cores using {config_dict['vm_size']}",
+            config_dict["num_cores"],
         )
-    if "pool_parameters_resource" not in config_dict:
-        config_dict["pool_parameters_resource"] = (
-            f'templates/{config_dict["template_name"]}/pool.parameters.json'
-        )
-    if "app_insights_app_id" not in config_dict:
-        config_dict["app_insights_app_id"] = ""
-    if "app_insights_instrumentation_key" not in config_dict:
-        config_dict["app_insights_instrumentation_key"] = ""
     # log the config dict
     logging.info(config_dict)
     #
