@@ -92,6 +92,10 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
         id: '${batchAccount.id}/applications/schism_with_deps'
         version: '5.11_alma8.7hpc_ucx_5.0.2'
       }
+      {
+        id: '${batchAccount.id}/applications/schimpy_with_deps'
+        version: 'rhel8.7'
+      }
     ]
   }
 }
