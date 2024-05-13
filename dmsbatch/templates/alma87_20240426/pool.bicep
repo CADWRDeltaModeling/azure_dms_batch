@@ -19,6 +19,7 @@ param nodeAgentSKUId string = 'batch.node.el 8'
 param startTaskScript string =  'printenv'
 param formula string = '$TargetDedicatedNodes = 0'
 // use existing batch account
+param createdBy string = ''
 
 resource batchAccount 'Microsoft.Batch/batchAccounts@2023-11-01' existing = {
   name: batchAccountName
@@ -34,6 +35,10 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
     taskSchedulingPolicy: {
       nodeFillType: 'Pack'
     }
+    
+    metadata: [
+      { name: 'created-by', value: createdBy }
+    ]
     
     mountConfiguration: [
       {

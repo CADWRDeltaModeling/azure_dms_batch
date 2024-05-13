@@ -5,6 +5,8 @@ import shutil
 import datetime
 import pkg_resources
 import json
+import yaml
+
 
 import azure.batch.models as batchmodels
 from azure.batch.models import BatchErrorException
@@ -223,8 +225,6 @@ def submit_schism_task(client, pool_name, config_dict):
 
 
 def parse_yaml_file(config_file):
-    import yaml
-
     with open(config_file) as f:
         data = yaml.safe_load(f)
     return data
@@ -256,6 +256,12 @@ def submit_schism_job(config_file, pool_name=None):
     )
     default_config_dict = parse_yaml_file(default_config_file)
     update_if_not_defined(config_dict, **default_config_dict)
+    # get user info
+    user_info = get_user_info()
+    if "user" in user_info:
+        uinfo = user_info["user"]
+        if "type" in uinfo:
+            config_dict["created_by"] = uinfo["name"]
     #
     location = config_dict["location"]
     config_dict["batch_account_url"] = (
@@ -328,6 +334,21 @@ def generate_schism_job_yaml(config_file):
     job_yaml_template = pkg_resources.resource_filename(__name__, "schism.job.yml")
     # copy template to config_file
     shutil.copyfile(job_yaml_template, config_file)
+
+
+def get_user_info():
+    cmd = "az account show"
+    try:
+        user_info = json.loads(
+            subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
+        )
+    except subprocess.SubprocessError as e:
+        logger.error(e)
+        raise Exception(
+            "Error getting user info. Make sure az cli is logged in to the correct subscription. \n"
+            + "Use az login --use-device-code to login to the correct subscription."
+        )
+    return user_info
 
 
 def get_batch_account_key(resource_group_name, batch_account_name):

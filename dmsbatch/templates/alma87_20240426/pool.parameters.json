@@ -31,6 +31,9 @@
         },
         "formula": {
             "value": "formula"
+        },
+        "createdBy": {
+            "value": ""
         }
     }
 }

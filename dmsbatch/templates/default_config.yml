@@ -10,3 +10,4 @@ application_command_template: 'templates/{template_name}/application_command_tem
 coordination_command_template: 'templates/{template_name}/coordination_command_template.sh'
 pool_bicep_resource: 'templates/{template_name}/pool.bicep' 
 pool_parameters_resource: 'templates/{template_name}/pool.parameters.json' 
+created_by: '' # this is the user who created the job
