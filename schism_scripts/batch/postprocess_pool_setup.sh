@@ -23,8 +23,3 @@ mount /dev/md10 /mnt/local
 #mount /dev/nvme0n1p1 /mnt/local 
 chmod 1777 /mnt/local
 #
-app_insights_version="v1.3.0"
-export BATCH_INSIGHTS_DOWNLOAD_URL="https://github.com/Azure/batch-insights/releases/download/${app_insights_version}/batch-insights"
-wget  -O - https://raw.githubusercontent.com/Azure/batch-insights/master/scripts/run-linux.sh | bash
-#
-./batch-insights $AZ_BATCH_INSIGHTS_ARGS  > /tmp/batch-insights.log &

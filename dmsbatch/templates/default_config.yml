@@ -10,6 +10,3 @@ application_command_template: 'templates/{template_name}/application_command_tem
 coordination_command_template: 'templates/{template_name}/coordination_command_template.sh'
 pool_bicep_resource: 'templates/{template_name}/pool.bicep' 
 pool_parameters_resource: 'templates/{template_name}/pool.parameters.json' 
-# nice to have to see CPU, memory, network, disk usage - sensitive so not enabled by default
-app_insights_instrumentation_key: '' # this is the instrumentation key for the app insights instance
-app_insights_app_id: '' # this is the app id for the app insights instance

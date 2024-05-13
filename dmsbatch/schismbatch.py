@@ -96,8 +96,6 @@ def create_schism_pool(pool_name, config_dict):
     storage_account_key = config_dict["storage_account_key"]
     storage_name = config_dict["storage_account_name"]
     container_name = config_dict["storage_container_name"]
-    app_insights_app_id = config_dict["app_insights_app_id"]
-    app_insights_instrumentation_key = config_dict["app_insights_instrumentation_key"]
     pool_bicep_resource = config_dict["pool_bicep_resource"]
     pool_parameters_resource = config_dict["pool_parameters_resource"]
     start_task_script = config_dict["start_task_script"]
@@ -238,7 +236,15 @@ def create_batch_client(name, key, url):
 
 def submit_schism_job(config_file, pool_name=None):
     config_dict = parse_yaml_file(config_file)
-    required_keys = ["template_name", "resource_group", "batch_account_name", "storage_account_name", "storage_container_name", "study_dir", "job_name", ]
+    required_keys = [
+        "template_name",
+        "resource_group",
+        "batch_account_name",
+        "storage_account_name",
+        "storage_container_name",
+        "study_dir",
+        "job_name",
+    ]
     for key in required_keys:
         if key not in config_dict:
             raise Exception(
@@ -250,7 +256,7 @@ def submit_schism_job(config_file, pool_name=None):
     )
     default_config_dict = parse_yaml_file(default_config_file)
     update_if_not_defined(config_dict, **default_config_dict)
-    # 
+    #
     location = config_dict["location"]
     config_dict["batch_account_url"] = (
         f'https://{config_dict["batch_account_name"]}.{location}.batch.azure.com'

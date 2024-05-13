@@ -14,10 +14,6 @@ param imageReference object = {
 param nodeAgentSKUId string = 'batch.node.el 8'
 param startTaskScript string =  'printenv'
 param formula string = '$TargetDedicatedNodes = 0'
-// app insights info
-param appInsightsInstrumentationKey string = ''
-param appInsightsAppId string = ''
-
 // use existing batch account
 
 resource batchAccount 'Microsoft.Batch/batchAccounts@2022-10-01' existing = {
@@ -85,10 +81,6 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2022-10-01' = {
           elevationLevel: 'Admin' // has to be admin to install software
         }
       }
-      environmentSettings: [
-         { name: 'APP_INSIGHTS_INSTRUMENTATION_KEY',  value: appInsightsInstrumentationKey }
-         { name: 'APP_INSIGHTS_APP_ID', value: appInsightsAppId  }
-      ]
       maxTaskRetryCount: 0
       waitForSuccess: true
     }

@@ -23,11 +23,5 @@
         "formula": {
             "value": "formula"
         },
-        "appInsightsInstrumentationKey": {
-            "value": "app_insights_instrumentation_key"
-        },
-        "appInsightsAppId": {
-            "value": "app_insights_app_id"
-        }
     }
 }
