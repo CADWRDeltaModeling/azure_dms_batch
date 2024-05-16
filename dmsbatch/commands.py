@@ -479,8 +479,9 @@ class AzureBatch:
         self.batch_client.job.patch(
             job_id=job_id,
             job_patch_parameter=batchmodels.JobPatchParameter(
-                on_all_tasks_complete=batchmodels.
-                OnAllTasksComplete.terminate_job))
+                on_all_tasks_complete=batchmodels.OnAllTasksComplete.terminate_job
+            ),
+        )
 
     def get_job(self, job_id: str) -> batchmodels.CloudJob:
         """
@@ -497,7 +498,7 @@ class AzureBatch:
 
         """
         return self.batch_client.job.get(job_id)
-    
+
     def delete_job(self, job_id: str):
         """
         deletes the job
@@ -821,7 +822,9 @@ class AzureBatch:
             multi_instance_settings=multi_instance_settings,
         )
 
-    def submit_tasks(self, job_id: str, tasks: list, tasks_per_request: int = 100, auto_complete=True):
+    def submit_tasks(
+        self, job_id: str, tasks: list, tasks_per_request: int = 100, auto_complete=True
+    ):
         """
         submit tasks as a list.
         There are limitations on size of request and also timeout. For this reason this task
@@ -1440,7 +1443,7 @@ class AzureBlob:
         self,
         storage_account_name: str,
         storage_account_key: str,
-        storage_account_domain: str,
+        storage_account_domain: str = "blob.core.windows.net",
     ):
         """
         Create the blob client, for use in obtaining references to blob storage containers and uploading files to containers.
@@ -1584,7 +1587,7 @@ class AzureBlob:
         self,
         container_name: str,
         blob_name: str,
-        permission=BlobSasPermissions(read=True),
+        permission=BlobSasPermissions(read=True, add=True, write=True, delete=True),
         expiry: datetime = None,
         timeout=datetime.timedelta(days=1),
     ) -> str:
@@ -1611,6 +1614,14 @@ class AzureBlob:
         """
         if expiry == None:  # if expiry not defined, use timeout
             expiry = datetime.datetime.utcnow() + timeout
+        if permission is None:
+            permission = BlobSasPermissions(
+                read=True,
+                add=True,
+                write=True,
+                delete=True,
+                delete_previous_version=True,
+            )
         blob_sas_token = generate_blob_sas(
             self.storage_account_name,
             container_name,
@@ -1627,7 +1638,9 @@ class AzureBlob:
         self,
         container_name: str,
         blob_name: str,
-        permission=BlobSasPermissions(read=True),
+        permission=BlobSasPermissions(
+            read=True, add=True, write=True, delete=True, delete_previous_version=True
+        ),
         expiry: datetime = None,
         timeout=datetime.timedelta(days=1),
     ) -> str:

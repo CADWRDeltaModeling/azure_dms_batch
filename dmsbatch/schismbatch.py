@@ -3,6 +3,7 @@ import subprocess
 import shutil
 
 import datetime
+import tempfile
 import pkg_resources
 import json
 import yaml
@@ -10,7 +11,7 @@ import yaml
 
 import azure.batch.models as batchmodels
 from azure.batch.models import BatchErrorException
-from dmsbatch.commands import AzureBatch
+from dmsbatch.commands import AzureBatch, AzureBlob
 
 # set up logging
 import logging
@@ -107,7 +108,10 @@ def create_schism_pool(pool_name, config_dict):
         __name__, pool_parameters_resource
     )
     dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    modified_parameters_file = f"temp_schismpool.parameters_{dtstr}.json"
+    # create a temporary file with the modified parameters in a temporary directory
+    modified_parameters_file = tempfile.NamedTemporaryFile(
+        prefix=f"schismbatch_{dtstr}", suffix="json"
+    ).name
     json_config_dict = convert_keys_to_camel_case(config_dict)
     try:
         # build json file from template using config_dict values
@@ -132,10 +136,6 @@ def create_schism_pool(pool_name, config_dict):
         logger.error("Error creating pool {}".format(pool_name))
         logger.error(e)
         raise e
-    finally:
-        # delete the modified parameters file
-        os.remove(modified_parameters_file)
-        logger.debug("removed the modified parameters file")  # for debug
 
 
 def estimate_cores_available(vm_size, num_hosts):
@@ -222,6 +222,7 @@ def submit_schism_task(client, pool_name, config_dict):
     # adding auto_complete so that job terminates when all these tasks are completed.
     client.submit_tasks(job_name, [schism_task], auto_complete=True)
     logger.info(f"Submitted task {job_name} to pool {pool_name}.")
+    return job_name, task_name
 
 
 def parse_yaml_file(config_file):
@@ -327,7 +328,23 @@ def submit_schism_job(config_file, pool_name=None):
         pool_name = config_dict["pool_name"] + f"_{dtstr}"
         # create pool
         pool_name = create_schism_pool(pool_name, config_dict)
-    submit_schism_task(client, pool_name, config_dict)
+    _, task_name = submit_schism_task(client, pool_name, config_dict)
+    try:
+        blob_client = AzureBlob(
+            config_dict["storage_account_name"], config_dict["storage_account_key"]
+        )
+        config_filename = os.path.basename(config_file)
+        logger.info(
+            f"uploading config file {config_file} to storage container under jobs/{task_name}/{config_filename}"
+        )
+        blob_client.upload_file_to_container(
+            config_dict["storage_container_name"],
+            f"jobs/{task_name}/{config_filename}",
+            config_file,
+        )
+    except Exception as e:
+        logger.error(e)
+        logger.error("Error uploading config file to storage account")
 
 
 def generate_schism_job_yaml(config_file):
