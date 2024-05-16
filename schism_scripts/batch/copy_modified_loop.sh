@@ -69,7 +69,7 @@ do
     # find files modified in the last modified_minutes minutes and copy them to dest_dir
     # OPTION1: cp with blobfuse mounted dir (slower due to writeback cache)
     mkdir -p $TMP_DIR
-    find . -type f -mmin "-${modified_minutes}" -exec cp -v --parents {} $TMP_DIR \;
+    find . -type f -mmin "-${modified_minutes}" -exec cp --parents {} $TMP_DIR \;
     # OPTION2: azcopy (faster, but need to install azcopy and set up SAS). Also sync scans destination and source so is slower
     # use azcopy sync (not sure how preformance compares to cp))
     #echo "syncing ${src_dir} to ${container}/${src_dir}"
