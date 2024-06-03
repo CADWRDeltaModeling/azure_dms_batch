@@ -56,9 +56,6 @@ trap 'finish=1' SIGUSR1
 # 
 echo "Waiting for ${max_modified_minutes} minutes before starting copy loop for the first time!"
 sleep $((max_modified_minutes * 60))
-# mount ramdisk (128GB) - this is a temporary solution to speed up copying FIXME:
-$SCHISM_SCRIPTS_HOME/batch/ramdisk_mount.sh
-export TMP_DIR=/mnt/ramdisk
 # copy from src_dir to dest_dir excluding the output directory
 echo "Starting copy loop from ${src_dir} to ${dest_dir}"
 while true
@@ -66,26 +63,11 @@ do
     start_time=$(date +%s)
     # copying files modified no more than ${modified_minutes} minutes ago
     echo "Copying files modified upto ${modified_minutes} minutes ago"
-    # find files modified in the last modified_minutes minutes and copy them to dest_dir
-    # OPTION1: cp with blobfuse mounted dir (slower due to writeback cache)
-    mkdir -p $TMP_DIR
-    find . -type f -mmin "-${modified_minutes}" -exec cp --parents {} $TMP_DIR \;
-    # OPTION2: azcopy (faster, but need to install azcopy and set up SAS). Also sync scans destination and source so is slower
-    # use azcopy sync (not sure how preformance compares to cp))
-    #echo "syncing ${src_dir} to ${container}/${src_dir}"
-    #azcopy sync "./" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}"
-    # OPTION3: azcopy as exec from find but each file is copied separately (slower)
-    # find "${src_dir}" -type f -mmin "-${modified_minutes}" -exec azcopy cp {} "https://${storage_account}.blob.core.windows.net/${container}/${dest_dir}?${SAS}" \;
     # OPTION 4: find files modified in the last modified_minutes minutes and then azcopy with list-of-files filter for faster copying times
     # MAJOR ASSUMPTION: current directory is the study directory
     # FIXME: $dest_dir is not used in the azcopy command as $src_dir is enough information to construct the destination path
-    # UNDOCUMENTED WAY: use --list-of-files option to azcopy
-    #find . -type f -mmin "-${modified_minutes}" -print > /tmp/azcopy_filelist.txt
-    #azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --list-of-files /tmp/azcopy_filelist.txt
     # DOCUMENTED WAY: construct a semi-colon separated list of files as an environment variable and use --include-path option to azcopy
-    #azcopy_filelist=$(find . -type f -mmin "-${modified_minutes}" -print0 | tr '\0' ';')
-    pushd $TMP_DIR;
-    azcopy_filelist=$(find . -type f -print0 | tr '\0' ';')
+    azcopy_filelist=$(find . -type f -mmin "-${modified_minutes}" -print0 | tr '\0' ';')
     # 
     if [ $finish -eq 1 ]; then
       echo "Received SIGUSR1... exiting after this copy!"
@@ -95,10 +77,9 @@ do
     if [ -z "${azcopy_filelist}" ]; then
       echo "No files to copy... skipping this time."
     else
-      azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --include-path ${azcopy_filelist} --preserve-symlinks;
+      # There will be failures as some of the files are being written to while copy is occurring which causes azcopy to return non-zero exit code
+      azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --include-path ${azcopy_filelist} --preserve-symlinks || true;
     fi
-    popd;
-    rm -rf $TMP_DIR/*;
     if [ $exit_after_copy -eq 1 ]; then
       echo "Exiting after last copy after receiving signal!"
       exit 0
