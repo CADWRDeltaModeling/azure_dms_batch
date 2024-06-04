@@ -41,18 +41,21 @@ for host in "${{host_list[@]}}"; do
 done
 
 echo "Hostfile created: $hostfile"
-# run schism
-echo "Running schism with {num_cores} cores and {num_hosts} hosts";
-# allow script to continue if schism fails
+# run commands
+echo "Running command with {num_cores} cores and {num_hosts} hosts";
+run_commands() {{
+    {mpi_command}
+}}
+# run in a function so that user can use return to exit early and send exit code.
 set +e;
-{mpi_command} >  $AZ_BATCH_TASK_DIR/stdout_command.txt 2> $AZ_BATCH_TASK_DIR/stderr_command.txt;
+run_commands > $AZ_BATCH_TASK_DIR/stdout_command.txt 2> $AZ_BATCH_TASK_DIR/stderr_command.txt;
 set -e;
-exit_code=$?;
-echo Schism Run Done;
+exit_code=$?; 
+echo Run Done;
 echo "Sending signal to background copy_modified_loop.sh with pid $pid";
 kill -SIGUSR1 $pid;
-# no semicolon for last command
-sleep 300;
+# wait for background copy to finish
 wait;
 echo "Done with everything. Shutting down";
+# no semicolon for last command
 exit $exit_code
