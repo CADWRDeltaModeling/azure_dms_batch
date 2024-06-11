@@ -4,7 +4,7 @@
 `run_modified_loop.sh` is a bash script designed to run a specified command on files within a directory that have been modified within a certain time frame. It allows for customization of the time parameters and the file pattern to watch, making it versatile for various automation tasks.
 
 ### Features
-- **Customizable Wait Times:** Allows setting minimum and maximum wait times before processing files.
+- **Customizable Wait Times:** Allows setting minimum and maximum modified times before processing files.
 - **Flexible File Matching:** Supports custom file patterns to match specific files.
 - **Command Execution:** Executes a specified command on the matched, modified files.
 
@@ -15,8 +15,8 @@
 #### Parameters
 - `-c <command>`: The command to run on modified files. This is a mandatory parameter.
 - `-w <wait_minutes>`: Loop sleep time in minutes. Default is 5 minutes.
-- `-m <min_modified_minutes>`: Minimum time to wait before starting the run loop. Default is 5 minutes.
-- `-x <max_modified_minutes>`: Maximum time to wait before starting the run loop. Default is 10 minutes.
+- `-m <min_modified_minutes>`: Minimum time that file is not modified before it is included in list to be processed. Default is 5 minutes.
+- `-x <max_modified_minutes>`: Maximum time that file that is modified is included in the list to be processed. Default is 10 minutes.
 - `-p <pattern>`: Pattern to match files, similar to glob patterns. Default is * (all files).
 - `<watch_dir>`: The directory to watch for modified files. This is a mandatory parameter.
 
@@ -54,7 +54,7 @@ Run a script on all `.txt` files modified within the last 5 to 10 minutes in the
 
 ### How It Works
 1. The script takes a command and optional arguments as its first inputs. The rest of the inputs should be file paths.
-2. It generates a unique filename to track processed files based on the command's basename.
+2. It generates a unique filename to track processed files based on the command's basename. Warning: multiple invocations with same command basename will cause conflicts.
 3. For each file path provided:
    - The script checks if the file has already been processed by looking for its name in the tracking file.
    - If the file has not been processed, the script executes the specified command with any provided arguments and the file path, then marks the file as processed by adding its name to the tracking file.
