@@ -1,5 +1,6 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
+printenv;
 source /opt/intel/oneapi/setvars.sh;
 export PATH=/opt/openmpi-5.0.2/bin/:$PATH;
 export LD_LIBRARY_PATH=/opt/openmpi-5.0.2/lib/:$LD_LIBRARY_PATH;
@@ -8,7 +9,6 @@ source $AZ_BATCH_APP_PACKAGE_schism_with_deps_5_11_alma8_7hpc_ucx_5_0_2/schism/s
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup_alma8_7;
 export BAY_DELTA_SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_BayDeltaSCHISM_2024_06_15;
 ulimit -s unlimited;
-printenv;
 #
 echo "Copying from blob to local for the setup first time";
 cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
@@ -44,14 +44,14 @@ done
 echo "Hostfile created: $hostfile"
 # run commands
 echo "Running command with {num_cores} cores and {num_hosts} hosts";
+# run commands with output to multiple files using tee and process substitution
 run_commands() {{
-    {mpi_command}
+{mpi_command}
 }}
-# run in a function so that user can use return to exit early and send exit code.
 set +e;
-run_commands > $AZ_BATCH_TASK_DIR/stdout_command.txt 2> $AZ_BATCH_TASK_DIR/stderr_command.txt;
+run_commands | tee -a >(cat >> $AZ_BATCH_TASK_DIR/stdout_command.txt) >(cat >> $AZ_BATCH_TASK_DIR/stdout.txt) 2>&1 | tee -a >(cat >> $AZ_BATCH_TASK_DIR/stderr_command.txt) >(cat >> $AZ_BATCH_TASK_DIR/stderr.txt) >&2;
 set -e;
-exit_code=$?; 
+exit_code=${{PIPESTATUS[0]}}; 
 echo Run Done;
 echo "Sending signal to background copy_modified_loop.sh with pid $pid";
 kill -SIGUSR1 $pid;
