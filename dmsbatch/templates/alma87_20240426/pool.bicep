@@ -97,6 +97,10 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
         id: '${batchAccount.id}/applications/baydeltaschism'
         version: '2024.06.15'
       }
+      {
+        id: '${batchAccount.id}/applications/telegraf'
+        version: '1.31.0'
+      }
     ]
   }
 }

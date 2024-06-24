@@ -1,6 +1,8 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
+telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
+telegraf_pid=$!;
 source /opt/intel/oneapi/setvars.sh;
 export PATH=/opt/openmpi-5.0.2/bin/:$PATH;
 export LD_LIBRARY_PATH=/opt/openmpi-5.0.2/lib/:$LD_LIBRARY_PATH;
@@ -55,6 +57,7 @@ exit_code=${{PIPESTATUS[0]}};
 echo Run Done;
 echo "Sending signal to background copy_modified_loop.sh with pid $pid";
 kill -SIGUSR1 $pid;
+kill $telegraf_pid;
 # wait for background copy to finish
 wait;
 echo "Done with everything. Shutting down";
