@@ -74,7 +74,7 @@ EOF
 
 setsebool -P use_nfs_home_dirs 1
 
-TIMEOUT=60
+TIMEOUT=120
 elapsed=0
 while [ $elapsed -lt $TIMEOUT ]; do
     mount -a
