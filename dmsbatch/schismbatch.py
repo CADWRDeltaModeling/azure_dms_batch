@@ -178,49 +178,61 @@ def submit_schism_task(client, pool_name, config_dict):
             print("Job already exists")
         else:
             raise e
-    task_name = f"{pre_pool_name}_task_{dtstr}"
-    #
-    app_cmd = load_command_from_resourcepath(fname=application_command_template)
-    app_cmd = app_cmd.format(**config_dict)  # do we need an order for substitution?
-    app_cmd = client.wrap_cmd_with_app_path(app_cmd, [], ostype="linux")
-    logger.debug("Application command: {}".format(app_cmd))
-    #
-    coordination_cmd = load_command_from_resourcepath(
-        fname=coordination_command_template
-    )
-    coordination_cmd = coordination_cmd.format(**config_dict)
-    coordination_cmd = client.wrap_cmd_with_app_path(
-        coordination_cmd, [], ostype="linux"
-    )
-    logger.debug("Coordination command: {}".format(coordination_cmd))
-    # output files should be saved to batch container
-    sas_batch = get_sas(
-        storage_account_name, storage_account_key, storage_container_name
-    )
-    output_file_specs = []
-    for upload_condition in [
-        batchmodels.OutputFileUploadCondition.task_completion,
-        batchmodels.OutputFileUploadCondition.task_failure,
-    ]:
-        spec = client.create_output_file_spec(
-            "../std*",
-            "https://{}.blob.core.windows.net/{}?{}".format(
-                storage_account_name, storage_container_name, sas_batch
-            ),
-            f"jobs/{task_name}",
-            upload_condition=upload_condition,
+    schism_tasks = []
+    # introduce special variable for task_id
+    if config_dict.get("task_ids") is not None:
+        # evaluate the task_id as a python expression
+        task_ids = eval(config_dict["task_ids"])
+    else:
+        task_ids = [""]
+    for task_id in task_ids:
+        config_dict["task_id"] = task_id
+        if task_id == "":
+            task_name = f"{pre_pool_name}_task_{dtstr}"
+        else:
+            task_name = f"{pre_pool_name}_task_{dtstr}_{task_id}"
+        app_cmd = load_command_from_resourcepath(fname=application_command_template)
+        app_cmd = app_cmd.format(**config_dict)  # do we need an order for substitution?
+        app_cmd = client.wrap_cmd_with_app_path(app_cmd, [], ostype="linux")
+        logger.debug("Application command: {}".format(app_cmd))
+        #
+        coordination_cmd = load_command_from_resourcepath(
+            fname=coordination_command_template
         )
-        output_file_specs.append(spec)
-    #
-    schism_task = client.create_task(
-        task_name,
-        app_cmd,
-        num_instances=num_hosts,
-        coordination_cmdline=coordination_cmd,
-        output_files=output_file_specs,
-    )
+        coordination_cmd = coordination_cmd.format(**config_dict)
+        coordination_cmd = client.wrap_cmd_with_app_path(
+            coordination_cmd, [], ostype="linux"
+        )
+        logger.debug("Coordination command: {}".format(coordination_cmd))
+        # output files should be saved to batch container
+        sas_batch = get_sas(
+            storage_account_name, storage_account_key, storage_container_name
+        )
+        output_file_specs = []
+        for upload_condition in [
+            batchmodels.OutputFileUploadCondition.task_completion,
+            batchmodels.OutputFileUploadCondition.task_failure,
+        ]:
+            spec = client.create_output_file_spec(
+                "../std*",
+                "https://{}.blob.core.windows.net/{}?{}".format(
+                    storage_account_name, storage_container_name, sas_batch
+                ),
+                f"jobs/{task_name}",
+                upload_condition=upload_condition,
+            )
+            output_file_specs.append(spec)
+        #
+        schism_task = client.create_task(
+            task_name,
+            app_cmd,
+            num_instances=num_hosts,
+            coordination_cmdline=coordination_cmd,
+            output_files=output_file_specs,
+        )
+        schism_tasks.append(schism_task)
     # adding auto_complete so that job terminates when all these tasks are completed.
-    client.submit_tasks(job_name, [schism_task], auto_complete=True)
+    client.submit_tasks(job_name, schism_tasks, auto_complete=True)
     logger.info(f"Submitted task {job_name} to pool {pool_name}.")
     return job_name, task_name
 
