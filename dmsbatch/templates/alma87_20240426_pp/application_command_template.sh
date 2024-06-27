@@ -1,8 +1,6 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
-telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
-telegraf_pid=$!;
 source /opt/intel/oneapi/setvars.sh;
 export PATH=/opt/openmpi-5.0.2/bin/:$PATH;
 export LD_LIBRARY_PATH=/opt/openmpi-5.0.2/lib/:$LD_LIBRARY_PATH;
@@ -13,7 +11,7 @@ export BAY_DELTA_SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_BayDeltaSCHISM_2024_06_27;
 ulimit -s unlimited;
 #
 echo "Copying from blob to local for the setup first time";
-cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
+cd $AZ_BATCH_TASK_WORKING_DIR; # make sure to match this to the coordination command template
 # do setup directories first to avoid link issues 
 setup_dirs=({setup_dirs});
 # loop over a array of directories, note double braces to escape for f-string substitution via python
@@ -30,22 +28,7 @@ mkdir -p {study_dir}/outputs;
 
 # change to study directory
 cd {study_dir};
-# start background copy script
-SAS="{sas}" bash $SCHISM_SCRIPTS_HOME/batch/copy_modified_loop.sh -d {delete_after_mins} {study_dir} $AZ_BATCH_NODE_MOUNTS_DIR "{storage_account_name}" "{storage_container_name}"&
-pid=$!;
-echo "Running background copy_modified_loop.sh with pid $pid";
-# Extract host list from AZ_BATCH_HOST_LIST
-IFS=',' read -r -a host_list <<< "$AZ_BATCH_HOST_LIST"
-
-# Create hostfile
-hostfile="hostfile"
-for host in "${{host_list[@]}}"; do
-    echo "$host" >> "$hostfile"
-done
-
-echo "Hostfile created: $hostfile"
 # run commands
-echo "Running command with {num_cores} cores and {num_hosts} hosts";
 # run commands with output to multiple files using tee and process substitution
 run_commands() {{
 {mpi_command}
@@ -55,11 +38,6 @@ run_commands | tee -a >(cat >> $AZ_BATCH_TASK_DIR/stdout_command.txt) >(cat >> $
 set -e;
 exit_code=${{PIPESTATUS[0]}}; 
 echo Run Done;
-echo "Sending signal to background copy_modified_loop.sh with pid $pid";
-kill -SIGUSR1 $pid;
-kill $telegraf_pid;
-# wait for background copy to finish
 wait;
-echo "Done with everything. Shutting down";
 # no semicolon for last command
 exit $exit_code

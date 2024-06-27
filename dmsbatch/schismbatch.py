@@ -62,6 +62,18 @@ def convert_keys_to_camel_case(config_dict):
     return camel_case_dict
 
 
+def create_substitutions_for_keywords(dict, **kwargs):
+    dict = dict.copy()
+    # string substitution for the config_dict values with kwargs only
+    for key in dict:
+        value = dict[key]
+        if isinstance(value, str):
+            dict[key] = value.format(**kwargs)
+        else:
+            dict[key] = value
+    return dict
+
+
 def create_substituted_dict(config_dict, **kwargs):
     config_dict = config_dict.copy()
     config_dict.update(kwargs)
@@ -95,13 +107,8 @@ def create_schism_pool(pool_name, config_dict):
     resource_group_name = config_dict["resource_group"]
     pool_name = config_dict["pool_name"]
     num_hosts = config_dict["num_hosts"]
-    batch_account_name = config_dict["batch_account_name"]
-    storage_account_key = config_dict["storage_account_key"]
-    storage_name = config_dict["storage_account_name"]
-    container_name = config_dict["storage_container_name"]
     pool_bicep_resource = config_dict["pool_bicep_resource"]
     pool_parameters_resource = config_dict["pool_parameters_resource"]
-    start_task_script = config_dict["start_task_script"]
 
     bicep_file = pkg_resources.resource_filename(__name__, pool_bicep_resource)
     parameters_file = pkg_resources.resource_filename(
@@ -150,21 +157,9 @@ def estimate_cores_available(vm_size, num_hosts):
 
 
 def submit_schism_task(client, pool_name, config_dict):
-    config_dict = create_substituted_dict(config_dict, pool_name=pool_name)
-    # assign the variables below to the values in the config file
-    num_hosts = config_dict["num_hosts"]
-    num_cores = config_dict["num_cores"]
-    num_scribes = config_dict["num_scribes"]
-    study_dir = config_dict["study_dir"]
-    study_copy_flags = config_dict["study_copy_flags"]
-    setup_dirs = config_dict["setup_dirs"]
     storage_account_name = config_dict["storage_account_name"]
     storage_container_name = config_dict["storage_container_name"]
-    sas = config_dict["sas"]
     storage_account_key = config_dict["storage_account_key"]
-    application_command_template = config_dict["application_command_template"]
-    mpi_command = config_dict["mpi_command"]
-    coordination_command_template = config_dict["coordination_command_template"]
     # pool_name has date and time appended after _
     dtstr = pool_name.split("_")[-1]
     # pre_pool_name is everything before the last _
@@ -172,7 +167,18 @@ def submit_schism_task(client, pool_name, config_dict):
     # name job and task with date and time
     job_name = f"{pre_pool_name}_job_{dtstr}"
     try:
-        client.create_job(job_name, pool_name)
+        job_start_command_template = config_dict["job_start_command_template"].format(
+            **config_dict
+        )
+        job_cmd = load_command_from_resourcepath(fname=job_start_command_template)
+        job_cmd = job_cmd.format(**config_dict)
+        logger.debug("Job Start command: {}".format(job_cmd))
+        job_cmd_list = job_cmd.split("\n")
+        # prep task takes care of formatting the command for azure
+        prep_task = client.create_prep_task(
+            f"job_prep_task", job_cmd_list, ostype="linux"
+        )
+        client.create_job(job_name, pool_name, prep_task)
     except BatchErrorException as e:
         if e.error.code == "JobExists":
             print("Job already exists")
@@ -185,17 +191,26 @@ def submit_schism_task(client, pool_name, config_dict):
         task_ids = eval(config_dict["task_ids"])
     else:
         task_ids = [""]
+    unsubstitued_config_dict = config_dict.copy()
     for task_id in task_ids:
-        config_dict["task_id"] = task_id
         if task_id == "":
             task_name = f"{pre_pool_name}_task_{dtstr}"
         else:
-            task_name = f"{pre_pool_name}_task_{dtstr}_{task_id}"
+            task_name = f"{task_id}"
+        unsubstitued_config_dict["task_id"] = task_id
+        config_dict = create_substituted_dict(
+            unsubstitued_config_dict, pool_name=pool_name
+        )
+        # assign the variables below to the values in the config file
+        num_hosts = config_dict["num_hosts"]
+        application_command_template = config_dict["application_command_template"]
+
         app_cmd = load_command_from_resourcepath(fname=application_command_template)
         app_cmd = app_cmd.format(**config_dict)  # do we need an order for substitution?
         app_cmd = client.wrap_cmd_with_app_path(app_cmd, [], ostype="linux")
         logger.debug("Application command: {}".format(app_cmd))
         #
+        coordination_command_template = config_dict["coordination_command_template"]
         coordination_cmd = load_command_from_resourcepath(
             fname=coordination_command_template
         )
@@ -249,6 +264,7 @@ def create_batch_client(name, key, url):
 
 def submit_schism_job(config_file, pool_name=None):
     config_dict = parse_yaml_file(config_file)
+    config_dict["task_id"] = ""
     required_keys = [
         "template_name",
         "resource_group",
@@ -308,9 +324,6 @@ def submit_schism_job(config_file, pool_name=None):
             "using default coordination command template",
             config_dict["coordination_command_template"],
         )
-    if "start_task_script" not in config_dict:
-        config_dict["start_task_script"] = "printenv"
-        logger.info("using default start task script", config_dict["start_task_script"])
     if "num_cores" not in config_dict:
         config_dict["num_cores"] = estimate_cores_available(
             config_dict["vm_size"], config_dict["num_hosts"]
