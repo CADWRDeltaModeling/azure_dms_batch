@@ -1,6 +1,7 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
+export SCHISM_STUDY_DIR=$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir};
 telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
 telegraf_pid=$!;
 module load mpi/mvapich2;
