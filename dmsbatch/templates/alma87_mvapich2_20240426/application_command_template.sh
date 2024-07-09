@@ -8,7 +8,7 @@ module load mpi/mvapich2;
 source $AZ_BATCH_APP_PACKAGE_schimpy_with_deps_rhel8_7/bin/activate;
 source $AZ_BATCH_APP_PACKAGE_schism_with_deps_5_11_1_alma8_7hpc_v4_mvapich2/schism/setup_paths.sh;
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup_alma8_7;
-export BAY_DELTA_SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_BayDeltaSCHISM_2024_06_27;
+export BAY_DELTA_SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_BayDeltaSCHISM_2024_07_09;
 ulimit -s unlimited;
 #
 echo "Copying from blob to local for the setup first time";
