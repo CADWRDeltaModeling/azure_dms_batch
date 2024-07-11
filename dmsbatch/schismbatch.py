@@ -233,7 +233,7 @@ def submit_schism_task(client, pool_name, config_dict):
                 "https://{}.blob.core.windows.net/{}?{}".format(
                     storage_account_name, storage_container_name, sas_batch
                 ),
-                f"jobs/{task_name}",
+                f"jobs/{job_name}/{task_name}",
                 upload_condition=upload_condition,
             )
             output_file_specs.append(spec)
