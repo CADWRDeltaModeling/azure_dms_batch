@@ -1,7 +1,7 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
-export SCHISM_STUDY_DIR=$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir};
+# export SCHISM_STUDY_DIR=$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir};
 telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
 telegraf_pid=$!;
 module load mpi/mvapich2;
@@ -32,7 +32,7 @@ cd {study_dir};
 # run commands
 # run commands with output to multiple files using tee and process substitution
 run_commands() {{
-{mpi_command}
+{command}
 }}
 set +e;
 run_commands | tee -a >(cat >> $AZ_BATCH_TASK_DIR/stdout_command.txt) >(cat >> $AZ_BATCH_TASK_DIR/stdout.txt) 2>&1 | tee -a >(cat >> $AZ_BATCH_TASK_DIR/stderr_command.txt) >(cat >> $AZ_BATCH_TASK_DIR/stderr.txt) >&2;
