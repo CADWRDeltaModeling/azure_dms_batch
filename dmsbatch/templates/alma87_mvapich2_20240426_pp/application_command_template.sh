@@ -2,8 +2,8 @@ echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
 # export SCHISM_STUDY_DIR=$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir};
-telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
-telegraf_pid=$!;
+#telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
+#telegraf_pid=$!;
 module load mpi/mvapich2;
 source $AZ_BATCH_APP_PACKAGE_schimpy_with_deps_rhel8_7/bin/activate;
 source $AZ_BATCH_APP_PACKAGE_schism_with_deps_5_11_1_alma8_7hpc_v4_mvapich2/schism/setup_paths.sh;
@@ -39,7 +39,7 @@ run_commands | tee -a >(cat >> $AZ_BATCH_TASK_DIR/stdout_command.txt) >(cat >> $
 set -e;
 exit_code=${{PIPESTATUS[0]}}; 
 echo Run Done;
-kill $telegraf_pid;
+#kill $telegraf_pid;
 # wait for background copy to finish
 wait;
 # no semicolon for last command
