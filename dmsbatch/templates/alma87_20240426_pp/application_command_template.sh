@@ -1,6 +1,7 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
+export SCHISM_STUDY_DIR=$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir};
 source /opt/intel/oneapi/setvars.sh;
 export PATH=/opt/openmpi-5.0.2/bin/:$PATH;
 export LD_LIBRARY_PATH=/opt/openmpi-5.0.2/lib/:$LD_LIBRARY_PATH;

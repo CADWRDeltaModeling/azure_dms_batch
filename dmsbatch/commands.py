@@ -1120,6 +1120,37 @@ class AzureBatch:
         else:
             raise ValueError("unknown ostype: {}".format(ostype))
 
+    def get_env_varname_for_app(self, app_name, app_version, ostype="windows"):
+        """
+        get the environment variable for the app
+
+        Parameters
+        ----------
+        app_name : str
+            name of app
+        app_version : str
+            version of app
+
+        Returns
+        -------
+        str
+            environment variable for the app
+        """
+        envvar_name = ""
+        if ostype == "windows":
+            envvar_name = "%AZ_BATCH_APP_PACKAGE_{app_name}#{app_version}%".format(
+                app_name, app_version
+            )
+        elif ostype == "linux":
+            envvar_name = (
+                "${AZ_BATCH_APP_PACKAGE_{app_name}_{app_version}{brace}".format(
+                    app_name.replace(".", "_"), app_version.replace(".", "_"), brace="}"
+                )
+            )
+        else:
+            raise ValueError("unknown ostype: {}".format(ostype))
+        return envvar_name
+
     def set_path_to_apps(self, apps: list, ostype="windows") -> str:
         """
         create cmd to set path to apps binary locations
@@ -1156,7 +1187,12 @@ class AzureBatch:
                 for name, version, bin_loc in apps
             ]
             env_var_path = ";".join(app_loc_var)
-            cmd = 'set "PATH={env_var_path};%PATH%"'.format(env_var_path=env_var_path)
+            if len(env_var_path) > 0:
+                cmd = 'set "PATH={env_var_path};%PATH%"'.format(
+                    env_var_path=env_var_path
+                )
+            else:
+                cmd = 'set "PATH=%PATH%"'
         elif ostype == "linux":
             app_loc_var = [
                 "${"

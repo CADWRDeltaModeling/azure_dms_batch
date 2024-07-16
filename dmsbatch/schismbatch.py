@@ -153,13 +153,40 @@ def estimate_cores_available(vm_size, num_hosts):
         "standard_hb120rs_v3": 120,
         "standard_hb176rs_v4": 176,
     }
-    return num_hosts * (VM_CORE_MAP[vm_size])
+    core_count_per_host = VM_CORE_MAP.get(vm_size, 1)
+    return num_hosts * core_count_per_host
+
+
+def convert_command_str_to_list(cmd_str, ostype="linux"):
+    # split app_cmd into a list assuming either \n or \r\n
+    cmd_str = cmd_str.replace("\r\n", "\n")
+    app_cmd_list = cmd_str.split("\n")
+    # if linux, optionally replace strings ending with ; and space with empty string
+    if ostype == "linux":
+        app_cmd_list = [cmd.rstrip("; ") for cmd in app_cmd_list]
+    return app_cmd_list
+
+
+def get_env_var_name_for_app(app_name, ostype="linux"):
+    envvar_name = ""
+    if ostype == "windows":
+        envvar_name = "%AZ_BATCH_APP_PACKAGE_{app_name}#{app_version}%".format(
+            app_name, app_version
+        )
+    elif ostype == "linux":
+        envvar_name = "${AZ_BATCH_APP_PACKAGE_{app_name}_{app_version}{brace}".format(
+            app_name.replace(".", "_"), app_version.replace(".", "_"), brace="}"
+        )
+    else:
+        raise ValueError("unknown ostype: {}".format(ostype))
+    return envvar_name
 
 
 def submit_schism_task(client, pool_name, config_dict):
     storage_account_name = config_dict["storage_account_name"]
     storage_container_name = config_dict["storage_container_name"]
     storage_account_key = config_dict["storage_account_key"]
+    ostype = config_dict.get("ostype", "linux")
     # pool_name has date and time appended after _
     dtstr = pool_name.split("_")[-1]
     # pre_pool_name is everything before the last _
@@ -176,7 +203,7 @@ def submit_schism_task(client, pool_name, config_dict):
         job_cmd_list = job_cmd.split("\n")
         # prep task takes care of formatting the command for azure
         prep_task = client.create_prep_task(
-            f"job_prep_task", job_cmd_list, ostype="linux"
+            f"job_prep_task", job_cmd_list, ostype=ostype
         )
         client.create_job(job_name, pool_name, prep_task)
     except BatchErrorException as e:
@@ -188,7 +215,7 @@ def submit_schism_task(client, pool_name, config_dict):
     # introduce special variable for task_id
     if config_dict.get("task_ids") is not None:
         # evaluate the task_id as a python expression
-        task_ids = eval(config_dict["task_ids"])
+        task_ids = eval(config_dict["task_ids"].format(**config_dict))
     else:
         task_ids = [""]
     unsubstitued_config_dict = config_dict.copy()
@@ -207,18 +234,25 @@ def submit_schism_task(client, pool_name, config_dict):
 
         app_cmd = load_command_from_resourcepath(fname=application_command_template)
         app_cmd = app_cmd.format(**config_dict)  # do we need an order for substitution?
-        app_cmd = client.wrap_cmd_with_app_path(app_cmd, [], ostype="linux")
+        app_cmd_list = convert_command_str_to_list(app_cmd, ostype=ostype)
+        app_cmd = client.wrap_cmd_with_app_path(app_cmd_list, [], ostype=ostype)
         logger.debug("Application command: {}".format(app_cmd))
         #
-        coordination_command_template = config_dict["coordination_command_template"]
-        coordination_cmd = load_command_from_resourcepath(
-            fname=coordination_command_template
-        )
-        coordination_cmd = coordination_cmd.format(**config_dict)
-        coordination_cmd = client.wrap_cmd_with_app_path(
-            coordination_cmd, [], ostype="linux"
-        )
-        logger.debug("Coordination command: {}".format(coordination_cmd))
+        if "mpi_command" in config_dict:
+            coordination_command_template = config_dict["coordination_command_template"]
+            coordination_cmd = load_command_from_resourcepath(
+                fname=coordination_command_template
+            )
+            coordination_cmd = coordination_cmd.format(**config_dict)
+            coordination_cmd_list = convert_command_str_to_list(
+                coordination_cmd, ostype
+            )
+            coordination_cmd = client.wrap_cmd_with_app_path(
+                coordination_cmd_list, [], ostype=ostype
+            )
+            logger.debug("Coordination command: {}".format(coordination_cmd))
+        else:
+            coordination_cmd = None
         # output files should be saved to batch container
         sas_batch = get_sas(
             storage_account_name, storage_account_key, storage_container_name

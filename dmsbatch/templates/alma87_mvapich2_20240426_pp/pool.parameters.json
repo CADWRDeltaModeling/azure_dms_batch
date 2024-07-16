@@ -34,6 +34,34 @@
         },
         "createdBy": {
             "value": ""
+        },
+        "app_pkgs": {
+            "value": [
+                {
+                    "name": "batch_setup",
+                    "version": "alma8.7"
+                },
+                {
+                    "name": "nfs",
+                    "version": "alma8.7"
+                },
+                {
+                    "name": "schism_with_deps",
+                    "version": "5.11.1_alma8.7hpc_v4_mvapich2"
+                },
+                {
+                    "name": "schimpy_with_deps",
+                    "version": "rhel8.7"
+                },
+                {
+                    "name": "baydeltaschism",
+                    "version": "2024.07.16"
+                },
+                {
+                    "name": "telegraf",
+                    "version": "1.31.0"
+                }
+          ]        
         }
     }
 }

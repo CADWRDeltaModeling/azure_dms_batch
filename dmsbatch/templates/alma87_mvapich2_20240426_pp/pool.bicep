@@ -20,7 +20,7 @@ param startTaskScript string =  'printenv'
 param formula string = '$TargetDedicatedNodes = 0'
 // use existing batch account
 param createdBy string = ''
-
+param app_pkgs array
 resource batchAccount 'Microsoft.Batch/batchAccounts@2023-11-01' existing = {
   name: batchAccountName
 }
@@ -77,29 +77,9 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
       waitForSuccess: true
     }
     applicationPackages: [
-      {
-        id: '${batchAccount.id}/applications/batch_setup'
-        version: 'alma8.7'
-      }
-      {
-        id: '${batchAccount.id}/applications/nfs'
-        version: 'alma8.7'
-      }
-      {
-        id: '${batchAccount.id}/applications/schism_with_deps'
-        version: '5.11.1_alma8.7hpc_v4_mvapich2'
-      }
-      {
-        id: '${batchAccount.id}/applications/schimpy_with_deps'
-        version: 'rhel8.7'
-      }
-      {
-        id: '${batchAccount.id}/applications/baydeltaschism'
-        version: '2024.07.11'
-      }
-      {
-        id: '${batchAccount.id}/applications/telegraf'
-        version: '1.31.0'
+      for pkg in app_pkgs:{
+        id: '${batchAccount.id}/applications/${pkg.name}'
+        version: pkg.version
       }
     ]
   }
