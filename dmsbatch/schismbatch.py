@@ -164,6 +164,8 @@ def convert_command_str_to_list(cmd_str, ostype="linux"):
     # if linux, optionally replace strings ending with ; and space with empty string
     if ostype == "linux":
         app_cmd_list = [cmd.rstrip("; ") for cmd in app_cmd_list]
+    # remove empty strings
+    app_cmd_list = [cmd for cmd in app_cmd_list if cmd]
     return app_cmd_list
 
 
