@@ -5,10 +5,10 @@ export SCHISM_STUDY_DIR=$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir};
 telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
 telegraf_pid=$!;
 module load mpi/mvapich2;
-source $AZ_BATCH_APP_PACKAGE_schimpy_with_deps_rhel8_7/bin/activate;
-source $AZ_BATCH_APP_PACKAGE_schism_with_deps_5_11_1_alma8_7hpc_v4_mvapich2/schism/setup_paths.sh;
-export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup_alma8_7;
-export BAY_DELTA_SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_BayDeltaSCHISM_2024_07_16;
+source $AZ_BATCH_APP_PACKAGE_schimpy_with_deps/bin/activate;
+source $AZ_BATCH_APP_PACKAGE_schism_with_deps/schism/setup_paths.sh;
+export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup;
+export BAY_DELTA_SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_BayDeltaSCHISM;
 ulimit -s unlimited;
 #
 echo "Copying from blob to local for the setup first time";

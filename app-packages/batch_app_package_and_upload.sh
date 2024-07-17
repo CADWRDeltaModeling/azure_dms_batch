@@ -13,7 +13,7 @@ package_and_upload_telegraf() {
     popd
     module load azure_cli
     az batch application package create --application-name telegraf --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
-
+    az batch application set --application-name telegraf --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}    
 }
 
 package_and_upload_bdschism() {
@@ -31,6 +31,7 @@ package_and_upload_bdschism() {
     popd
     module load azure_cli
     az batch application package create --application-name BayDeltaSCHISM --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${today}"
+    az batch application set --application-name BayDeltaSCHISM --default-version "${today}" --name ${batch_name} --resource-group ${resource_group_name}
 }
 
 package_and_upload_schism() {
@@ -44,6 +45,7 @@ package_and_upload_schism() {
 
     module load azure_cli
     az batch application package create --application-name schism_with_deps --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
+    az batch application set --application-name schism_with_deps --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
 }
 
 package_and_upload_batch_setup(){
@@ -60,6 +62,32 @@ package_and_upload_batch_setup(){
     popd
     module load azure_cli
     az batch application package create --application-name batch_setup --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
+    az batch application set --application-name batch_setup --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
+}
+
+package_and_upload_schimpy(){
+    batch_name=$1
+    resource_group_name=$2
+    app_name="schimpy_with_deps"
+    # todays date in 2024.06.11 format
+    today=$(date +"%Y.%m.%d")
+    version=${today}
+    mkdir -p /tmp/schimpy_with_deps_${version}
+    cd /tmp/schimpy_with_deps_${version}
+    git clone https://github.com/CADWRDeltaModeling/schimpy
+    cd schimpy
+    conda env remove -n schimpy_${version} -y || true
+    conda env create -f schimpy_env.yml -n schimpy_${version}
+    conda activate pack
+    conda pack -n schimpy_${version} -o schimpy.tar.gz
+    zip -r schimpy_${version}.zip schimpy.tar.gz
+    conda deactivate
+    conda env remove -n schimpy_${version} -y
+    package_file="schimpy_${version}.zip"
+
+    module load azure_cli
+    az batch application package create --application-name "${app_name}" --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
+    az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
 }
 # Call the function
 #package_and_upload_bdschism "../../BayDeltaSCHISM" schismbatch dwrbdo_schism_rg
@@ -75,3 +103,6 @@ package_and_upload_batch_setup(){
 #az batch application package create --application-name schism_with_deps --name dwrbdodspbatch --package-file schism_with_deps_5.11.1_alma8.7hpc_mvapich2.zip -g dwrbdo_dsp --version-name "5.11.1_alma8.7hpc_mvapich2"
 #az batch application package create --application-name schism_with_deps --name schismbatch --package-file schism_with_deps_5.11.1_alma8.7hpc_hpcx_pmix.zip -g dwrbdo_schism_rg --version-name "5.11.1_alma8.7hpc_hpcx_pmix"
 #az batch application package create --application-name schism_with_deps --name schismbatch --package-file schism_with_deps_5.11.1_alma8.7hpc_hpcx.zip -g dwrbdo_schism_rg --version-name "5.11.1_alma8.7hpc_hpcx"
+#az batch application package create --application-name mvapich2 --name schismbatch --package-file mvapich2-2.3.7-1-ndr-patch.zip -g dwrbdo_schism_rg --version-name "2.3.7-1-ndr-patch"
+#az batch application package create --application-name schism_with_deps --name schismbatch --package-file schism_with_deps_v5.11.1_alma8.7hpc_mvapich2_ndr_patch.zip -g dwrbdo_schism_rg --version-name "5.11.1_alma8.7hpc_mvapich2_ndr_patch"
+#package_and_upload_schimpy schismbatch dwrbdo_schism_rg

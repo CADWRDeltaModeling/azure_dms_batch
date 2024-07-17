@@ -79,7 +79,6 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
     applicationPackages: [
       for pkg in app_pkgs:{
         id: '${batchAccount.id}/applications/${pkg.name}'
-        version: pkg.version
       }
     ]
   }

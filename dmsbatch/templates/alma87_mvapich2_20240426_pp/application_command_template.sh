@@ -1,14 +1,11 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
-# export SCHISM_STUDY_DIR=$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir};
-#telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
-#telegraf_pid=$!;
 module load mpi/mvapich2;
-source $AZ_BATCH_APP_PACKAGE_schimpy_with_deps_rhel8_7/bin/activate;
-source $AZ_BATCH_APP_PACKAGE_schism_with_deps_5_11_1_alma8_7hpc_v4_mvapich2/schism/setup_paths.sh;
-export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup_alma8_7;
-export BAY_DELTA_SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_BayDeltaSCHISM_2024_07_11;
+source $AZ_BATCH_APP_PACKAGE_schimpy_with_deps/bin/activate;
+source $AZ_BATCH_APP_PACKAGE_schism_with_deps/schism/setup_paths.sh;
+export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup;
+export BAY_DELTA_SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_BayDeltaSCHISM;
 ulimit -s unlimited;
 #
 echo "Copying from blob to local for the setup first time";
@@ -39,7 +36,6 @@ run_commands | tee -a >(cat >> $AZ_BATCH_TASK_DIR/stdout_command.txt) >(cat >> $
 set -e;
 exit_code=${{PIPESTATUS[0]}}; 
 echo Run Done;
-#kill $telegraf_pid;
 # wait for background copy to finish
 wait;
 # no semicolon for last command
