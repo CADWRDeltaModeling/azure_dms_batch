@@ -1,6 +1,7 @@
 import os
 import subprocess
 import shutil
+import re
 
 import datetime
 import tempfile
@@ -157,19 +158,24 @@ def estimate_cores_available(vm_size, num_hosts):
     return num_hosts * core_count_per_host
 
 
+def get_semicolon_pattern():
+    return re.compile(r";\s*$")
+
+
 def convert_command_str_to_list(cmd_str, ostype="linux"):
+    pattern = get_semicolon_pattern()
     # split app_cmd into a list assuming either \n or \r\n
     cmd_str = cmd_str.replace("\r\n", "\n")
     app_cmd_list = cmd_str.split("\n")
     # if linux, optionally replace strings ending with ; and space with empty string
     if ostype == "linux":
-        app_cmd_list = [cmd.rstrip("; ") for cmd in app_cmd_list]
+        app_cmd_list = [pattern.sub("", cmd) for cmd in app_cmd_list]
     # remove empty strings
     app_cmd_list = [cmd for cmd in app_cmd_list if cmd]
     return app_cmd_list
 
 
-def get_env_var_name_for_app(app_name, ostype="linux"):
+def get_env_var_name_for_app(app_name, app_version, ostype="linux"):
     envvar_name = ""
     if ostype == "windows":
         envvar_name = "%AZ_BATCH_APP_PACKAGE_{app_name}#{app_version}%".format(
@@ -233,11 +239,9 @@ def submit_schism_task(client, pool_name, config_dict):
         # assign the variables below to the values in the config file
         num_hosts = config_dict["num_hosts"]
         application_command_template = config_dict["application_command_template"]
-
         app_cmd = load_command_from_resourcepath(fname=application_command_template)
         app_cmd = app_cmd.format(**config_dict)  # do we need an order for substitution?
-        app_cmd_list = convert_command_str_to_list(app_cmd, ostype=ostype)
-        app_cmd = client.wrap_cmd_with_app_path(app_cmd_list, [], ostype=ostype)
+        app_cmd = client.wrap_commands_in_shell([app_cmd], ostype=ostype)
         logger.debug("Application command: {}".format(app_cmd))
         #
         if "mpi_command" in config_dict:
@@ -246,11 +250,8 @@ def submit_schism_task(client, pool_name, config_dict):
                 fname=coordination_command_template
             )
             coordination_cmd = coordination_cmd.format(**config_dict)
-            coordination_cmd_list = convert_command_str_to_list(
-                coordination_cmd, ostype
-            )
-            coordination_cmd = client.wrap_cmd_with_app_path(
-                coordination_cmd_list, [], ostype=ostype
+            coordination_cmd = client.wrap_commands_in_shell(
+                [coordination_cmd], ostype=ostype
             )
             logger.debug("Coordination command: {}".format(coordination_cmd))
         else:
