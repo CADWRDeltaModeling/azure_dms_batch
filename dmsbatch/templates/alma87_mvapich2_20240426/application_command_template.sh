@@ -19,7 +19,7 @@ setup_dirs=({setup_dirs});
 for dir in "${{setup_dirs[@]}}"; do
     echo "Copying $dir";
     mkdir -p $(dirname $dir);
-    azcopy copy --recursive --preserve-symlinks "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/$dir?{sas}" $(dirname $dir) || true;
+    azcopy copy {setup_dirs_copy_flags} "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/$dir?{sas}" $(dirname $dir) || true;
 done
 
 # setup study directory
