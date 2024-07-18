@@ -72,8 +72,9 @@ package_and_upload_schimpy(){
     # todays date in 2024.06.11 format
     today=$(date +"%Y.%m.%d")
     version=${today}
+    rm -rf /tmp/schimpy_with_deps_${version}
     mkdir -p /tmp/schimpy_with_deps_${version}
-    cd /tmp/schimpy_with_deps_${version}
+    pushd /tmp/schimpy_with_deps_${version}
     git clone https://github.com/CADWRDeltaModeling/schimpy
     cd schimpy
     conda env remove -n schimpy_${version} -y || true
@@ -88,6 +89,7 @@ package_and_upload_schimpy(){
     module load azure_cli
     az batch application package create --application-name "${app_name}" --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
     az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
+    popd
 }
 # Call the function
 #package_and_upload_bdschism "../../BayDeltaSCHISM" schismbatch dwrbdo_schism_rg
@@ -106,3 +108,4 @@ package_and_upload_schimpy(){
 #az batch application package create --application-name mvapich2 --name schismbatch --package-file mvapich2-2.3.7-1-ndr-patch.zip -g dwrbdo_schism_rg --version-name "2.3.7-1-ndr-patch"
 #az batch application package create --application-name schism_with_deps --name schismbatch --package-file schism_with_deps_v5.11.1_alma8.7hpc_mvapich2_ndr_patch.zip -g dwrbdo_schism_rg --version-name "5.11.1_alma8.7hpc_mvapich2_ndr_patch"
 #package_and_upload_schimpy schismbatch dwrbdo_schism_rg
+#package_and_upload_schimpy dwrbdodspbatch dwrbdo_dsp
