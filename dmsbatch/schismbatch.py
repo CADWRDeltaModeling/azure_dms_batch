@@ -40,12 +40,14 @@ def modify_json_file(json_file, modified_file, **kwargs):
         json.dump(json_dict, f, indent=4)
 
 
-def build_autoscaling_formula(num_hosts, startTime):
-    formula = pkg_resources.resource_string(
-        __name__, "schismpool_autoscale_formula.txt"
-    )
+def build_autoscaling_formula(config_dict):
+    formula = pkg_resources.resource_string(__name__, config_dict["autoscale_formula"])
     formula = formula.decode("utf-8")
-    formula = formula.format(num_hosts=num_hosts, startTime=startTime.isoformat())
+    config_dict = config_dict.copy()
+    config_dict["startTime"] = (
+        datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()
+    )
+    formula = formula.format(**config_dict)
     return formula
 
 
@@ -126,10 +128,7 @@ def create_schism_pool(pool_name, config_dict):
         modify_json_file(
             parameters_file,
             modified_parameters_file,
-            formula=build_autoscaling_formula(
-                num_hosts,
-                datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0),
-            ),
+            formula=build_autoscaling_formula(config_dict),
             **json_config_dict,
         )
         # Run the command and capture its output
