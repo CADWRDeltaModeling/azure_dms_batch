@@ -275,13 +275,18 @@ def submit_schism_task(client, pool_name, config_dict):
             )
             output_file_specs.append(spec)
         #
-        schism_task = client.create_task(
-            task_name,
-            app_cmd,
-            num_instances=num_hosts,
-            coordination_cmdline=coordination_cmd,
-            output_files=output_file_specs,
-        )
+        if coordination_cmd is not None:
+            schism_task = client.create_task(
+                task_name,
+                app_cmd,
+                num_instances=num_hosts,
+                coordination_cmdline=coordination_cmd,
+                output_files=output_file_specs,
+            )
+        else:
+            schism_task = client.create_task(
+                task_name, app_cmd, output_files=output_file_specs
+            )
         schism_tasks.append(schism_task)
     # adding auto_complete so that job terminates when all these tasks are completed.
     client.submit_tasks(job_name, schism_tasks, auto_complete=True)
@@ -318,7 +323,7 @@ def submit_schism_job(config_file, pool_name=None):
             )
     # load defaults from default_config.yml and update undefined ones
     default_config_file = pkg_resources.resource_filename(
-        __name__, "templates/default_config.yml"
+        __name__, f'templates/{config_dict["template_name"]}/default_config.yml'
     )
     default_config_dict = parse_yaml_file(default_config_file)
     update_if_not_defined(config_dict, **default_config_dict)
