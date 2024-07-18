@@ -30,10 +30,9 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
   parent: batchAccount
   properties: {
     vmSize: vmSize
-    interNodeCommunication: 'Enabled'
     taskSlotsPerNode: taskSlotsPerNode
     taskSchedulingPolicy: {
-      nodeFillType: 'Pack'
+      nodeFillType: 'Spread'
     }
     
     metadata: [
