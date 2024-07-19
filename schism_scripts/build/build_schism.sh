@@ -8,6 +8,11 @@ export OSVER="alma8.7hpc"
 # Activate MVAPICH2 if argument to this script is mvapich2 else if openmpi activate openmpi
 if [ "$1" == "mvapich2" ]; then
   module load mpi/mvapich2
+elif [ "$1" == "mvapich2-ndr-patch" ]; then
+  module load gcc-9.2.0
+  export MVAPICH2_VERSION=2.3.7-1-ndr-patch
+  export PATH=$PATH:/opt/mvapich2-${MVAPICH2_VERSION}/bin
+  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/mvapich2-${MVAPICH2_VERSION}/lib
 elif [ "$1" == "openmpi" ]; then
   module load mpi/openmpi
 elif [ "$1" == "hpcx" ]; then
@@ -159,7 +164,7 @@ EOF
 export FULL_VERSION=${SCHISM_VERSION}_${OSVER}_${1}
 echo "Full version: $FULL_VERSION"
 zip -r /tmp/schism_with_deps_$FULL_VERSION.zip schism netcdf-c netcdf-fortran hdf5
-# export $BATCH_ACCOUNT="schismbatch"
-# export $BATCH_RESOURCE_GROUP="dwrbdo_schism_rg"
+# export BATCH_ACCOUNT="schismbatch"
+# export BATCH_RESOURCE_GROUP="dwrbdo_schism_rg"
 # az batch application package create --application-name schism_with_deps --name $BATCH_ACCOUNT --package-file /tmp/schism_with_deps_$FULL_VERSION.zip -g $BATCH_RESOURCE_GROUP --version-name "$FULL_VERSION"
 echo "Done building SCHISM with dependencies"

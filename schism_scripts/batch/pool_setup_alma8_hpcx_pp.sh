@@ -13,14 +13,6 @@ echo "Starting pool install script..."
 echo "Installing telegraf..."
 ./install-telegraf.sh
 echo "Done with telegraf install"
-echo "Setting up shared disk"
-source ./nfs_common.sh
-setup_disks
-ln -s /shared/apps /apps
-ln -s /shared/data /data
-
-df
-echo "Done with shared disk setup"
 echo "Done with pool installs"
 popd
 echo "Done with pool setup script"
