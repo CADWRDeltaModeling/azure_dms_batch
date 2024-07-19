@@ -1,2 +1,3 @@
 *.zip
 schism/
+telegraf/telegraf.conf
