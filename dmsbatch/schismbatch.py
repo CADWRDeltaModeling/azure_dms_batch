@@ -8,7 +8,7 @@ import tempfile
 import pkg_resources
 import json
 import yaml
-
+import base64
 
 import azure.batch.models as batchmodels
 from azure.batch.models import BatchErrorException
@@ -162,40 +162,47 @@ def get_semicolon_pattern():
 
 
 def convert_command_str_to_list(cmd_str, ostype="linux"):
-    pattern = get_semicolon_pattern()
-    # split app_cmd into a list assuming either \n or \r\n
     cmd_str = cmd_str.replace("\r\n", "\n")
-    app_cmd_list = cmd_str.split("\n")
-    # if linux, optionally replace strings ending with ; and space with empty string
+    cmds = cmd_str.split("\n")
+    cmds = [cmd.rstrip() for cmd in cmds]
     if ostype == "linux":
-        app_cmd_list = [pattern.sub("", cmd) for cmd in app_cmd_list]
+        cmds = [cmd.rstrip(";") for cmd in cmds]
+    if ostype == "windows":
+        cmds = [cmd.replace('"', '\\\\"') for cmd in cmds]
     # remove empty strings
-    app_cmd_list = [cmd for cmd in app_cmd_list if cmd]
-    return app_cmd_list
+    cmds = [cmd for cmd in cmds if cmd]
+    return cmds
 
 
-def get_env_var_name_for_app(app_name, app_version, ostype="linux"):
+def envvar_name(app_name, app_version=None, ostype="linux"):
     envvar_name = ""
     if ostype == "windows":
-        envvar_name = "%AZ_BATCH_APP_PACKAGE_{app_name}#{app_version}%".format(
-            app_name, app_version
-        )
+        envvar_name = f"AZ_BATCH_APP_PACKAGE_{app_name}"
+        if app_version:
+            envvar_name = f"{envvar_name}#{app_version}"
+        envvar_name = f"%{envvar_name}%"
     elif ostype == "linux":
-        envvar_name = "${AZ_BATCH_APP_PACKAGE_{app_name}_{app_version}{brace}".format(
-            app_name.replace(".", "_"), app_version.replace(".", "_"), brace="}"
-        )
+        envvar_name = f"AZ_BATCH_APP_PACKAGE_{app_name}"
+        if app_version:
+            app_version = app_version.replace(".", "_").replace("-", "_")
+            app_name = app_name.replace(".", "_").replace("-", "_")
+            envvar_name = f"{envvar_name}_{app_version}"
+        envvar_name = "${" + envvar_name + "}"
     else:
         raise ValueError("unknown ostype: {}".format(ostype))
     return envvar_name
 
 
-def submit_schism_task(client, pool_name, config_dict):
+def submit_schism_task(client, pool_name, config_dict, pool_exists=False):
     storage_account_name = config_dict["storage_account_name"]
     storage_container_name = config_dict["storage_container_name"]
     storage_account_key = config_dict["storage_account_key"]
     ostype = config_dict.get("ostype", "linux")
     # pool_name has date and time appended after _
-    dtstr = pool_name.split("_")[-1]
+    if pool_exists:  # create job with new timestamp
+        dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    else:  # if new pool is created, use the timestamp from the pool name
+        dtstr = pool_name.split("_")[-1]
     # pre_pool_name is everything before the last _
     pre_pool_name = "_".join(pool_name.split("_")[0:-1])
     # name job and task with date and time
@@ -240,7 +247,19 @@ def submit_schism_task(client, pool_name, config_dict):
         application_command_template = config_dict["application_command_template"]
         app_cmd = load_command_from_resourcepath(fname=application_command_template)
         app_cmd = app_cmd.format(**config_dict)  # do we need an order for substitution?
-        app_cmd = client.wrap_commands_in_shell([app_cmd], ostype=ostype)
+        if ostype == "windows":
+            # Encode the commands as base64
+            encoded_commands = base64.b64encode(app_cmd.encode("utf-8")).decode("utf-8")
+            app_cmd = (
+                'powershell -Command "'
+                f"$encoded = '{encoded_commands}'; "
+                "$decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($encoded)); "
+                "$decoded | Out-File -Encoding ASCII $env:AZ_BATCH_TASK_WORKING_DIR\\temp_commands.bat; "
+                'cmd /c $env:AZ_BATCH_TASK_WORKING_DIR\\temp_commands.bat"'
+            )
+        else:
+            cmds = [app_cmd]
+            app_cmd = client.wrap_commands_in_shell(cmds, ostype=ostype)
         logger.debug("Application command: {}".format(app_cmd))
         #
         if "mpi_command" in config_dict:
@@ -387,6 +406,8 @@ def submit_schism_job(config_file, pool_name=None):
         config_dict["storage_account_key"],
         config_dict["storage_container_name"],
     )
+    if "ostype" in config_dict and config_dict["ostype"] == "windows":
+        sas = sas.replace("%", "%%")
     config_dict["sas"] = sas
     # TODO: pool name substitution should be improved
     dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -394,7 +415,12 @@ def submit_schism_job(config_file, pool_name=None):
         pool_name = config_dict["pool_name"] + f"_{dtstr}"
         # create pool
         pool_name = create_schism_pool(pool_name, config_dict)
-    _, task_name = submit_schism_task(client, pool_name, config_dict)
+        pool_exists = False
+    else:
+        pool_exists = True
+    _, task_name = submit_schism_task(
+        client, pool_name, config_dict, pool_exists=pool_exists
+    )
     try:
         blob_client = AzureBlob(
             config_dict["storage_account_name"], config_dict["storage_account_key"]
