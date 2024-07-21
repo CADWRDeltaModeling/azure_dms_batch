@@ -75,10 +75,9 @@ package_and_upload_schimpy(){
     rm -rf /tmp/schimpy_with_deps_${version}
     mkdir -p /tmp/schimpy_with_deps_${version}
     pushd /tmp/schimpy_with_deps_${version}
-    git clone https://github.com/CADWRDeltaModeling/schimpy
-    cd schimpy
+    wget https://raw.githubusercontent.com/CADWRDeltaModeling/BayDeltaSCHISM/master/schism_env.yml
     conda env remove -n schimpy_${version} -y || true
-    conda env create -f schimpy_env.yml -n schimpy_${version}
+    conda env create -f schism_env.yml -n schimpy_${version}
     conda activate pack
     conda pack -n schimpy_${version} -o schimpy.tar.gz
     zip -r schimpy_${version}.zip schimpy.tar.gz
