@@ -82,6 +82,8 @@ def create_substituted_dict(config_dict, **kwargs):
     config_dict.update(kwargs)
     # string substitution for the config_dict values with itself
     for key in config_dict:
+        if key == "task_ids":
+            continue  # skip task_ids
         value = config_dict[key]
         if isinstance(value, str):
             config_dict[key] = value.format(**config_dict)
@@ -193,7 +195,7 @@ def envvar_name(app_name, app_version=None, ostype="linux"):
     return envvar_name
 
 
-def submit_schism_task(client, pool_name, config_dict, pool_exists=False):
+def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
     storage_account_name = config_dict["storage_account_name"]
     storage_container_name = config_dict["storage_container_name"]
     storage_account_key = config_dict["storage_account_key"]
@@ -226,22 +228,20 @@ def submit_schism_task(client, pool_name, config_dict, pool_exists=False):
         else:
             raise e
     schism_tasks = []
-    # introduce special variable for task_id
-    if config_dict.get("task_ids") is not None:
-        # evaluate the task_id as a python expression
-        task_ids = eval(config_dict["task_ids"].format(**config_dict))
-    else:
-        task_ids = [""]
+    task_ids = config_dict["task_ids"]
     unsubstitued_config_dict = config_dict.copy()
     for task_id in task_ids:
-        if task_id == "":
-            task_name = f"{pre_pool_name}_task_{dtstr}"
-        else:
-            task_name = f"{task_id}"
         unsubstitued_config_dict["task_id"] = task_id
         config_dict = create_substituted_dict(
             unsubstitued_config_dict, pool_name=pool_name
         )
+        if task_id == "":
+            task_name = f"{pre_pool_name}_task_{dtstr}"
+        else:
+            if "task_name" in config_dict:
+                task_name = config_dict["task_name"]
+            else:
+                task_name = f"{task_id}"
         # assign the variables below to the values in the config file
         num_hosts = config_dict["num_hosts"]
         application_command_template = config_dict["application_command_template"]
@@ -299,11 +299,15 @@ def submit_schism_task(client, pool_name, config_dict, pool_exists=False):
                 app_cmd,
                 num_instances=num_hosts,
                 coordination_cmdline=coordination_cmd,
+                env_settings=config_dict.get("environment_variables", None),
                 output_files=output_file_specs,
             )
         else:
             schism_task = client.create_task(
-                task_name, app_cmd, output_files=output_file_specs
+                task_name,
+                app_cmd,
+                env_settings=config_dict.get("environment_variables", None),
+                output_files=output_file_specs,
             )
         schism_tasks.append(schism_task)
     # adding auto_complete so that job terminates when all these tasks are completed.
@@ -318,7 +322,7 @@ def parse_yaml_file(config_file):
     return data
 
 
-def create_batch_client(name, key, url):
+def create_batch_client(name, key, url) -> AzureBatch:
     return AzureBatch(name, key, url)
 
 
@@ -411,6 +415,14 @@ def submit_schism_job(config_file, pool_name=None):
     config_dict["sas"] = sas
     # TODO: pool name substitution should be improved
     dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    # FIXME:
+    # introduce special variable for task_id
+    if config_dict.get("task_ids") is not None:
+        # evaluate the task_id as a python expression
+        config_dict["task_ids"] = eval(config_dict["task_ids"].format(**config_dict))
+    else:
+        config_dict["task_ids"] = [""]
+    config_dict["task_id"] = config_dict["task_ids"][0]  # for now
     if pool_name is None:
         pool_name = config_dict["pool_name"] + f"_{dtstr}"
         # create pool
