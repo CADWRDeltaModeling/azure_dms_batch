@@ -326,6 +326,21 @@ def create_batch_client(name, key, url) -> AzureBatch:
     return AzureBatch(name, key, url)
 
 
+# https://stackoverflow.com/questions/39379331/python-exec-a-code-block-and-eval-the-last-line
+import ast
+
+
+def exec_then_eval(code):
+    block = ast.parse(code, mode="exec")
+
+    # assumes last node is an expression
+    last = ast.Expression(block.body.pop().value)
+
+    _globals, _locals = {}, {}
+    exec(compile(block, "<string>", mode="exec"), _globals, _locals)
+    return eval(compile(last, "<string>", mode="eval"), _globals, _locals)
+
+
 def submit_schism_job(config_file, pool_name=None):
     config_dict = parse_yaml_file(config_file)
     config_dict["task_id"] = ""
@@ -420,7 +435,9 @@ def submit_schism_job(config_file, pool_name=None):
     # introduce special variable for task_id
     if config_dict.get("task_ids") is not None:
         # evaluate the task_id as a python expression
-        config_dict["task_ids"] = eval(config_dict["task_ids"].format(**config_dict))
+        config_dict["task_ids"] = exec_then_eval(
+            config_dict["task_ids"].format(**config_dict)
+        )
     else:
         config_dict["task_ids"] = [""]
     config_dict["task_id"] = config_dict["task_ids"][0]  # for now
