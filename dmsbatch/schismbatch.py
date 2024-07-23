@@ -410,9 +410,10 @@ def submit_schism_job(config_file, pool_name=None):
         config_dict["storage_account_key"],
         config_dict["storage_container_name"],
     )
-    if "ostype" in config_dict and config_dict["ostype"] == "windows":
-        sas = sas.replace("%", "%%")
     config_dict["sas"] = sas
+    if "ostype" in config_dict and config_dict["ostype"] == "windows":
+        sas_win = sas.replace("%", "%%")
+        config_dict["sas_win"] = sas_win
     # TODO: pool name substitution should be improved
     dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     # FIXME:

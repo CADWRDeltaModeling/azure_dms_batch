@@ -16,14 +16,14 @@ REM Loop over array of directories
 
 for %%d in (%setup_dirs%) do (
     echo Copying %%d
-    azcopy copy {setup_dirs_copy_flags} "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/%%d/*?{sas}" "%%d" || echo AzCopy failed for %%d but continuing...
+    azcopy copy {setup_dirs_copy_flags} "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/%%d/*?{sas_win}" "%%d" || echo AzCopy failed for %%d but continuing...
 )
 
 REM Setup study directory
 
 for %%d in ({study_dir}) do (
     echo Copying %%d
-    azcopy copy {study_copy_flags} "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/%%d/*?{sas}" "%%d" || echo AzCopy failed for study directory but continuing...
+    azcopy copy {study_copy_flags} "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/%%d/*?{sas_win}" "%%d" || echo AzCopy failed for study directory but continuing...
 )
 if not exist "{study_dir}\outputs" mkdir "{study_dir}\outputs"
 
