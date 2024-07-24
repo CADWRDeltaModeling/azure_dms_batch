@@ -39,6 +39,10 @@
               },
               {
                 "name": "vista"
+              },
+              {
+                "name": "python",
+                "version": "v37"
               }
             ]
         },
