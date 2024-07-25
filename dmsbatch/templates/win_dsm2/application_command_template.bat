@@ -2,6 +2,7 @@ echo on
 set DSM2_HOME=%AZ_BATCH_APP_PACKAGE_dsm2%\DSM2-8.2.c5aacef7-win32
 set VISTA_HOME=%AZ_BATCH_APP_PACKAGE_vista%
 set PATH=%PATH%;%AZ_BATCH_APP_PACKAGE_azcopy%\azcopy_windows_amd64_10.25.1;%DSM2_HOME%\bin;%VISTA_HOME%\vista\bin;%AZ_BATCH_APP_PACKAGE_unzip%\bin
+call %AZ_BATCH_APP_PACKAGE_python#v37%\Scripts\activate.bat
 echo All environment variables:
 set
 echo End of environment variables

@@ -52,9 +52,10 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
       waitForSuccess: true
     }
     applicationPackages: [
-      for pkg in appPkgs:{
-        id: '${batchAccount.id}/applications/${pkg.name}'
-      }
+        for pkg in appPkgs:{
+          id: '${batchAccount.id}/applications/${pkg.name}'
+          version: pkg.?version
+        }
     ]
   }
 }
