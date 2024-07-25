@@ -306,19 +306,15 @@ def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=F
             storage_account_name, storage_account_key, storage_container_name
         )
         output_file_specs = []
-        for upload_condition in [
-            batchmodels.OutputFileUploadCondition.task_completion,
-            batchmodels.OutputFileUploadCondition.task_failure,
-        ]:
-            spec = client.create_output_file_spec(
-                "../std*",
-                "https://{}.blob.core.windows.net/{}?{}".format(
-                    storage_account_name, storage_container_name, sas_batch
-                ),
-                f"jobs/{job_name}/{task_name}",
-                upload_condition=upload_condition,
-            )
-            output_file_specs.append(spec)
+        spec = client.create_output_file_spec(
+            "../std*",
+            "https://{}.blob.core.windows.net/{}?{}".format(
+                storage_account_name, storage_container_name, sas_batch
+            ),
+            f"jobs/{job_name}/{task_name}",
+            upload_condition=batchmodels.OutputFileUploadCondition.task_completion,
+        )
+        output_file_specs.append(spec)
         #
         if "container_run_options" in config_dict:
             task_container_settings = batchmodels.TaskContainerSettings(
