@@ -22,7 +22,10 @@ logger.setLevel(logging.INFO)
 
 
 def load_command_from_resourcepath(fname):
-    return pkg_resources.resource_string(__name__, fname).decode("utf-8")
+    try:
+        return pkg_resources.resource_string(__name__, fname).decode("utf-8")
+    except FileNotFoundError as e:
+        return fname  # assume the fname is the command itself
 
 
 def modify_json_file(json_file, modified_file, **kwargs):
