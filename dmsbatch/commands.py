@@ -757,6 +757,7 @@ class AzureBatch:
         num_instances: int = 1,
         coordination_cmdline: str = None,
         coordination_files: list = None,
+        container_settings: batchmodels.TaskContainerSettings = None,
     ):
         """
         Create a task for the given input_file, command, output file specs and environment settings.
@@ -820,6 +821,7 @@ class AzureBatch:
             environment_settings=environment_settings,
             output_files=output_files,
             multi_instance_settings=multi_instance_settings,
+            container_settings=container_settings,
         )
 
     def submit_tasks(

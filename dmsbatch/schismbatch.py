@@ -293,21 +293,64 @@ def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=F
             )
             output_file_specs.append(spec)
         #
+        if "container_run_options" in config_dict:
+            task_container_settings = batchmodels.TaskContainerSettings(
+                image_name=config_dict["container_image_name"],
+                container_run_options=config_dict["container_run_options"],
+            )
+        else:
+            task_container_settings = None
+        #
+        if "resource_files" in config_dict:
+            resource_files = config_dict["resource_files"]
+            resource_files = [  # convert to list of ResourceFile objects
+                batchmodels.ResourceFile(
+                    file_path=resource_file["file_path"],
+                    auto_storage_container_name=storage_container_name,
+                    blob_prefix=resource_file["blob_prefix"],
+                )
+                for resource_file in resource_files
+            ]
+        else:
+            resource_files = None
+        if "output_files" in config_dict:
+            output_files = config_dict["output_files"]
+            output_files = [  # convert to list of OutputFile objects
+                batchmodels.OutputFile(
+                    file_pattern=output_file["file_pattern"],
+                    destination=batchmodels.OutputFileDestination(
+                        container=batchmodels.OutputFileBlobContainerDestination(
+                            container_url=f"https://{storage_account_name}.blob.core.windows.net/{storage_container_name}?{sas_batch}",
+                            path=output_file["path"],
+                        )
+                    ),
+                    upload_options=batchmodels.OutputFileUploadOptions(
+                        upload_condition=output_file["upload_condition"]
+                    ),
+                )
+                for output_file in output_files
+            ]
+            output_file_specs.extend(output_files)
+
         if coordination_cmd is not None:
             schism_task = client.create_task(
                 task_name,
                 app_cmd,
                 num_instances=num_hosts,
                 coordination_cmdline=coordination_cmd,
+                resource_files=resource_files,
                 env_settings=config_dict.get("environment_variables", None),
                 output_files=output_file_specs,
+                container_settings=task_container_settings,
             )
         else:
             schism_task = client.create_task(
                 task_name,
                 app_cmd,
+                resource_files=resource_files,
                 env_settings=config_dict.get("environment_variables", None),
                 output_files=output_file_specs,
+                container_settings=task_container_settings,
             )
         schism_tasks.append(schism_task)
     # adding auto_complete so that job terminates when all these tasks are completed.
