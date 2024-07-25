@@ -77,21 +77,48 @@ def create_substitutions_for_keywords(dict, **kwargs):
     return dict
 
 
+def substitute_values(data):
+    """
+    Substitutes values in the dictionary with formatted values from other values in the dictionary.
+
+    Parameters:
+    data (dict): Dictionary with values that should be formatted with other values in the dictionary.
+
+    Returns:
+    dict: Dictionary with substituted values.
+    """
+
+    def recursive_format(value, data):
+        """
+        Recursively formats strings within nested structures using values from the dictionary.
+
+        Parameters:
+        value: The value to format, can be a string, list, or dictionary.
+        data (dict): Dictionary with values for formatting.
+
+        Returns:
+        The formatted value.
+        """
+        if isinstance(value, str):
+            try:
+                return value.format(**data)
+            except KeyError as e:
+                print(f"KeyError: Missing key {e} for value '{value}'")
+                return value
+        elif isinstance(value, dict):
+            return {k: recursive_format(v, data) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [recursive_format(item, data) for item in value]
+        else:
+            return value
+
+    return {key: recursive_format(value, data) for key, value in data.items()}
+
+
 def create_substituted_dict(config_dict, **kwargs):
     config_dict = config_dict.copy()
     config_dict.update(kwargs)
-    # string substitution for the config_dict values with itself
-    for key in config_dict:
-        if key == "task_ids":
-            continue  # skip task_ids
-        value = config_dict[key]
-        if isinstance(value, str):
-            config_dict[key] = value.format(**config_dict)
-        elif isinstance(value, list):
-            config_dict[key] = " ".join(value)
-        else:
-            config_dict[key] = value
-    return config_dict
+    return substitute_values(config_dict)
 
 
 def update_if_not_defined(config_dict, **kwargs):
