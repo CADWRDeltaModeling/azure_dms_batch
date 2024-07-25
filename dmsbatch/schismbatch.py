@@ -247,9 +247,21 @@ def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=F
         job_cmd = job_cmd.format(**config_dict)
         logger.debug("Job Start command: {}".format(job_cmd))
         job_cmd_list = job_cmd.split("\n")
+        if "job_start_command_resource_files" in config_dict:
+            job_resource_files = [
+                batchmodels.ResourceFile(
+                    file_path=resource_file["file_path"],
+                    auto_storage_container_name=storage_container_name,
+                    blob_prefix=resource_file["blob_prefix"],
+                )
+                for resource_file in config_dict["job_start_command_resource_files"]
+            ]
         # prep task takes care of formatting the command for azure
         prep_task = client.create_prep_task(
-            f"job_prep_task", job_cmd_list, ostype=ostype
+            f"job_prep_task",
+            job_cmd_list,
+            ostype=ostype,
+            resource_files=job_resource_files,
         )
         client.create_job(job_name, pool_name, prep_task)
     except BatchErrorException as e:
