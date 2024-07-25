@@ -15,6 +15,7 @@ echo "Copying from blob to local for the setup first time";
 cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
 # do setup directories first to avoid link issues 
 setup_dirs=({setup_dirs});
+setup_dirs=$(echo "$setup_dirs" | tr -d '[]' | tr ',' ' ');
 # loop over a array of directories, note double braces to escape for f-string substitution via python
 for dir in "${{setup_dirs[@]}}"; do
     echo "Copying $dir";
