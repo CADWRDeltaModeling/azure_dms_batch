@@ -514,7 +514,7 @@ def submit_schism_job(config_file, pool_name=None):
         pool_exists = False
     else:
         pool_exists = True
-    _, task_name = submit_schism_task(
+    job_name, task_name = submit_schism_task(
         client, pool_name, config_dict, pool_exists=pool_exists
     )
     try:
@@ -523,11 +523,11 @@ def submit_schism_job(config_file, pool_name=None):
         )
         config_filename = os.path.basename(config_file)
         logger.info(
-            f"uploading config file {config_file} to storage container under jobs/{task_name}/{config_filename}"
+            f"uploading config file {config_file} to storage container under jobs/{job_name}/{config_filename}"
         )
         blob_client.upload_file_to_container(
             config_dict["storage_container_name"],
-            f"jobs/{task_name}/{config_filename}",
+            f"jobs/{job_name}/{config_filename}",
             config_file,
         )
     except Exception as e:
