@@ -383,15 +383,11 @@ def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=F
             logger.debug("Coordination command: {}".format(coordination_cmd))
         else:
             coordination_cmd = None
-        # output files should be saved to batch container
-        sas_batch = get_sas(
-            storage_account_name, storage_account_key, storage_container_name
-        )
         output_file_specs = []
         spec = client.create_output_file_spec(
             "../std*",
             "https://{}.blob.core.windows.net/{}?{}".format(
-                storage_account_name, storage_container_name, sas_batch
+                storage_account_name, storage_container_name, config_dict["sas"]
             ),
             f"jobs/{job_name}/{task_name}",
             upload_condition=batchmodels.OutputFileUploadCondition.task_completion,
@@ -425,7 +421,7 @@ def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=F
                     file_pattern=output_file["file_pattern"],
                     destination=batchmodels.OutputFileDestination(
                         container=batchmodels.OutputFileBlobContainerDestination(
-                            container_url=f"https://{storage_account_name}.blob.core.windows.net/{storage_container_name}?{sas_batch}",
+                            container_url=f"https://{storage_account_name}.blob.core.windows.net/{storage_container_name}?{config_dict['sas']}",
                             path=output_file["path"],
                         )
                     ),
