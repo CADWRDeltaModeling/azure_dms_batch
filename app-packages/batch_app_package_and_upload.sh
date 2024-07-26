@@ -102,6 +102,7 @@ package_and_upload_pydelmod(){
     mkdir -p /tmp/${app_name}_${version}
     pushd /tmp/${app_name}_${version}
     wget https://raw.githubusercontent.com/CADWRDeltaModeling/pydelmod/master/environment.yml
+    sed -i '/- pyhecdss/i\  - libgfortran' environment.yml # add libgfortran to the environment.yml
     conda env remove -n ${app_name}_${version} -y || true
     conda env create -f environment.yml -n ${app_name}_${version}
     conda activate pack
