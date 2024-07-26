@@ -758,6 +758,7 @@ class AzureBatch:
         coordination_cmdline: str = None,
         coordination_files: list = None,
         container_settings: batchmodels.TaskContainerSettings = None,
+        depends_on: list = None,
     ):
         """
         Create a task for the given input_file, command, output file specs and environment settings.
@@ -822,6 +823,7 @@ class AzureBatch:
             output_files=output_files,
             multi_instance_settings=multi_instance_settings,
             container_settings=container_settings,
+            depends_on=depends_on,
         )
 
     def submit_tasks(
@@ -854,7 +856,7 @@ class AzureBatch:
                 )
             except batchmodels.BatchErrorException as err:
                 self.print_batch_exception(err)
-                raise
+                raise err
         if auto_complete:
             self.mark_job_termination_on_task_completion(job_id)
 
@@ -1114,9 +1116,11 @@ class AzureBatch:
             if ostype is unknown
         """
         if ostype.lower() == "linux":
-            return "/bin/bash -c 'set -e; set -o pipefail; {}; wait'".format(
+            cmd = "/bin/bash -c 'set -e; set -o pipefail; {}; wait'".format(
                 ";".join(commands)
             )
+            cmd.replace(";;", ";")
+            return cmd
         elif ostype.lower() == "windows":
             return 'cmd.exe /c "{}"'.format("&".join(commands))
         else:

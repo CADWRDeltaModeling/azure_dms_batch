@@ -1,0 +1,55 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "batchAccountName": {
+            "value": "batch_account_name"
+        },
+        "poolName": {
+            "value": "pool_name"
+        },
+        "vmSize": {
+            "value": "vm_size"
+        },
+        "taskSlotsPerNode": {
+            "value": 1
+        },
+        "nodeAgentSKUId": {
+            "value": "batch.node.windows amd64"
+        },
+        "startTaskScript": {
+            "value": "cmd /c echo start task"
+        },
+        "formula": {
+            "value": "formula"
+        },
+        "createdBy": {
+            "value": ""
+        },
+        "appPkgs": {
+            "value": [
+              {
+                "name": "azcopy"
+              },
+              {
+                "name": "dsm2"
+              },
+              {
+                "name": "unzip"
+              },
+              {
+                "name": "python",
+                "version": "v37"
+              }
+            ]
+        },
+        "imageReference": {
+            "value": {
+                "publisher": "microsoftwindowsserver",
+                "offer": "windowsserver",
+                "sku": "2019-datacenter-core",
+                "version": "latest"
+            }
+        }
+    }
+}

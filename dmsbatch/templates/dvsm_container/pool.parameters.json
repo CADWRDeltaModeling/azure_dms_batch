@@ -1,0 +1,40 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "batchAccountName": {
+            "value": "batch_account_name"
+        },
+        "poolName": {
+            "value": "pool_name"
+        },
+        "vmSize": {
+            "value": "standard_ds2_v2"
+        },
+        "taskSlotsPerNode": {
+            "value": 1
+        },
+        "nodeAgentSKUId": {
+            "value": "batch.node.ubuntu 22.04"
+        },
+        "startTaskScript": {
+            "value": "cd $AZ_BATCH_APP_PACKAGE_pydelmod; tar xvzf pydelmod*.tar.gz"
+        },
+        "formula": {
+            "value": "formula"
+        },
+        "createdBy": {
+            "value": ""
+        },
+        "containerImageName": {
+            "value": "cadwrdms/dsm2:latest"
+        },
+        "appPkgs": {
+            "value": [
+              {
+                "name": "pydelmod"
+              }
+            ]
+        }
+    }
+}

@@ -8,6 +8,7 @@ dependencies:
   - ipykernel
   - click
   - pyyaml
+  - tqdm
   - pip:
     - azure-batch 
     - azure-storage-blob

@@ -14,6 +14,9 @@ import azure.batch.models as batchmodels
 from azure.batch.models import BatchErrorException
 from dmsbatch.commands import AzureBatch, AzureBlob
 
+#
+import tqdm
+
 # set up logging
 import logging
 
@@ -82,7 +85,8 @@ def create_substitutions_for_keywords(dict, **kwargs):
 
 def substitute_values(data):
     """
-    Substitutes values in the dictionary with formatted values from other values in the dictionary.
+    Substitutes values in the dictionary with formatted values from other values in the dictionary,
+    using the current updated state of the dictionary for each substitution.
 
     Parameters:
     data (dict): Dictionary with values that should be formatted with other values in the dictionary.
@@ -91,31 +95,41 @@ def substitute_values(data):
     dict: Dictionary with substituted values.
     """
 
-    def recursive_format(value, data):
+    def recursive_format(value, current_data):
         """
         Recursively formats strings within nested structures using values from the dictionary.
 
         Parameters:
         value: The value to format, can be a string, list, or dictionary.
-        data (dict): Dictionary with values for formatting.
+        current_data (dict): Current state of the dictionary with values for formatting.
 
         Returns:
         The formatted value.
         """
         if isinstance(value, str):
             try:
-                return value.format(**data)
+                return value.format(**current_data)
             except KeyError as e:
-                print(f"KeyError: Missing key {e} for value '{value}'")
+                # print(f"KeyError: Missing key {e} for value '{value}'")
                 return value
         elif isinstance(value, dict):
-            return {k: recursive_format(v, data) for k, v in value.items()}
+            return {k: recursive_format(v, current_data) for k, v in value.items()}
         elif isinstance(value, list):
-            return [recursive_format(item, data) for item in value]
+            return [recursive_format(item, current_data) for item in value]
         else:
             return value
 
-    return {key: recursive_format(value, data) for key, value in data.items()}
+    # Create a copy of the original dictionary to store updated values
+    updated_data = {}
+
+    # Process each item in the original dictionary
+    for key, value in data.items():
+        # Format the value using the current state of updated_data
+        formatted_value = recursive_format(value, updated_data)
+        # Add the formatted value to the updated dictionary
+        updated_data[key] = formatted_value
+
+    return updated_data
 
 
 def create_substituted_dict(config_dict, **kwargs):
@@ -225,6 +239,52 @@ def envvar_name(app_name, app_version=None, ostype="linux"):
     return envvar_name
 
 
+def commands_to_string(commands, ostype="linux"):
+    # Strip whitespace and filter out empty lines
+    commands = [cmd.strip() for cmd in commands if cmd.strip()]
+
+    if ostype.lower() == "linux":
+        # Join commands with semicolons for bash
+        joined_commands = "; ".join(commands)
+        # Remove any trailing semicolon
+        joined_commands = joined_commands.rstrip(";")
+        # Escape single quotes and wrap the entire command in single quotes
+        escaped_commands = joined_commands.replace("'", "'\"'\"'")
+        return escaped_commands
+
+    elif ostype.lower() == "windows":
+        # Join commands with '&' for CMD
+        joined_commands = " & ".join(commands)
+        # Remove any trailing '&'
+        joined_commands = joined_commands.rstrip("&").strip()
+        # Escape special characters and wrap in double quotes
+        escaped_commands = (
+            joined_commands.replace("^", "^^")
+            # .replace("&", "^&")
+            .replace("<", "^<")
+            .replace(">", "^>")
+            .replace("|", "^|")
+        )
+        return escaped_commands
+    else:
+        raise ValueError("Invalid ostype. Use 'linux' or 'windows'.")
+
+
+def move_key_to_first(d, key):
+    if key not in d:
+        raise KeyError(f"Key '{key}' not found in the dictionary.")
+
+    # Create a new dictionary with the specified key first
+    new_dict = {key: d[key]}
+
+    # Add the rest of the items
+    for k, v in d.items():
+        if k != key:
+            new_dict[k] = v
+
+    return new_dict
+
+
 def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
     storage_account_name = config_dict["storage_account_name"]
     storage_container_name = config_dict["storage_container_name"]
@@ -240,26 +300,32 @@ def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=F
     # name job and task with date and time
     job_name = f"{pre_pool_name}_job_{dtstr}"
     try:
-        job_start_command_template = config_dict["job_start_command_template"].format(
-            **config_dict
-        )
+        local_config_dict = create_substituted_dict(config_dict, pool_name=pool_name)
+        job_start_command_template = local_config_dict["job_start_command_template"]
         job_cmd = load_command_from_resourcepath(fname=job_start_command_template)
-        job_cmd = job_cmd.format(**config_dict)
+        job_cmd = job_cmd.format(**local_config_dict)
         logger.debug("Job Start command: {}".format(job_cmd))
-        job_cmd_list = job_cmd.split("\n")
-        if "job_start_command_resource_files" in config_dict:
+        if "job_start_command_resource_files" in local_config_dict:
             job_resource_files = [
                 batchmodels.ResourceFile(
                     file_path=resource_file["file_path"],
                     auto_storage_container_name=storage_container_name,
                     blob_prefix=resource_file["blob_prefix"],
                 )
-                for resource_file in config_dict["job_start_command_resource_files"]
+                for resource_file in local_config_dict[
+                    "job_start_command_resource_files"
+                ]
             ]
+        if ostype == "linux":
+            job_cmd = commands_to_string(job_cmd.split("\n")).split(";")
+        else:
+            job_cmd = commands_to_string(job_cmd.split("\n"), ostype="windows").split(
+                " & "
+            )
         # prep task takes care of formatting the command for azure
         prep_task = client.create_prep_task(
             f"job_prep_task",
-            job_cmd_list,
+            job_cmd,
             ostype=ostype,
             resource_files=job_resource_files,
         )
@@ -271,8 +337,9 @@ def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=F
             raise e
     schism_tasks = []
     task_ids = config_dict["task_ids"]
-    unsubstitued_config_dict = config_dict.copy()
-    for task_id in task_ids:
+    unsubstitued_config_dict = move_key_to_first(config_dict, "task_id")
+
+    for task_id in tqdm.tqdm(task_ids):
         unsubstitued_config_dict["task_id"] = task_id
         config_dict = create_substituted_dict(
             unsubstitued_config_dict, pool_name=pool_name
@@ -391,8 +458,19 @@ def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=F
                 container_settings=task_container_settings,
             )
         schism_tasks.append(schism_task)
+        if len(schism_tasks) == 100:
+            try:
+                client.submit_tasks(job_name, schism_tasks, auto_complete=False)
+                schism_tasks = []
+            except BatchErrorException as e:
+                print(e)
+                raise e
     # adding auto_complete so that job terminates when all these tasks are completed.
-    client.submit_tasks(job_name, schism_tasks, auto_complete=True)
+    try:
+        client.submit_tasks(job_name, schism_tasks, auto_complete=True)
+    except BatchErrorException as e:
+        print(e)
+        raise e
     logger.info(f"Submitted task {job_name} to pool {pool_name}.")
     return job_name, task_name
 
