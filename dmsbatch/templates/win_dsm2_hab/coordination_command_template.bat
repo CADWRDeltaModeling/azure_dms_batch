@@ -1,1 +1,0 @@
-echo Coordination Task Done
