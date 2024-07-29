@@ -1,0 +1,35 @@
+location: eastus # the location of the batch account
+pool_name: "{job_name}"
+num_hosts: 1
+ostype: windows
+vm_size: "standard_ds2_v2" # use any of the H series from https://learn.microsoft.com/en-us/azure/virtual-machines/sizes-hpc
+command: 'printenv; echo "define mpi_command in job config yaml file";'
+study_copy_flags: "--recursive --exclude-regex='.*outputs.*dss'"
+setup_dirs_copy_flags: "--recursive"
+# translates to pkg_resources.resource_filename('dmsbatch', 'templates/<template_name>/a>
+application_command_template: 'templates/{template_name}/application_command_template.bat' 
+coordination_command_template: 'templates/{template_name}/coordination_command_template.bat'
+job_start_command_template: 'templates/{template_name}/job_start_command_template.bat' 
+pool_bicep_resource: 'templates/{template_name}/pool.bicep' 
+pool_parameters_resource: 'templates/{template_name}/pool.parameters.json' 
+autoscale_formula: 'templates/{template_name}/autoscale_formula.txt'
+start_task_script: 'set'
+created_by: '' # this is the user who created the job
+image_reference:
+  publisher: microsoftwindowsserver
+  offer: windowsserver
+  sku: 2019-datacenter-core
+  version: latest
+node_agent_sku_id: 'batch.node.windows amd64'
+app_pkgs:
+  - name: azcopy
+    init_script: set PATH=%PATH%;%AZ_BATCH_APP_PACKAGE_azcopy%\azcopy_windows_amd64_10.25.1
+  - name: dsm2
+    init_script: set DSM2_HOME=%AZ_BATCH_APP_PACKAGE_dsm2%\DSM2-8.2.c5aacef7-win32 & set PATH=%PATH%;%DSM2_HOME%\bin
+  - name: unzip
+    init_script: set PATH=%PATH%;%AZ_BATCH_APP_PACKAGE_unzip%\bin
+  - name: vista
+    init_script: set VISTA_HOME=%AZ_BATCH_APP_PACKAGE_vista% & set PATH=%PATH%;%VISTA_HOME%\vista\bin
+  - name: python
+    version: v37
+    init_script: call %AZ_BATCH_APP_PACKAGE_python#v37%\Scripts\activate.bat
