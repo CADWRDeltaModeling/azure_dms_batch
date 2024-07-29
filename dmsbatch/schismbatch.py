@@ -327,6 +327,8 @@ def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=F
                     "job_start_command_resource_files"
                 ]
             ]
+        else:
+            job_resource_files = None
         if ostype == "linux":
             job_cmd = commands_to_string(job_cmd.split("\n")).split(";")
         else:
