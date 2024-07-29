@@ -1,0 +1,94 @@
+resource_group: azure_model_batch
+location: westus2
+study_name: 9a_v2a_dcp
+job_name: ptm_{study_name}_np
+batch_account_name: mybatchaccount 
+storage_account_name: mybatchassociatedstore 
+storage_container_name: test
+# hardware
+vm_size: standard_ds5_v2
+num_hosts: 1
+num_cores: 2
+task_slots_per_node: 16
+# study specific
+study_copy_flags: --recursive
+study_name: 9a_v2a_dcp
+study_folder: neutrally_buoyant_particles
+study_dir: dcp-lto-2024/{study_folder}/{study_name}/studies
+job_start_command_template: |
+  mv dcp-lto-2024/tidefiles/{study_name}/{study_name}.h5 $AZ_BATCH_NODE_SHARED_DIR
+job_start_command_resource_files:
+  - file_path: "."
+    blob_prefix: "dcp-lto-2024/tidefiles/{study_name}/{study_name}.h5"
+simulation_start_year: 1922
+simulation_end_year: 2021
+simulation_months: [1,2,3,4,5,6]
+simulation_start_day: 1
+simulation_days: 92
+insertion_file: run_number_loc.txt
+simulation_days: 1
+delay: 0day
+duration: 1485minutes
+#job_name_prefix, run_no, particle_no, insertion_node, ptm_start_date, ptm_end_date, particle_insertion_row
+job_name_prefix: '{task_id[0]}'
+run_no: '{task_id[1]}'
+particle_no: '{task_id[2]}'
+insertion_node: '{task_id[3]}'
+ptm_start_date: '{task_id[4]}'
+ptm_end_date: '{task_id[5]}'
+particle_insertion_row: '{task_id[6]}'
+task_name: '{study_name}_{ptm_start_date}_{run_no}'
+resource_files:
+  - file_path: "."
+    blob_prefix: "{study_dir}"
+output_files:
+  - file_pattern: '*.dss'
+    path: '{study_dir}/output'
+    upload_condition: 'taskcompletion' # tasksuccess, taskfailure, taskcompletion
+  - file_pattern: '{run_no}/*'
+    path: 'outputs/{study_name}/{ptm_start_date}/{run_no}'
+    upload_condition: 'taskcompletion'
+environment_variables:
+  'RUN_NO': '{run_no}'
+  'PTM_START_DATE': '{ptm_start_date}'
+  'PTM_END_DATE': '{ptm_end_date}'
+  'PARTICLE_INSERTION_ROW': '{particle_insertion_row}'
+  'DSM2_STUDY_NAME': 'LTO_{study_name}_{study_folder}'
+command: |
+  source $AZ_BATCH_APP_PACKAGE_pydelmod/bin/activate;
+  cd {study_dir}
+  mkdir -p $AZ_BATCH_TASK_WORKING_DIR/{run_no};
+  echo "done create directory";
+  export TIDEFILE_LOC=$AZ_BATCH_NODE_SHARED_DIR; 
+  sed -i 's+./output/DCP_EX.h5+${{TIDEFILE_LOC}}/{study_name}.h5+g' planning_ptm.inp;
+  ptm planning_ptm.inp; 
+  rm output/trace.out;
+  echo "done remove trace file"
+  cd output;
+  python ptm_fate_postpro_single.py --start {ptm_start_date} --runno {run_no};
+  cd ../;
+  mv output/* $AZ_BATCH_TASK_WORKING_DIR/{run_no}
+task_ids: |
+  import datetime
+  import csv
+  sim_days = datetime.timedelta(days={simulation_days})
+  tasks = []
+  with open('{insertion_file}', 'r') as input:
+      for row in csv.DictReader(input):  # run#,particle#,node
+          run_no = row['run#']
+          particle_no = row['particle#']
+          insertion_node = row['node']
+          job_name_prefix = 'ptm-{study_folder}-{study_name}-%s'%(run_no)                                           
+          for y in range({simulation_start_year}, {simulation_end_year}+1):
+              for m in {simulation_months}:
+                  s_day = datetime.date(y, m, {simulation_start_day})
+                  e_day = s_day + sim_days                                                                  
+                  ptm_start_date = s_day.strftime("%d%b%Y").upper()
+                  ptm_end_date = e_day.strftime("%d%b%Y").upper()
+                  particle_insertion_row = '%s %s %s %s' % (
+                      insertion_node, particle_no, '{delay}', '{duration}')
+                  tasks.append([job_name_prefix, run_no, particle_no, insertion_node, ptm_start_date, ptm_end_date, particle_insertion_row])
+  tasks # last line must be the list of tasks
+app_pkgs:
+  - name: pydelmod
+template_name: "dvsm_container"
