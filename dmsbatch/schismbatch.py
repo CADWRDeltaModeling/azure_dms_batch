@@ -57,6 +57,17 @@ def build_autoscaling_formula(config_dict):
     return formula
 
 
+def build_app_pkg_scripts(config_dict):
+    if "app_pkgs" in config_dict:
+        app_pkgs = config_dict["app_pkgs"]
+        app_pkg_scripts = [
+            app_pkg["init_script"] for app_pkg in app_pkgs if "init_script" in app_pkg
+        ]
+        return "\n".join(app_pkg_scripts)
+    else:
+        return ""
+
+
 def convert_to_camel_case(variable_name):
     parts = variable_name.split("_")
     camel_case_name = parts[0] + "".join(word.title() for word in parts[1:])
@@ -596,6 +607,8 @@ def submit_schism_job(config_file, pool_name=None):
     else:
         config_dict["task_ids"] = [""]
     config_dict["task_id"] = config_dict["task_ids"][0]  # for now
+    # add in app_pkgs_script
+    config_dict["app_pkgs_script"] = build_app_pkg_scripts(config_dict)
     if pool_name is None:
         pool_name = config_dict["pool_name"] + f"_{dtstr}"
         # create pool
