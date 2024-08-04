@@ -14,3 +14,10 @@ pool_bicep_resource: 'templates/{template_name}/pool.bicep'
 pool_parameters_resource: 'templates/{template_name}/pool.parameters.json'
 autoscale_formula: 'templates/{template_name}/autoscale_formula.txt'
 created_by: '' # this is the user who created the job
+app_pkgs:
+- name: batch_setup
+- name: nfs
+- name: schism_with_deps
+- name: schimpy_with_deps
+- name: baydeltaschism
+- name: telegraf

@@ -35,7 +35,7 @@
         "createdBy": {
             "value": ""
         },
-        "app_pkgs": {
+        "appPkgs": {
             "value": [
                 {
                     "name": "batch_setup"
