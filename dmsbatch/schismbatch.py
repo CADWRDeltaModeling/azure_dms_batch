@@ -509,6 +509,14 @@ def exec_then_eval(code):
     return eval(compile(last, "<string>", mode="eval"), _globals, _locals)
 
 
+def insert_after_key(dictionary, key, new_key, new_value):
+    items = list(dictionary.items())
+    index = next((i for i, (k, v) in enumerate(items) if k == key), -1)
+    if index != -1:
+        items.insert(index + 1, (new_key, new_value))
+    return dict(items)
+
+
 def submit_schism_job(config_file, pool_name=None):
     config_dict = parse_yaml_file(config_file)
     config_dict["task_id"] = ""
@@ -572,9 +580,11 @@ def submit_schism_job(config_file, pool_name=None):
             config_dict["coordination_command_template"],
         )
     if "num_cores" not in config_dict:
-        config_dict["num_cores"] = estimate_cores_available(
+        # insert the number of cores available right after the num_hosts key
+        ncores = estimate_cores_available(
             config_dict["vm_size"], config_dict["num_hosts"]
         )
+        config_dict = insert_after_key(config_dict, "num_hosts", "num_cores", ncores)
         logger.info(
             f"using calculated number of cores cores using {config_dict['vm_size']}",
             config_dict["num_cores"],
