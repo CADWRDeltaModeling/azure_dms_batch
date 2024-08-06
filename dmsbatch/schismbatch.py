@@ -94,6 +94,31 @@ def create_substitutions_for_keywords(dict, **kwargs):
     return dict
 
 
+def recursive_format(value, current_data):
+    """
+    Recursively formats strings within nested structures using values from the dictionary.
+
+    Parameters:
+    value: The value to format, can be a string, list, or dictionary.
+    current_data (dict): Current state of the dictionary with values for formatting.
+
+    Returns:
+    The formatted value.
+    """
+    if isinstance(value, str):
+        try:
+            return value.format(**current_data)
+        except KeyError as e:
+            # print(f"KeyError: Missing key {e} for value '{value}'")
+            return value
+    elif isinstance(value, dict):
+        return {k: recursive_format(v, current_data) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [recursive_format(item, current_data) for item in value]
+    else:
+        return value
+
+
 def substitute_values(data):
     """
     Substitutes values in the dictionary with formatted values from other values in the dictionary,
@@ -105,30 +130,6 @@ def substitute_values(data):
     Returns:
     dict: Dictionary with substituted values.
     """
-
-    def recursive_format(value, current_data):
-        """
-        Recursively formats strings within nested structures using values from the dictionary.
-
-        Parameters:
-        value: The value to format, can be a string, list, or dictionary.
-        current_data (dict): Current state of the dictionary with values for formatting.
-
-        Returns:
-        The formatted value.
-        """
-        if isinstance(value, str):
-            try:
-                return value.format(**current_data)
-            except KeyError as e:
-                # print(f"KeyError: Missing key {e} for value '{value}'")
-                return value
-        elif isinstance(value, dict):
-            return {k: recursive_format(v, current_data) for k, v in value.items()}
-        elif isinstance(value, list):
-            return [recursive_format(item, current_data) for item in value]
-        else:
-            return value
 
     # Create a copy of the original dictionary to store updated values
     updated_data = {}
@@ -177,7 +178,7 @@ def create_schism_pool(pool_name, config_dict):
     dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     # create a temporary file with the modified parameters in a temporary directory
     modified_parameters_file = tempfile.NamedTemporaryFile(
-        prefix=f"schismbatch_{dtstr}", suffix="json"
+        prefix=f"schismbatch_{dtstr}", suffix=".json"
     ).name
     json_config_dict = convert_keys_to_camel_case(config_dict)
     try:
@@ -199,17 +200,52 @@ def create_schism_pool(pool_name, config_dict):
     except Exception as e:
         logger.error("Error creating pool {}".format(pool_name))
         logger.error(e)
+        try:
+            os.remove(modified_parameters_file)
+        except Exception as e:
+            logger.error(
+                "Error removing temporary file {}".format(modified_parameters_file)
+            )
         raise e
 
 
-def estimate_cores_available(vm_size, num_hosts):
+def estimate_cores_available(vm_size, num_hosts, location):
+    try:
+        with open(
+            pkg_resources.resource_filename(__name__, "templates/vm_core_map.yml")
+        ) as f:
+            VM_CORE_MAP = yaml.safe_load(f)
+    except FileNotFoundError as e:
+        logger.error(e)
+        VM_CORE_MAP = {
+            "standard_hc44rs": 44,
+            "standard_hb120rs_v2": 120,
+            "standard_hb120rs_v3": 120,
+            "standard_hb176rs_v4": 176,
+        }
+        with open(
+            pkg_resources.resource_filename(__name__, "templates/vm_core_map.yml"), "w"
+        ) as f:
+            yaml.dump(VM_CORE_MAP, f)
+
     vm_size = vm_size.lower()
-    VM_CORE_MAP = {
-        "standard_hc44rs": 44,
-        "standard_hb120rs_v2": 120,
-        "standard_hb120rs_v3": 120,
-        "standard_hb176rs_v4": 176,
-    }
+    if not vm_size in VM_CORE_MAP:
+        # use az cli to get the number of cores available for the vm_size
+        json_query = "[0].capabilities[?name=='vCPUs'].value | [0]"
+        cmd = f'az vm list-skus --location {location} --size {vm_size} --output json --query "{json_query}"'
+        try:
+            cpu_count = json.loads(
+                subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
+            )
+            core_count_per_host = int(cpu_count)
+        except subprocess.SubprocessError as e:
+            logger.error(e)
+            core_count_per_host = 1
+        VM_CORE_MAP[vm_size] = core_count_per_host
+        with open(
+            pkg_resources.resource_filename(__name__, "templates/vm_core_map.yml"), "w"
+        ) as f:
+            yaml.dump(VM_CORE_MAP, f)
     core_count_per_host = VM_CORE_MAP.get(vm_size, 1)
     return num_hosts * core_count_per_host
 
@@ -349,9 +385,8 @@ def submit_schism_task(client: AzureBatch, pool_name, config_dict, pool_exists=F
         else:
             raise e
     schism_tasks = []
-    task_ids = config_dict["task_ids"]
+    task_ids = config_dict.pop("task_ids")
     unsubstitued_config_dict = move_key_to_first(config_dict, "task_id")
-
     for task_id in tqdm.tqdm(task_ids):
         unsubstitued_config_dict["task_id"] = task_id
         config_dict = create_substituted_dict(
@@ -582,7 +617,7 @@ def submit_schism_job(config_file, pool_name=None):
     if "num_cores" not in config_dict:
         # insert the number of cores available right after the num_hosts key
         ncores = estimate_cores_available(
-            config_dict["vm_size"], config_dict["num_hosts"]
+            config_dict["vm_size"], config_dict["num_hosts"], config_dict["location"]
         )
         config_dict = insert_after_key(config_dict, "num_hosts", "num_cores", ncores)
         logger.info(

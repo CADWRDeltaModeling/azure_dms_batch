@@ -26,7 +26,6 @@ simulation_months: [1,2,3,4,5,6]
 simulation_start_day: 1
 simulation_days: 92
 insertion_file: run_number_loc.txt
-simulation_days: 1
 delay: 0day
 duration: 1485minutes
 #job_name_prefix, run_no, particle_no, insertion_node, ptm_start_date, ptm_end_date, particle_insertion_row
