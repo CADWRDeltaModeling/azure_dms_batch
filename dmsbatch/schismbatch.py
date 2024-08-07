@@ -209,7 +209,7 @@ def create_schism_pool(pool_name, config_dict):
         raise e
 
 
-def estimate_cores_available(vm_size, num_hosts, location):
+def get_core_count(vm_size, location):
     try:
         with open(
             pkg_resources.resource_filename(__name__, "templates/vm_core_map.yml")
@@ -247,6 +247,11 @@ def estimate_cores_available(vm_size, num_hosts, location):
         ) as f:
             yaml.dump(VM_CORE_MAP, f)
     core_count_per_host = VM_CORE_MAP.get(vm_size, 1)
+    return core_count_per_host
+
+
+def estimate_cores_available(vm_size, num_hosts, location):
+    core_count_per_host = get_core_count(vm_size, location)
     return num_hosts * core_count_per_host
 
 
@@ -613,6 +618,13 @@ def submit_schism_job(config_file, pool_name=None):
         logger.info(
             "using default coordination command template",
             config_dict["coordination_command_template"],
+        )
+    if "task_slots_per_host" not in config_dict:
+        config_dict["task_slots_per_node"] = get_core_count(
+            config_dict["vm_size"], config_dict["location"]
+        )
+        logger.info(
+            "using default task slots per node", config_dict["task_slots_per_node"]
         )
     if "num_cores" not in config_dict:
         # insert the number of cores available right after the num_hosts key
