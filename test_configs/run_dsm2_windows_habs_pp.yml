@@ -1,0 +1,46 @@
+resource_group: azure_model_batch
+location: westus2
+job_name: habs_pp
+batch_account_name: dwrmodelingbatchaccount 
+storage_account_name: dwrmodelingstore 
+storage_container_name: test-habs
+# hardware
+vm_size: standard_ds5_v2
+num_hosts: 1
+num_cores: 2
+task_slots_per_node: 4
+# study specific
+task_name: "habs_pp_{task_id}"
+environment_variables:
+  SCENARIO: "{task_id}"
+study_dir: pyscripts
+command: |
+  move output/model .
+  cd pyscripts
+  rt_postp.bat
+resource_files:
+  - file_path: "."
+    blob_prefix: "output/model/{task_id}"
+  - file_path: "."
+    blob_prefix: "pyscripts"
+output_files:
+  - file_pattern: "**/model/*RT.csv"
+    path: "postp"
+    upload_condition: 'taskcompletion' # tasksuccess, taskfailure, taskcompletion
+task_ids: |
+  ["9a_v2a_dcp"] 
+app_pkgs:
+  - name: azcopy
+    init_script: set PATH=%PATH%;%AZ_BATCH_APP_PACKAGE_azcopy%\azcopy_windows_amd64_10.25.1
+  - name: dsm2
+    version: win_v8.2.1
+    init_script: |
+      set DSM2_HOME=%AZ_BATCH_APP_PACKAGE_dsm2#win_v8.2.1%\DSM2v821
+      set VISTA_HOME=%DSM2_HOME%\vista
+      set PATH=%PATH%;%DSM2_HOME%\bin;%VISTA_HOME%\bin
+  - name: unzip
+    init_script: set PATH=%PATH%;%AZ_BATCH_APP_PACKAGE_unzip%\bin
+  - name: python
+    version: v37
+    init_script: call %AZ_BATCH_APP_PACKAGE_python#v37%\Scripts\activate.bat
+template_name: "win_dsm2"

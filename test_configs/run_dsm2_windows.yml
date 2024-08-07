@@ -1,0 +1,27 @@
+resource_group: azure_model_batch
+location: westus2
+job_name: dsm2_win_run_historical
+batch_account_name: dwrmodelingbatchaccount 
+storage_account_name: dwrmodelingstore 
+storage_container_name: test
+# hardware
+vm_size: standard_ds2_v2
+num_hosts: 1
+num_cores: 2
+task_slots_per_node: 1
+# study specific
+study_copy_flags: --recursive
+study_dir: dsm2_studies_v82/studies/historical
+setup_dirs: # these are directories that are also copied in addition to the study_dir
+ - dsm2_studies_v82/bin
+ - dsm2_studies_v82/common_input
+ - dsm2_studies_v82/timeseries
+environment_variables:
+  START_DATE: "01JAN2000"
+  END_DATE: "31DEC2000"
+command: |
+  hydro hydro.inp
+  echo "Hydro done"
+  qual qual_ec.inp
+  echo "Qual done"
+template_name: "win_dsm2"

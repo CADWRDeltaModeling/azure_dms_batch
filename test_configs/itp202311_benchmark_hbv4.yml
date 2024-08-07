@@ -1,0 +1,29 @@
+vm_size: standard_hb176rs_v4 #standard_hb120rs_v2 #standard_hb176rs_v4 #standard_hb120rs_v2 # 9m/day
+resource_group: dwrbdo_schism_rg # the resource group containing the batch account
+job_name: itp202311_benchmark_hbv4 # job name, will be used to name the pool and the job
+batch_account_name: schismbatch # batch account name
+storage_account_name: dwrbdoschismsa # this is the storage account containing batch and storage_container defined below
+storage_container_name: test # this is mounted to $AZ_BATCH_MOUNTS_DIR/<<storage_container_name>> in addition to batch container which is mounted to $AZ_BATCH_MOUNTS_DIR/batch
+study_copy_flags: --recursive --preserve-symlinks --exclude-regex ".*out.*nc"
+delete_after_mins: 2000 # delete the job after this many minutes
+study_dir: itp202311/simulations/2023 # e.g. for test container this is vansickle2020/base_barclinic # this is copied sans the outputs/ folder 
+setup_dirs: # these are directories that are also copied in addition to the study_dir
+ - hrrr # e.g. for test container this is vansickle2020/ts
+# - vansickle2020/atmospheric_data # e.g. for test container this is vansickle2020/inputs
+num_hosts: 2 # number of nodes in the pool
+# num_cores: <<number of cores total>> # is optional as default is number of cores per host * number of hosts
+num_scribes: 10 # This is used in the mpi_cmd template if referred to there
+# command to run , assume the study_dir is current directory
+# mpi_command: "printenv"
+# UCX_TLS=dc,sm
+# mpi_opts: --bind-to core
+# opts from this article: https://techcommunity.microsoft.com/t5/azure-high-performance-computing/optimizing-mpi-collective-communication-using-hpc-x-on-azurehpc/ba-p/1356740
+#mpi_opts: -mca coll_hcoll_enable 1 -x HCOLL_ENABLE_MCAST_ALL=1 -x HCOLL_SBGP_BASESMSOCKET_GROUP_BY=numa
+#mpi_opts: --bind-to core --report-bindings --map-by l3cache
+mpi_opts: --bind-to core
+mpi_command: |
+ cd sflux; rm -f *.nc; python make_links_full.py; cd ../;
+ MV2_FORCE_HCA_TYPE=22 mpirun -n {num_cores} --hostfile hostfile {mpi_opts} pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes};
+#mpirun -n {num_cores} --hostfile hostfile -x PATH -x LD_LIBRARY_PATH {mpi_opts} pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes};
+# template for the pool name, which is used to create the pool with appropriate settings
+template_name: "alma87_mvapich2_20240426" # this is the template name for the pool, e.g. "centos7" or "alma8"

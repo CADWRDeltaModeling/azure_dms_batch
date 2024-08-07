@@ -1,0 +1,23 @@
+resource_group: dwrbdo_schism_rg # the resource group containing the batch account
+job_name: hotstart_combine_generate # job name, will be used to name the pool and the job
+batch_account_name: schismbatch # batch account name
+storage_account_name: dwrbdoschismsa # this is the storage account containing batch and storage_container defined below
+storage_container_name: mss2024 # this is mounted to $AZ_BATCH_MOUNTS_DIR/<<storage_container_name>> in addition to batch container which is mounted to $AZ_BATCH_MOUNTS_DIR/batch
+study_dir: simulations/mss0701_nobarrier_2021f_none_v300_e6000 # e.g. for test container this is vansickle2020/base_barclinic # this is copied sans the outputs/ folder 
+study_copy_flags: --recursive --include-regex ".*hotstart_.*_{hotstart_it}.*;.*local_to_global.*;.*combine_hotstart\.sh"
+#setup_dirs: simulations/mss0701_nobarrier_2021f_none_v300_e6000 # e.g. for test container this is vansickle2020/base_barclinic # this is copied sans the outputs/ folder 
+#setup_dirs_copy_flags: --recursive --include-regex ".*hotstart_.*_{hotstart_it}.*;.*local_to_global.*"
+hotstart_nday: "215"
+hotstart_it: "206400"
+hotstart_date: "20210804"
+# hotstart_convention: 
+vm_size: "Standard_DS2_v2" # Standard_HB120rs_v3
+num_hosts: 1 # number of nodes in the pool
+num_cores: 2
+command: |
+ bash combine_hotstart.sh {hotstart_nday};
+ cp outputs/hotstart_it\={hotstart_it}.nc hotstart.{hotstart_date}.{hotstart_it}.GEN.nc;
+ ln -sf hotstart.{hotstart_date}.{hotstart_it}.GEN.nc hotstart.nc;
+ azcopy copy hotstart.{hotstart_date}.{hotstart_it}.GEN.nc "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}/hotstart.{hotstart_date}.{hotstart_it}.GEN.nc?{sas}" || true;
+ azcopy copy hotstart.nc "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}/hotstart.nc?{sas}" --preserve-symlinks --recursive || true;
+template_name: "alma87_mvapich2_20240426_pp" # this is the template name for the pool, e.g. "centos7" or "alma8"

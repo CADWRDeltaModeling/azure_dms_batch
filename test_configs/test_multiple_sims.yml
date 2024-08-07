@@ -1,0 +1,21 @@
+batch_account_name: schismbatch
+command: |
+  ln -sf param_clinic_gen.nml param.nml;
+  archive_ts --rundir . --ardir archive_ts --label {task_id[0]} --scenario_data "{{year: {task_id[1]}, inflow: {task_id[2]}, exports: {task_id[3]}}}" --extracted "{{flux.out: flux}}" --stationfile fluxflag.prop --run_start {task_id[1]}-01-01;
+  archive_ts --rundir . --ardir archive_ts --label {task_id[0]} --scenario_data "{{year: {task_id[1]}, inflow: {task_id[2]}, exports: {task_id[3]}}}" ;
+  archive_ts --rundir . --ardir archive_ts --label {task_id[0]} --scenario_data "{{{task_id[1]}, inflow: {task_id[2]}, exports: {task_id[3]}}}" --extracted "{{fracsjr_*.out: fracsjr, fracdelta_*.out: fracdelta}}"  --time_sharded;
+  azcopy copy "archive_ts/*.csv" "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/simulations/archive_ts/{task_id[0]}/?{sas}" || true;
+  rm -rf *;
+job_name: test_archive_2021f_i300_e150
+num_hosts: 1
+resource_group: dwrbdo_schism_rg
+storage_account_name: dwrbdoschismsa
+storage_container_name: mss2024
+study_copy_flags: --recursive --include-regex "archive_ts;.*flux\.out;.*staout_1;.*staout_5;.*staout_6;fluxflag\.prop;station\.in;.*param.*;.*south_delta\.bp"
+study_dir: simulations/{task_id[0]}
+task_name: "{task_id[0]}"
+task_ids: |
+ [(s, s.split('_')[2][:-1], s.split('_')[4][1:], s.split('_')[5][1:]) for s in ["mss0701_nobarrier_2021f_none_v300_e1500","mss0701_nobarrier_2021f_none_v300_e3000"]]
+task_slots_per_node: 8
+template_name: alma87_mvapich2_20240426_pp
+vm_size: Standard_DS5_v2

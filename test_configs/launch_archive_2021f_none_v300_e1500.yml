@@ -1,0 +1,15 @@
+batch_account_name: schismbatch
+command: cd .;archive_ts --rundir . --ardir archive_ts --label flushing --scenario_data '{{year: 2021, infow: 300, exports: 150}}' --extracted '{{flux.out: flux}}' --stationfile fluxflag.prop --run_start 2021-01-01;archive_ts --rundir . --ardir archive_ts --label flushing --scenario_data '{year: 2021, infow: 300, exports: 150}' ;archive_ts --rundir . --ardir archive_ts --label flushing --scenario_data '{year: 2021, infow: 300, exports: 150}' --extracted '{fracsjr_*.out: fracsjr, fracdelta_*.out: fracdelta}'  --time_sharded;azcopy
+  copy archive_ts/*.csv "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/simulations/archive_ts?{sas}"
+  || true;rm -rf *;
+job_name: archive_2021f_none_v300_e1500
+num_hosts: 1
+resource_group: dwrbdo_schism_rg
+storage_account_name: dwrbdoschismsa
+storage_container_name: mss2024
+study_copy_flags: --recursive --include-regex ".*flux\.out;.*staout_1;.*staout_5;.*staout_6;fluxflag\.prop;station\.in;param.*;.*south_delta\.bp"
+study_dir: simulations/mss0701_nobarrier_2021f_none_v300_e1500
+task_ids: '[1]'
+task_slots_per_node: 8
+template_name: alma87_mvapich2_20240426_pp
+vm_size: Standard_DS5_v2

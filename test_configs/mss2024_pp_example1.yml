@@ -1,0 +1,22 @@
+vm_size: Standard_DS2_v2 #standard_hb120rs_v2 #standard_hb176rs_v4 #standard_hb120rs_v2 # 9m/day
+task_ids: "[1]" # just one task
+resource_group: dwrbdo_schism_rg # the resource group containing the batch account
+job_name: mss2024_bm_pp # job name, will be used to name the pool and the job
+batch_account_name: schismbatch # batch account name
+storage_account_name: dwrbdoschismsa # this is the storage account containing batch and storage_container defined below
+storage_container_name: mss2024 # 
+study_copy_flags: --recursive --preserve-symlinks
+study_dir: pp/bm 
+setup_dirs_copy_flags: --recursive --include-regex ".*flux.*;.*staout_1;"
+setup_dirs: # these are directories that are also copied in addition to the study_dir
+ - simulations/mss0701_nobarrier_2021f_v1000_e10000
+ - simulations/mss0701_nobarrier_2021f_v1000_e1500
+num_hosts: 1 # number of nodes in the pool
+num_cores: 2
+task_slots_per_node: 2 # number of tasks per node
+# num_cores: <<number of cores total>> # is optional as default is number of cores per host * number of hosts
+mpi_command: |
+ python plot_mss.py;
+ azcopy copy "*.png" "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/pp/plots/{job_name}?{sas}" || true;
+ echo "Done generating plots"
+template_name: "alma87_mvapich2_20240426_pp" # this is the template name to use for the job

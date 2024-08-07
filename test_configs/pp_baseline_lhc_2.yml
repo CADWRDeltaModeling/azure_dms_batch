@@ -1,0 +1,25 @@
+job_name: pp_dsp_2024_baseline_lhc_2 # job name, will be used to name the pool and the job
+# location of the batch account and storage account
+resource_group: dwrbdo_dsp # the resource group containing the batch account
+batch_account_name: dwrbdodspbatch # batch account name
+storage_account_name: dwrbdodspsa # this is the storage account containing batch and storage_container defined below
+storage_container_name: test # this is mounted to $AZ_BATCH_MOUNTS_DIR/<<storage_container_name>> in addition to batch container which is mounted to $AZ_BATCH_MOUNTS_DIR/batch
+study_dir: azure_dsp_2024_lhc_v3/simulations/baseline_lhc_2 ## where the relative study directory for the simulation will be
+study_copy_flags: --recursive --preserve-symlinks --include-regex "outputs/.*_{task_id}\.nc;flux.*;.*bp;vgrid.*;process.*sh;param.*nml"
+# hardware settings
+vm_size: standard_ds5_v2 #standard_hb176rs_v4 #standard_hb120rs_v2 # 9m/day
+num_hosts: 1 # number of nodes in the pool
+task_slots_per_node: 16 # number of tasks per node
+# task settings
+task_ids: "range(1,439)"
+command: |
+ chmod +x ./process_x2.sh
+ ./process_x2.sh {task_id};
+ cd outputs;
+ azcopy copy ./x2_bay_sjr_out{task_id}.csv "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/process_x2_output/baseline_lhc_2/?{sas}";
+ azcopy copy ./x2_bay_nysjr_out{task_id}.csv "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/process_x2_output/baseline_lhc_2/?{sas}";
+ azcopy copy ./x2_bay_mzm_out{task_id}.csv "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/process_x2_output/baseline_lhc_2/?{sas}";
+ azcopy copy ./x2_bay_sac_out{task_id}.csv "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/process_x2_output/baseline_lhc_2/?{sas}";
+ cd ..;
+ rm -rf *;
+template_name: "alma87_mvapich2_20240426_pp" # this is the template name to use for the job

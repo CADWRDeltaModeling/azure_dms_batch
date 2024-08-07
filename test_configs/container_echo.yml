@@ -1,0 +1,43 @@
+resource_group: azure_model_batch
+location: westus2
+job_name: container_echo
+batch_account_name: dwrmodelingbatchaccount 
+storage_account_name: dwrmodelingstore 
+storage_container_name: test
+# hardware
+vm_size: standard_ds2_v2
+num_hosts: 1
+num_cores: 2
+task_slots_per_node: 1
+# study specific
+study_copy_flags: --recursive
+study_dir: dsm2_studies_v82/studies/historical
+setup_dirs: # these are directories that are also copied in addition to the study_dir
+ - dsm2_studies_v82/bin
+ - dsm2_studies_v82/common_input
+ - dsm2_studies_v82/timeseries
+resource_files:
+  - file_path: "."
+    blob_prefix: "{study_dir}"
+  - file_path: "."
+    blob_prefix: dsm2_studies_v82/common_input
+  - file_path: "."
+    blob_prefix: dsm2_studies_v82/timeseries
+output_files:
+  - file_pattern: '*.dss'
+    path: "{study_dir}/outputs"
+    upload_condition: "taskcompletion" # tasksuccess, taskfailure, taskcompletion
+command: |
+  echo "Hello from the container!"
+  echo "This is a test of the containerized job."
+  echo "The container is running on host: $(hostname)"
+  echo "The container is running on node: $(uname -n)"
+  echo "The container is running on VM: $(uname -m)"
+  echo "The container is running on OS: $(uname -o)"
+  echo "The container is running on kernel: $(uname -r)"
+  echo "The container is running on release: $(uname -v)"
+  echo "The container is running on version: $(uname -s)"
+  cd {study_dir}
+  hydro -v
+  hydro hydro.inp
+template_name: "dvsm_container"

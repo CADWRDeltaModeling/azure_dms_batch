@@ -1,0 +1,20 @@
+job_name: postpro_test
+# location of the batch account and storage account
+batch_account_name: schismbatch
+resource_group: dwrbdo_schism_rg
+storage_account_name: dwrbdoschismsa
+storage_container_name: mss2024
+# hardware setup
+vm_size: Standard_DS5_v2
+task_slots_per_node: 16
+# task setup
+study_dir: simulations/mss0701_nobarrier_2021f_none_v300_e3000
+study_copy_flags: --recursive --include-regex ".*_{task_id}\.nc;.*flux.*;.*staout_1;.*staout_5;.*staout_6;vgrid.in.*;param.*;.*extract_time_series\.sh;.*south_delta\.bp"
+task_ids: 'range(250,301)'
+command: |
+ cd outputs;bash extract_time_series.sh {task_id} GEN_1 fracsjr south_delta.bp;
+ bash extract_time_series.sh {task_id} GEN_2 fracdelta south_delta.bp;
+ azcopy copy fracsjr_{task_id}.out "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/simulations/mss0701_nobarrier_2021f_none_v300_e3000/fracsjr_{task_id}.out?{sas}" || true;
+ azcopy copy fracdelta_{task_id}.out "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/simulations/mss0701_nobarrier_2021f_none_v300_e3000/fracdelta_{task_id}.out?{sas}" || true;
+ rm -rf *;
+template_name: alma87_mvapich2_20240426_pp
