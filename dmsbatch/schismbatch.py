@@ -109,7 +109,9 @@ def recursive_format(value, current_data):
         try:
             return value.format(**current_data)
         except KeyError as e:
-            # print(f"KeyError: Missing key {e} for value '{value}'")
+            logger.debug(
+                f"Failed to format ... KeyError: Missing key {e} for value '{value}'"
+            )
             return value
     elif isinstance(value, dict):
         return {k: recursive_format(v, current_data) for k, v in value.items()}
@@ -190,7 +192,8 @@ def create_schism_pool(pool_name, config_dict):
             **json_config_dict,
         )
         # Run the command and capture its output
-        cmdstr = f"az deployment group create --name {pool_name} --resource-group {resource_group_name} --template-file {bicep_file} --parameters {modified_parameters_file}"
+        azdebug = "--debug" if logger.level == logging.DEBUG else ""
+        cmdstr = f"az deployment group create {azdebug} --name {pool_name} --resource-group {resource_group_name} --template-file {bicep_file} --parameters {modified_parameters_file}"
         logger.debug(cmdstr)
         result = subprocess.check_output(cmdstr, shell=True).decode("utf-8").strip()
         # Print the output -- for debug ---
@@ -200,12 +203,13 @@ def create_schism_pool(pool_name, config_dict):
     except Exception as e:
         logger.error("Error creating pool {}".format(pool_name))
         logger.error(e)
-        try:
-            os.remove(modified_parameters_file)
-        except Exception as e:
-            logger.error(
-                "Error removing temporary file {}".format(modified_parameters_file)
-            )
+        if logger.level != logging.DEBUG:
+            try:
+                os.remove(modified_parameters_file)
+            except Exception as e:
+                logger.error(
+                    "Error removing temporary file {}".format(modified_parameters_file)
+                )
         raise e
 
 
