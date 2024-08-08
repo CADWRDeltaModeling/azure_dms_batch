@@ -623,7 +623,7 @@ def submit_schism_job(config_file, pool_name=None):
             "using default coordination command template",
             config_dict["coordination_command_template"],
         )
-    if "task_slots_per_host" not in config_dict:
+    if "task_slots_per_node" not in config_dict:
         config_dict["task_slots_per_node"] = get_core_count(
             config_dict["vm_size"], config_dict["location"]
         )
