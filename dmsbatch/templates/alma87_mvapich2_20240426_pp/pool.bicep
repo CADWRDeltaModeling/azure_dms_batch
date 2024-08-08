@@ -20,7 +20,9 @@ param startTaskScript string =  'printenv'
 param formula string = '$TargetDedicatedNodes = 0'
 // use existing batch account
 param createdBy string = ''
-param appPkgs array
+param appPkgs array = [ // array of application packages
+
+]
 resource batchAccount 'Microsoft.Batch/batchAccounts@2023-11-01' existing = {
   name: batchAccountName
 }
@@ -75,11 +77,9 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
       maxTaskRetryCount: 0
       waitForSuccess: true
     }
-    applicationPackages: [
-      for pkg in appPkgs:{
-        id: '${batchAccount.id}/applications/${pkg.name}'
-        version: pkg.?version
-      }
-    ]
+    applicationPackages: [for pkg in appPkgs: {
+      id: resourceId('Microsoft.Batch/batchAccounts/applications', batchAccountName, pkg.name)
+      version: pkg.?version
+    }]
   }
 }
