@@ -6,6 +6,7 @@ study_copy_flags: "--recursive --preserve-symlinks --exclude-regex='.*outputs.*n
 setup_dirs_copy_flags: "--recursive --preserve-symlinks"
 delete_after_mins: 240 # delete the job after this many minutes
 mpi_command: 'printenv; echo "define mpi_command in job config yaml file";'
+task_slots_per_node: 1
 # translates to pkg_resources.resource_filename('dmsbatch', 'templates/<template_name>/a>
 application_command_template: 'templates/{template_name}/application_command_template.sh' 
 coordination_command_template: 'templates/{template_name}/coordination_command_template.sh'
