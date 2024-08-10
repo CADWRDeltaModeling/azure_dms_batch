@@ -1,7 +1,7 @@
 import dmsbatch
 from dmsbatch import __version__
 from dmsbatch import commands
-from dmsbatch import schismbatch
+from dmsbatch import batch
 from dmsbatch import mount_blob
 
 import click
@@ -27,29 +27,19 @@ def schism():
     pass
 
 
-@click.command(
-    help="submits schism job using the config file specified. You can generate a sample config file using the generate-config command"
-)
+@click.command(help="submits job using the config file specified")
 @click.option(
     "--file",
     prompt="config file",
-    help="config file describing the job to be submitted. Use the generate-schism-job-config command to generate a sample config file.",
+    help="config file describing the job to be submitted.",
 )
 @click.option(
     "--pool-name",
     help="The pool name if specified means the pool already exists and so would not be created but used",
     required=False,
 )
-def submit_schism_job(file, pool_name=None):
-    schismbatch.submit_schism_job(file, pool_name)
-
-
-@click.command(
-    help="generate schism job yaml file: Use as an example to fill in your own yaml file"
-)
-@click.option("--file", prompt="generate sample config file", help="config file")
-def generate_schism_job_config(file):
-    schismbatch.generate_schism_job_yaml(file)
+def submit_job(file, pool_name=None):
+    batch.submit_job(file, pool_name)
 
 
 @click.command(help="set batch and storage account keys")
@@ -63,30 +53,30 @@ def generate_schism_job_config(file):
     "--storage-account-name", prompt="storage account name", help="storage account name"
 )
 def set_keys(resource_group_name, batch_account_name, storage_account_name):
-    batch_account_key = schismbatch.get_batch_account_key(
+    batch_account_key = batch.get_batch_account_key(
         resource_group_name, batch_account_name
     )
-    storage_account_key = schismbatch.get_storage_account_key(
+    storage_account_key = batch.get_storage_account_key(
         resource_group_name, storage_account_name
     )
     if sys.platform == "win32":
-        with open("schism_keys.bat", "w") as f:
+        with open("keys.bat", "w") as f:
             f.write("set BATCH_ACCOUNT_KEY={}\n".format(batch_account_key))
             f.write("set STORAGE_ACCOUNT_KEY={}\n".format(storage_account_key))
-        print("Batch and storage account keys written to schism_keys.bat")
+        print("Batch and storage account keys written to keys.bat")
         print(
-            "Run schism_keys.bat to set environment variables before using dmsbatch schism to submit jobs. Delete it when done for security."
+            "Run keys.bat to set environment variables before using dmsbatch submit-job to submit jobs. Delete it when done for security."
         )
-        print("call schism_keys.bat && del schism_keys.bat")
+        print("call keys.bat && del keys.bat")
     else:
-        with open("schism_keys.sh", "w") as f:
+        with open("keys.sh", "w") as f:
             f.write("export BATCH_ACCOUNT_KEY={}\n".format(batch_account_key))
             f.write("export STORAGE_ACCOUNT_KEY={}\n".format(storage_account_key))
-        print("Batch and storage account keys written to schism_keys.sh")
+        print("Batch and storage account keys written to keys.sh")
         print(
-            "Run source schism_keys.sh to set environment variables before using dmsbatch schism to submit jobs. Delete it when done for security."
+            "Run source keys.sh to set environment variables before using dmsbatch schism to submit jobs. Delete it when done for security."
         )
-        print("source schism_keys.sh && rm schism_keys.sh")
+        print("source keys.sh && rm keys.sh")
 
 
 @click.command(help="upload batch scripts to storage account")
@@ -97,18 +87,17 @@ def set_keys(resource_group_name, batch_account_name, storage_account_name):
     "--storage-account-name", prompt="storage account name", help="storage account name"
 )
 def upload_batch_scripts(resource_group_name, storage_account_name):
-    schismbatch.upload_batch_scripts(resource_group_name, storage_account_name)
+    batch.upload_batch_scripts(resource_group_name, storage_account_name)
 
 
-schism.add_command(submit_schism_job, name="submit-job")
-schism.add_command(generate_schism_job_config, name="generate-config")
+schism.add_command(submit_job, name="submit-job")
 schism.add_command(set_keys, name="set-keys")
 schism.add_command(upload_batch_scripts, name="upload-batch-scripts")
 
 
 main.add_command(config_generate_cmd, name="config-generate")
 main.add_command(schism, name="schism")
-main.add_command(submit_schism_job, name="submit-job")
+main.add_command(submit_job, name="submit-job")
 main.add_command(mount_blob.mount_blob, name="mount-blob")
 main.add_command(mount_blob.unmount_all_blobs)
 
