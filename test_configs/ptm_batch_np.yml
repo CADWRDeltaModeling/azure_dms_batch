@@ -6,7 +6,7 @@ batch_account_name: dwrmodelingbatchaccount
 storage_account_name: dwrmodelingstore 
 storage_container_name: ptm-docker-test
 # hardware
-vm_size:  standard_f16s_v2 # standard_ds5_v2
+vm_size:   standard_ds5_v2 # standard_f16s_v2 # standard_ds5_v2
 num_hosts: 0
 # study specific
 study_copy_flags: --recursive
