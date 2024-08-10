@@ -15,3 +15,4 @@ pool_bicep_resource: 'templates/{template_name}/pool.bicep'
 pool_parameters_resource: 'templates/{template_name}/pool.parameters.json'
 autoscale_formula: 'templates/{template_name}/autoscale_formula.txt'
 created_by: '' # this is the user who created the job
+spot_core_limit: 2000 # The number of cores for spot vms defined in batch account quotas

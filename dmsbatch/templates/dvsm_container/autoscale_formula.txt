@@ -1,4 +1,5 @@
-maxNumberofVMs = 50;
+spotCoreLimit = {spot_core_limit};
+maxNumberofVMs = floor(spotCoreLimit/{task_slots_per_node}); // 2000 is the default spot core capacity
 // Set the number of task slots per node times two to allow atleast three passes of tasks for a node.
 // tasks are typically short and there is no point in asking for too many hosts and resusing a running host is preferable.
 taskSlotsPerNode={task_slots_per_node};
