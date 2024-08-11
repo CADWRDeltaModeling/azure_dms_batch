@@ -39,5 +39,4 @@ command: |
   echo "The container is running on version: $(uname -s)"
   cd {study_dir}
   hydro -v
-  hydro hydro.inp
 template_name: "dvsm_container"
