@@ -561,6 +561,13 @@ def insert_after_key(dictionary, key, new_key, new_value):
 
 def initialize_config(config_file, pool_name=None):
     config_dict = parse_yaml_file(config_file)
+    # get the output of git describe
+    try:
+        config_dict["dmsbatch_version"] = (
+            subprocess.check_output("git describe", shell=True).decode("utf-8").strip()
+        )
+    except subprocess.SubprocessError as e:
+        config_dict["dmsbatch_version"] = "unknown"
     config_dict["task_id"] = ""
     required_keys = [
         "template_name",

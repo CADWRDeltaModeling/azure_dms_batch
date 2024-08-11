@@ -1,6 +1,7 @@
 param batchAccountName string
 // pool information
 param poolName string
+param dmsbatchVersion string
 param vmSize string
 param taskSlotsPerNode int // number of tasks per node to be changed with vmSize (1 task = 1 core) usually unless you want more memory per task
 param imageReference object
@@ -25,6 +26,7 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
     
     metadata: [
       { name: 'created-by', value: createdBy }
+      { name: 'dmsbatch-version', value: dmsbatchVersion }
     ]
     
     deploymentConfiguration: {

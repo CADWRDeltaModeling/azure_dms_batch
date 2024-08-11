@@ -5,6 +5,7 @@ param storageContainerName string
 param storageAccountKey string = ''
 // pool information
 param poolName string
+param dmsbatchVersion string
 param vmSize string = 'Standard_HB120rs_v2' //'STANDARD_HC44rs' or 
 param taskSlotsPerNode int = 1 // number of tasks per node to be changed with vmSize (1 task = 1 core) usually unless you want more memory per task
 // param targetDedicatedNodes int = 2 // number of nodes to be changed with vmSize - now in the autoscaling formula
@@ -38,6 +39,7 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
     
     metadata: [
       { name: 'created-by', value: createdBy }
+      { name: 'dmsbatch-version', value: dmsbatchVersion }
     ]
     
     mountConfiguration: [
