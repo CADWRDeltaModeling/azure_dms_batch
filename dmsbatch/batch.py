@@ -162,14 +162,13 @@ def update_if_not_defined(config_dict, **kwargs):
     return config_dict
 
 
-def create_pool(pool_name, config_dict):
+def create_pool(config_dict):
     """create a pool with the given number of hosts.  The pool name is
     assumed to include the date and time after the last _ in the name."""
     # assign the variables below to the values in the config file
-    config_dict = create_substituted_dict(config_dict, pool_name=pool_name)
+    config_dict = create_substituted_dict(config_dict)
     resource_group_name = config_dict["resource_group"]
     pool_name = config_dict["pool_name"]
-    num_hosts = config_dict["num_hosts"]
     pool_bicep_resource = config_dict["pool_bicep_resource"]
     pool_parameters_resource = config_dict["pool_parameters_resource"]
 
@@ -177,10 +176,9 @@ def create_pool(pool_name, config_dict):
     parameters_file = pkg_resources.resource_filename(
         __name__, pool_parameters_resource
     )
-    dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     # create a temporary file with the modified parameters in a temporary directory
     modified_parameters_file = tempfile.NamedTemporaryFile(
-        prefix=f"batch_{dtstr}", suffix=".json"
+        prefix=f"batch_{pool_name}", suffix=".json"
     ).name
     json_config_dict = convert_keys_to_camel_case(config_dict)
     try:
@@ -203,7 +201,7 @@ def create_pool(pool_name, config_dict):
     except Exception as e:
         logger.error("Error creating pool {}".format(pool_name))
         logger.error(e)
-        if False:  # logger.level != logging.DEBUG:
+        if logger.level != logging.DEBUG:
             try:
                 os.remove(modified_parameters_file)
             except Exception as e:
@@ -561,7 +559,7 @@ def insert_after_key(dictionary, key, new_key, new_value):
     return dict(items)
 
 
-def submit_job(config_file, pool_name=None):
+def initialize_config(config_file, pool_name=None):
     config_dict = parse_yaml_file(config_file)
     config_dict["task_id"] = ""
     required_keys = [
@@ -660,9 +658,12 @@ def submit_job(config_file, pool_name=None):
         sas_win = sas.replace("%", "%%")
         config_dict["sas_win"] = sas_win
         config_dict = move_key_to_first(config_dict, "sas_win")
-    # TODO: pool name substitution should be improved
     dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    # FIXME:
+    if pool_name is None:
+        pool_name = config_dict["pool_name"] + f"_{dtstr}"
+    else:
+        pool_name = pool_name
+    config_dict["pool_name"] = pool_name
     # introduce special variable for task_id
     if config_dict.get("task_ids") is not None:
         # evaluate the task_id as a python expression
@@ -674,13 +675,24 @@ def submit_job(config_file, pool_name=None):
     config_dict["task_id"] = config_dict["task_ids"][0]  # for now
     # add in app_pkgs_script
     config_dict["app_pkgs_script"] = build_app_pkg_scripts(config_dict)
+    return config_dict, client
+
+
+def create_pool_from_config(config_file, pool_name=None):
+    config_dict, client = initialize_config(config_file, pool_name)
+    pool_name = create_pool(config_dict)
+    return pool_name
+
+
+def submit_job(config_file, pool_name=None):
+    config_dict, client = initialize_config(config_file, pool_name)
     if pool_name is None:
-        pool_name = config_dict["pool_name"] + f"_{dtstr}"
         # create pool
-        pool_name = create_pool(pool_name, config_dict)
+        pool_name = create_pool(config_dict)
         pool_exists = False
     else:
         pool_exists = True
+
     job_name, task_name = submit_task(
         client, pool_name, config_dict, pool_exists=pool_exists
     )

@@ -38,8 +38,46 @@ def schism():
     help="The pool name if specified means the pool already exists and so would not be created but used",
     required=False,
 )
-def submit_job(file, pool_name=None):
+# add a log level option that allows for DEBUG, INFO, WARNING, ERROR, CRITICAL
+@click.option(
+    "--log-level",
+    default="INFO",
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+    ),
+    help="The log level to use. Default is INFO",
+    show_default=True,
+)
+def submit_job(file, pool_name=None, log_level="INFO"):
+    batch.logger.setLevel(log_level)
     batch.submit_job(file, pool_name)
+
+
+@click.command(help="creates a pool using the config file specified")
+@click.option(
+    "--file",
+    prompt="config file",
+    help="config file describing the pool to be created.",
+    required=True,
+)
+@click.option(
+    "--pool-name",
+    help="The pool name to be created.",
+    required=False,
+)
+# add a log level option that allows for DEBUG, INFO, WARNING, ERROR, CRITICAL
+@click.option(
+    "--log-level",
+    default="INFO",
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+    ),
+    help="The log level to use. Default is INFO",
+    show_default=True,
+)
+def create_pool(file, pool_name, log_level):
+    batch.logger.setLevel(log_level)
+    batch.create_pool_from_config(file, pool_name)
 
 
 @click.command(help="set batch and storage account keys")
@@ -98,6 +136,7 @@ schism.add_command(upload_batch_scripts, name="upload-batch-scripts")
 main.add_command(config_generate_cmd, name="config-generate")
 main.add_command(schism, name="schism")
 main.add_command(submit_job, name="submit-job")
+main.add_command(create_pool, name="create-pool")
 main.add_command(mount_blob.mount_blob, name="mount-blob")
 main.add_command(mount_blob.unmount_all_blobs)
 
