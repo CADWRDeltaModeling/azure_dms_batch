@@ -1,7 +1,7 @@
 param batchAccountName string
 // pool information
 param poolName string
-param dmsbatchVersion string
+param dmsbatchVersion string = 'unknown'
 param vmSize string
 param taskSlotsPerNode int // number of tasks per node to be changed with vmSize (1 task = 1 core) usually unless you want more memory per task
 param imageReference object
