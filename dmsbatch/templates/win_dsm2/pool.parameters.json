@@ -18,6 +18,9 @@
         },
         "createdBy": {
         },
+        "dmsbatchVersion": {
+            "value": "1.0.0"
+        },
         "appPkgs": {
         },
         "imageReference": {

@@ -25,6 +25,9 @@
         },
         "createdBy": {
             "value": ""
+        },        
+        "dmsbatchVersion": {
+            "value": "1.0.0"
         },
         "containerImageName": {
             "value": "cadwrdms/dsm2:latest"
