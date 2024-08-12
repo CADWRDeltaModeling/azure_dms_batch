@@ -12,6 +12,7 @@ import base64
 
 import azure.batch.models as batchmodels
 from azure.batch.models import BatchErrorException
+import dmsbatch.commands
 from dmsbatch.commands import AzureBatch, AzureBlob
 
 #
@@ -646,7 +647,7 @@ def initialize_config(config_file, pool_name=None):
             config_dict["num_cores"],
         )
     # log the config dict
-    logging.info(config_dict)
+    logger.info(config_dict)
     #
     client = create_batch_client(
         config_dict["batch_account_name"],

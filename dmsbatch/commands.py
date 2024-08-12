@@ -25,6 +25,9 @@ from azure.storage.blob import (
     generate_container_sas,
 )
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 def generate_blank_config(config_file: str):
     """
@@ -182,15 +185,15 @@ class AzureBatch:
             True if created else False
         """
         try:
-            logging.info("Attempting to create pool:", pool.id)
+            logger.info("Attempting to create pool:", pool.id)
             self.batch_client.pool.add(pool)
-            logging.info("Created pool:", pool.id)
+            logger.info("Created pool:", pool.id)
             return True
         except batchmodels.BatchErrorException as e:
             if e.error.code != "PoolExists":
                 raise
             else:
-                logging.info("Pool {!r} already exists".format(pool.id))
+                logger.info("Pool {!r} already exists".format(pool.id))
                 return False
 
     def resize_pool(
@@ -461,7 +464,7 @@ class AzureBatch:
         prep_task : batchmodels.JobPreparationTask, optional
             a preperation task to be run before any tasks, by default None
         """
-        logging.info("Creating job [{}]...".format(job_id))
+        logger.info("Creating job [{}]...".format(job_id))
 
         job = batch.models.JobAddParameter(
             id=job_id,
@@ -545,7 +548,7 @@ class AzureBatch:
                 job_schedule_id=job_schedule_id
             )
 
-            logging.info("Checking if job exists...")
+            logger.info("Checking if job exists...")
             if (cloud_job_schedule.execution_info.recent_job) and (
                 cloud_job_schedule.execution_info.recent_job.id is not None
             ):
@@ -576,7 +579,7 @@ class AzureBatch:
                 job_schedule_id=job_schedule_id
             )
 
-            logging.info("Checking if job schedule is complete...")
+            logger.info("Checking if job schedule is complete...")
             state = cloud_job_schedule.state
             if state == batchmodels.JobScheduleState.completed:
                 return
@@ -854,6 +857,9 @@ class AzureBatch:
                         ]
                     ),
                 )
+            except batch.custom.custom_errors.CreateTasksErrorException as err:
+                self.print_task_exception(err)
+                raise err
             except batchmodels.BatchErrorException as err:
                 self.print_batch_exception(err)
                 raise err
@@ -892,7 +898,7 @@ class AzureBatch:
             self.wait_for_tasks_to_complete(
                 job_id, timeout, polling_interval_secs=polling_interval_secs
             )
-            logging.info(
+            logger.info(
                 "Success! All tasks completed within the timeout period:", timeout
             )
         except batchmodels.BatchErrorException as err:
@@ -940,7 +946,7 @@ class AzureBatch:
         """
         timeout_expiration = datetime.datetime.now() + timeout
 
-        logging.debug(
+        logger.debug(
             "Monitoring all tasks for 'Completed' state, timeout in {}...".format(
                 timeout
             ),
@@ -1040,7 +1046,7 @@ class AzureBatch:
         RuntimeError
             incase the nodes don't achieve the desired state within the timeout
         """
-        logging.info(
+        logger.info(
             "waiting for all nodes in pool {} to reach one of: {!r}".format(
                 pool_id, node_state
             )
@@ -1064,12 +1070,40 @@ class AzureBatch:
                     return nodes
                 i += 1
                 if i % 3 == 0:
-                    logging.info(
+                    logger.info(
                         "waiting for {} nodes to reach desired state...".format(
                             pool.target_dedicated_nodes
                         )
                     )
             time.sleep(polling_interval_secs)
+
+    def print_task_exception(self, task_exception: Exception):
+        """
+        Prints the contents of the specified Task exception.
+
+        Parameters
+        ----------
+        task_exception : Exception
+        """
+        failure_tasks = list(task_exception.failure_tasks)
+        errors = list(task_exception.errors)
+        logger.info("-------------------------------------------")
+        logger.info("Exception encountered:")
+        if errors:
+            for error in errors[:3]:
+                logger.info("Error: {}".format(error))
+        if failure_tasks:
+            for task_failure in failure_tasks[:3]:
+                result = task_failure
+                message = "Task with id `%s` failed due to client error - %s::%s" % (
+                    result.task_id,
+                    result.error.code,
+                    result.error.message.value,
+                )
+                logger.info("Task failure: ", message)
+                for ev in result.error.values[:5]:
+                    logger.info("Error: %s::%s" % (ev.key, ev.value))
+        logger.info("-------------------------------------------")
 
     def print_batch_exception(self, batch_exception: Exception):
         """
@@ -1080,19 +1114,19 @@ class AzureBatch:
         batch_exception : Exception
 
         """
-        logging.info("-------------------------------------------")
-        logging.info("Exception encountered:")
+        logger.info("-------------------------------------------")
+        logger.info("Exception encountered:")
         if (
             batch_exception.error
             and batch_exception.error.message
             and batch_exception.error.message.value
         ):
-            logging.info(batch_exception.error.message.value)
+            logger.info(batch_exception.error.message.value)
             if batch_exception.error.values:
-                logging.info()
+                logger.info()
                 for mesg in batch_exception.error.values:
-                    logging.info("{}:\t{}".format(mesg.key, mesg.value))
-        logging.info("-------------------------------------------")
+                    logger.info("{}:\t{}".format(mesg.key, mesg.value))
+        logger.info("-------------------------------------------")
 
     def wrap_commands_in_shell(self, commands, ostype: str = "windows") -> str:
         """
@@ -1334,7 +1368,7 @@ class AzureBatch:
 
         # pick first
         agent_sku_id, image_ref_to_use = skus_to_use[0]
-        logging.info(agent_sku_id, image_ref_to_use)
+        logger.info(agent_sku_id, image_ref_to_use)
         return (agent_sku_id, image_ref_to_use)
 
     def print_task_output(self, job_id: str, task_ids: list, encoding: str = None):
@@ -1354,22 +1388,22 @@ class AzureBatch:
             file_text = self.read_task_file_as_string(
                 job_id, task_id, AzureBatch._STANDARD_OUT_FILE_NAME, encoding
             )
-            logging.info(
+            logger.info(
                 "{} content for task {}: ".format(
                     AzureBatch._STANDARD_OUT_FILE_NAME, task_id
                 )
             )
-            logging.info(file_text)
+            logger.info(file_text)
 
             file_text = self.read_task_file_as_string(
                 job_id, task_id, AzureBatch._STANDARD_ERROR_FILE_NAME, encoding
             )
-            logging.info(
+            logger.info(
                 "{} content for task {}: ".format(
                     AzureBatch._STANDARD_ERROR_FILE_NAME, task_id
                 )
             )
-            logging.info(file_text)
+            logger.info(file_text)
 
     def print_configuration(self, config: str):
         """
@@ -1384,8 +1418,8 @@ class AzureBatch:
             s: dict(config.items(s)) for s in config.sections() + ["DEFAULT"]
         }
 
-        logging.info("Configuration is:")
-        logging.info(configuration_dict)
+        logger.info("Configuration is:")
+        logger.info(configuration_dict)
 
     def _read_stream_as_string(self, stream, encoding: str = "utf-8"):
         """
@@ -1805,7 +1839,7 @@ class AzureBlob:
         str
             sas url with the permissions and expiry
         """
-        logging.info(
+        logger.info(
             "Uploading file {} to container [{}]...".format(file_name, container_name)
         )
         sas_url = self.upload_blob_and_create_sas(
@@ -1879,7 +1913,7 @@ class AzureBlob:
         blob_name : str
         directory_path : str
         """
-        logging.info(
+        logger.info(
             "Downloading result file from container [{}]...".format(container_name)
         )
 
@@ -1890,13 +1924,13 @@ class AzureBlob:
             blob_data = local_blob_client.download_blob()
             blob_data.readinto(my_blob)
 
-        logging.info(
+        logger.info(
             "  Downloaded blob [{}] from container [{}] to {}".format(
                 blob_name, container_name, destination_file_path
             )
         )
 
-        logging.info("  Download complete!")
+        logger.info("  Download complete!")
 
     #
 
