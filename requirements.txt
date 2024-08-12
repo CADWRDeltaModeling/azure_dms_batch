@@ -7,3 +7,4 @@ azure-identity
 msrest
 click
 pyyaml
+tqdm
