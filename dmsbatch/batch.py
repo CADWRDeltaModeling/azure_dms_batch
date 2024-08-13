@@ -17,12 +17,23 @@ from dmsbatch.commands import AzureBatch, AzureBlob
 
 #
 import tqdm
+import sys
 
 # set up logging
 import logging
+import logging.config
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+
+
+def setup_logging(log_level=logging.INFO):
+    logger.setLevel(log_level)
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter("%(levelname)s:%(name)s %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    dmsbatch.commands.logger.setLevel(log_level)
+    dmsbatch.commands.logger.addHandler(handler)
 
 
 def load_command_from_resourcepath(fname):
@@ -156,7 +167,7 @@ def create_substituted_dict(config_dict, **kwargs):
 def update_if_not_defined(config_dict, **kwargs):
     for key, value in kwargs.items():
         if key not in config_dict:
-            logger.info(
+            logger.debug(
                 'Will use default config value "{}" for "{}"'.format(value, key)
             )
             config_dict[key] = value
@@ -603,29 +614,29 @@ def initialize_config(config_file, pool_name=None):
     )
     if "BATCH_ACCOUNT_KEY" in os.environ:
         config_dict["batch_account_key"] = os.environ["BATCH_ACCOUNT_KEY"]
-        logger.info("using batch account key from environment variable")
+        logger.debug("using batch account key from environment variable")
     else:
         config_dict["batch_account_key"] = get_batch_account_key(
             config_dict["resource_group"], config_dict["batch_account_name"]
         )
-        logger.info("using batch account key from az cli")
+        logger.debug("using batch account key from az cli")
     if "STORAGE_ACCOUNT_KEY" in os.environ:
         config_dict["storage_account_key"] = os.environ["STORAGE_ACCOUNT_KEY"]
-        logger.info("using storage account key from environment variable")
+        logger.debug("using storage account key from environment variable")
     else:
         config_dict["storage_account_key"] = get_storage_account_key(
             config_dict["resource_group"], config_dict["storage_account_name"]
         )
-        logger.info("using storage account key from az cli")
-    logger.info("using vm size", config_dict["vm_size"])
+        logger.debug("using storage account key from az cli")
+    logger.debug("using vm size", config_dict["vm_size"])
     if "setup_dirs" not in config_dict:
         config_dict["setup_dirs"] = []
-        logger.info("using default setup dirs", config_dict["setup_dirs"])
+        logger.debug("using default setup dirs", config_dict["setup_dirs"])
     if "coordination_command_template" not in config_dict:
         config_dict["coordination_command_template"] = (
             f'templates/{config_dict["template_name"]}/coordination_command_template.sh'
         )
-        logger.info(
+        logger.debug(
             "using default coordination command template",
             config_dict["coordination_command_template"],
         )
@@ -633,7 +644,7 @@ def initialize_config(config_file, pool_name=None):
         config_dict["task_slots_per_node"] = get_core_count(
             config_dict["vm_size"], config_dict["location"]
         )
-        logger.info(
+        logger.debug(
             "using default task slots per node", config_dict["task_slots_per_node"]
         )
     if "num_cores" not in config_dict:
@@ -642,12 +653,12 @@ def initialize_config(config_file, pool_name=None):
             config_dict["vm_size"], config_dict["num_hosts"], config_dict["location"]
         )
         config_dict = insert_after_key(config_dict, "num_hosts", "num_cores", ncores)
-        logger.info(
+        logger.debug(
             f"using calculated number of cores cores using {config_dict['vm_size']}",
             config_dict["num_cores"],
         )
     # log the config dict
-    logger.info(config_dict)
+    logger.debug(config_dict)
     #
     client = create_batch_client(
         config_dict["batch_account_name"],
@@ -683,6 +694,7 @@ def initialize_config(config_file, pool_name=None):
     config_dict["task_id"] = config_dict["task_ids"][0]  # for now
     # add in app_pkgs_script
     config_dict["app_pkgs_script"] = build_app_pkg_scripts(config_dict)
+    logger.info("config initialized...")
     return config_dict, client
 
 
@@ -709,7 +721,7 @@ def submit_job(config_file, pool_name=None):
             config_dict["storage_account_name"], config_dict["storage_account_key"]
         )
         config_filename = os.path.basename(config_file)
-        logger.info(
+        logger.debug(
             f"uploading config file {config_file} to storage container under jobs/{job_name}/{config_filename}"
         )
         blob_client.upload_file_to_container(

@@ -1840,7 +1840,9 @@ class AzureBlob:
             sas url with the permissions and expiry
         """
         logger.info(
-            "Uploading file {} to container [{}]...".format(file_name, container_name)
+            "Uploading file {} to container [{}]/{}...".format(
+                file_name, container_name, blob_name
+            )
         )
         sas_url = self.upload_blob_and_create_sas(
             container_name,

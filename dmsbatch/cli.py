@@ -5,7 +5,6 @@ from dmsbatch import batch
 from dmsbatch import mount_blob
 
 import click
-import os
 import sys
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
@@ -49,7 +48,7 @@ def schism():
     show_default=True,
 )
 def submit_job(file, pool_name=None, log_level="INFO"):
-    batch.logger.setLevel(log_level)
+    batch.setup_logging(log_level)
     batch.submit_job(file, pool_name)
 
 
@@ -76,7 +75,7 @@ def submit_job(file, pool_name=None, log_level="INFO"):
     show_default=True,
 )
 def create_pool(file, pool_name, log_level):
-    batch.logger.setLevel(log_level)
+    batch.setup_logging(log_level)
     batch.create_pool_from_config(file, pool_name)
 
 
