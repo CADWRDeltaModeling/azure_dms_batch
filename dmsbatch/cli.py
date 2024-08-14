@@ -11,8 +11,15 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
+@click.version_option(__version__, "-v", "--version", message="%(version)s")
 def main():
     pass
+
+
+@click.command()
+@click.option("-v", "--version", is_flag=True, help="Show the version and exit.")
+def version():
+    print(__version__)
 
 
 @click.command()
@@ -130,7 +137,6 @@ def upload_batch_scripts(resource_group_name, storage_account_name):
 schism.add_command(submit_job, name="submit-job")
 schism.add_command(set_keys, name="set-keys")
 schism.add_command(upload_batch_scripts, name="upload-batch-scripts")
-
 
 main.add_command(config_generate_cmd, name="config-generate")
 main.add_command(schism, name="schism")
