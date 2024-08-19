@@ -79,9 +79,11 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
       maxTaskRetryCount: 0
       waitForSuccess: true
     }
+    /*
     applicationPackages: [for pkg in appPkgs: {
       id: resourceId('Microsoft.Batch/batchAccounts/applications', batchAccountName, pkg.name)
       version: pkg.?version
     }]
+    */
   }
 }

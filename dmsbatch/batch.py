@@ -206,6 +206,17 @@ def create_pool(config_dict):
         cmdstr = f"az deployment group create {azdebug} --name {pool_name} --resource-group {resource_group_name} --template-file {bicep_file} --parameters {modified_parameters_file}"
         logger.debug(cmdstr)
         result = subprocess.check_output(cmdstr, shell=True).decode("utf-8").strip()
+        batch_account_name = config_dict["batch_account_name"]
+        location = config_dict["location"]
+        app_pkgs = config_dict.get("app_pkgs", [])
+        app_pkg_names = [app_pkg["name"] for app_pkg in app_pkgs]
+        app_pkg_names = " ".join(app_pkg_names)
+        if len(app_pkg_names) > 0:
+            cmdstr2 = f"az batch pool set --account-endpoint {batch_account_name}.{location}.batch.azure.com --account-name {batch_account_name} --pool-id {pool_name} --application-package-references {app_pkg_names}"
+            logger.debug(cmdstr2)
+            result = (
+                subprocess.check_output(cmdstr2, shell=True).decode("utf-8").strip()
+            )
         # Print the output -- for debug ---
         logger.debug(result)
         logger.info("created pool {}".format(pool_name))

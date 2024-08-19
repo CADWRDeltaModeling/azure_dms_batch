@@ -78,11 +78,13 @@ resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
       maxTaskRetryCount: 0
       waitForSuccess: true
     }
+    /* temporarily commented out while azure support works on this. The application package references need to be added in after pool creation.
     applicationPackages: [
       for pkg in appPkgs:{
         id: '${batchAccount.id}/applications/${pkg.name}'
         version: pkg.?version
       }
     ]
+    */
   }
 }
