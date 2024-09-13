@@ -6,6 +6,6 @@ $samples = $PendingTasks.GetSamplePercent(TimeInterval_Second * 1);
 // otherwise use the maximum of last sample point and the history average.
 $tasks = $samples < 70 ? max(0,$PendingTasks.GetSample(1)) : max( $PendingTasks.GetSample(1), avg($PendingTasks.GetSample(TimeInterval_Second * 1)));
 // For multi instance tasks, set targetVMs to {num_hosts}, otherwise 0.
-$TargetDedicatedNodes = (timesince > timelimit ? ($tasks > 0 ? {num_hosts}: 0): {num_hosts});
+${nodeType} = (timesince > timelimit ? ($tasks > 0 ? {num_hosts}: 0): {num_hosts});
 // Set node deallocation mode - let running tasks finish before removing a node
 $NodeDeallocationOption = taskcompletion;

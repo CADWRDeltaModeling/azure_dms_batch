@@ -62,9 +62,14 @@ def build_autoscaling_formula(config_dict):
     formula = pkg_resources.resource_string(__name__, config_dict["autoscale_formula"])
     formula = formula.decode("utf-8")
     config_dict = config_dict.copy()
-    config_dict["startTime"] = (
-        datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()
-    )
+    if "startTime" not in config_dict:
+        config_dict["startTime"] = (
+            datetime.datetime.now(datetime.timezone.utc)
+            .replace(microsecond=0)
+            .isoformat()
+        )
+    if "node_type" in config_dict:
+        config_dict["nodeType"] = config_dict["node_type"]
     formula = formula.format(**config_dict)
     return formula
 
@@ -213,14 +218,20 @@ def create_pool(config_dict):
     except Exception as e:
         logger.error("Error creating pool {}".format(pool_name))
         logger.error(e)
-        if logger.level != logging.DEBUG:
-            try:
-                os.remove(modified_parameters_file)
-            except Exception as e:
-                logger.error(
-                    "Error removing temporary file {}".format(modified_parameters_file)
-                )
-        raise e
+        try:
+            logger.info("cmdstr is {}".format(cmdstr))
+            # save the bicep and parameters file for future inspection
+            dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            os.makedirs(f"/tmp/failed_{dtstr}", exist_ok=True)
+            shutil.copy(bicep_file, f"/tmp/failed_{dtstr}")
+            shutil.copy(modified_parameters_file, f"/tmp/failed_{dtstr}")
+            logger.info(
+                f"The parameters and bicep file has been saved in directory /tmp/failed_{dtstr} for future inspection"
+            )
+        except Exception as e:
+            logger.error("Error while saving bicep and parameters: {}".format(e))
+        finally:
+            raise e
 
 
 def get_core_count(vm_size, location):
@@ -390,6 +401,10 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
             job_cmd = commands_to_string(job_cmd.split("\n"), ostype="windows").split(
                 " & "
             )
+        if "max_task_retry_count" in config_dict:
+            max_task_retry_count = int(config_dict["max_task_retry_count"])
+        else:
+            max_task_retry_count = 0
         # prep task takes care of formatting the command for azure
         prep_task = client.create_prep_task(
             f"job_prep_task",
@@ -397,7 +412,9 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
             ostype=ostype,
             resource_files=job_resource_files,
         )
-        client.create_job(job_name, pool_name, prep_task)
+        client.create_job(
+            job_name, pool_name, prep_task, max_task_retry_count=max_task_retry_count
+        )
     except BatchErrorException as e:
         if e.error.code == "JobExists":
             print("Job already exists")

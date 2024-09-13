@@ -451,6 +451,7 @@ class AzureBatch:
         job_id: str,
         pool_id: str,
         prep_task: batchmodels.JobPreparationTask = None,
+        max_task_retry_count=0,
     ):
         """
         Creates a job with the specified ID, associated with the specified pool.
@@ -470,6 +471,9 @@ class AzureBatch:
             id=job_id,
             job_preparation_task=prep_task,
             pool_info=batch.models.PoolInformation(pool_id=pool_id),
+            constraints=batch.models.JobConstraints(
+                max_task_retry_count=max_task_retry_count
+            ),
         )
 
         self.batch_client.job.add(job)

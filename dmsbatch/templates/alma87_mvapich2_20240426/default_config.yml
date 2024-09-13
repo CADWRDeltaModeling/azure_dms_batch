@@ -13,6 +13,7 @@ coordination_command_template: 'templates/{template_name}/coordination_command_t
 job_start_command_template: 'templates/{template_name}/job_start_command_template.sh' 
 pool_bicep_resource: 'templates/{template_name}/pool.bicep' 
 pool_parameters_resource: 'templates/{template_name}/pool.parameters.json'
+node_type: 'TargetDedicatedNodes' # 'TargetLowPriorityNodes'
 autoscale_formula: 'templates/{template_name}/autoscale_formula.txt'
 created_by: '' # this is the user who created the job
 app_pkgs:
