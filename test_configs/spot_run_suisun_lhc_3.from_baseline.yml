@@ -23,7 +23,7 @@ mpi_command: |
   python make_links_az.py;
   cd ../;
   echo "SFLUX LINKS MADE";
-  source dsp_suisun_lhc_3.clinic.from_baseline.sh no-interp;  
+  source dsp_suisun_lhc_3.clinic.from_baseline.sh no-interp;
   if [ -f $AZ_BATCH_TASK_ID.state.txt ]; then
     echo $(date) >> $AZ_BATCH_TASK_ID.state.txt;
     current_date=$(date);
@@ -33,6 +33,7 @@ mpi_command: |
     azcopy copy --include-regex="hotstart_\d+_$iterations\.nc" --recursive "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}/outputs/?{sas}" . || true;
     echo "Generating and linking hotstart for $iterations";
     $SCHISM_SCRIPTS_HOME/batch/generate_and_link_hotstart.sh $iterations;
+    $SCHISM_SCRIPTS_HOME/batch/schism_scripts/batch/update_param_for_restart.sh param.nml;
   else
     echo $(date) > $AZ_BATCH_TASK_ID.state.txt;
   fi
