@@ -1,6 +1,5 @@
-echo "Job Start Task Start"
+echo "Job Start Task Start for PP"
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup
-pushd $AZ_BATCH_APP_PACKAGE_schimpy_with_deps
-tar -xzf schimpy.tar.gz && rm -f schimpy.tar.gz
-popd
-echo "Job Start Task Done"
+[[ -z "$AZ_BATCH_APP_PACKAGE_schimpy_with_deps" ]] && echo "schimpy_with_deps package not found" || (echo "schimpy_with_deps package found" && pushd $AZ_BATCH_APP_PACKAGE_schimpy_with_deps && tar -xzf schimpy.tar.gz && rm -f schimpy.tar.gz && popd)
+[[ -z "$AZ_BATCH_APP_PACKAGE_suxarray" ]] && echo "suxarray package not found" || (echo "suxarray package found" && pushd $AZ_BATCH_APP_PACKAGE_suxarray && tar -xzf suxarray.tar.gz && rm -f suxarray.tar.gz && source $AZ_BATCH_APP_PACKAGE_suxarray/bin/activate && git clone -b suxarray https://github.com/kjnam/uxarray.git && cd uxarray && pip install --no-deps -e . && cd .. && git clone -b v2024.09.0 https://github.com/cadwrdeltamodeling/suxarray && cd suxarray && pip install --no-deps -e . && cd .. && popd)
+echo "Job Start Task Done for PP"

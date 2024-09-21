@@ -2,7 +2,11 @@ echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
 module load mpi/mvapich2;
-source $AZ_BATCH_APP_PACKAGE_schimpy_with_deps/bin/activate;
+if [[ -z $AZ_BATCH_APP_PACKAGE_schimpy_with_deps ]]; then
+    echo "schimpy_with_deps package not found"
+else 
+    source $AZ_BATCH_APP_PACKAGE_schimpy_with_deps/bin/activate;
+fi
 source $AZ_BATCH_APP_PACKAGE_schism_with_deps/schism/setup_paths.sh;
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup;
 export BAY_DELTA_SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_baydeltaschism;

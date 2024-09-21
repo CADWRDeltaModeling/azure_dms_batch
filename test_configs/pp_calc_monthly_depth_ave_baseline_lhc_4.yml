@@ -1,0 +1,28 @@
+resource_group: dwrbdo_dsp # the resource group containing the batch account
+job_name: pp_calc_das_dsp_2024_baseline_lhc_4 # job name, will be used to name the pool and the job
+batch_account_name: dwrbdodspbatch # batch account name
+storage_account_name: dwrbdodspsa # this is the storage account containing batch and storage_container defined below
+storage_container_name: test # this is mounted to $AZ_BATCH_MOUNTS_DIR/<<storage_container_name>> in addition to batch container which is mounted to $AZ_BATCH_MOUNTS_DIR/batch
+study_copy_flags: --recursive --preserve-symlinks --include-regex "outputs/out2d_6[2-5][0-6].nc; outputs/zCoordinates_6[2-5][0-6].nc; outputs/salinity_6[2-5][0-6].nc;depth_averaging/calculate_depth_average.py; depth_averaging/docker_depth_average.sh"
+study_dir: azure_dsp_2024_lhc_v3/simulations/baseline_lhc_4 # where the relative study directory for the simulation will be
+num_hosts: 1 # number of nodes in the pool
+task_slots_per_node: 1
+vm_size: standard_ds5_v2 # standard_f16s_v2 # standard_ds5_v2
+command: |
+  source $AZ_BATCH_APP_PACKAGE_suxarray/bin/activate;
+  cd depth_averaging;
+  python calculate_depth_average.py --path_study ./;
+  cd ../;
+  echo "netCDF built!";
+  azcopy copy --recursive --preserve-symlinks --include-regex "depth_averaging/out2d_1.nc;" ./ "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}/?{sas}";
+  echo "netCDF uploaded!";
+# template for the pool name, which is used to create the pool with appropriate settings
+template_name: "alma87_mvapich2_20240426_pp" # this is the template name for the pool, e.g. "centos7" or "alma8"
+app_pkgs:
+  - name: batch_setup
+  - name: nfs
+  - name: schism_with_deps
+  #- name: schimpy_with_deps
+  - name: baydeltaschism
+  - name: telegraf
+  - name: suxarray

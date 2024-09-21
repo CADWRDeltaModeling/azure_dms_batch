@@ -669,6 +669,7 @@ class AzureBatch:
         commands: str,
         resource_files: list = None,
         ostype: str = "windows",
+        elevation_level=batchmodels.ElevationLevel.admin,
     ) -> batchmodels.JobPreparationTask:
         """
         Creates a task to run on a node before any tasks for a job are run. This creates the the task that is then
@@ -695,6 +696,12 @@ class AzureBatch:
             command_line=cmdline,
             resource_files=resource_files,
             wait_for_success=True,
+            user_identity=batchmodels.UserIdentity(
+                auto_user=batchmodels.AutoUserSpecification(
+                    scope=batchmodels.AutoUserScope.pool,
+                    elevation_level=elevation_level,
+                )
+            ),
         )
 
         return prep_task

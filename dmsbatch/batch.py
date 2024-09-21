@@ -407,10 +407,7 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
             max_task_retry_count = 0
         # prep task takes care of formatting the command for azure
         prep_task = client.create_prep_task(
-            f"job_prep_task",
-            job_cmd,
-            ostype=ostype,
-            resource_files=job_resource_files,
+            f"job_prep_task", job_cmd, ostype=ostype, resource_files=job_resource_files
         )
         client.create_job(
             job_name, pool_name, prep_task, max_task_retry_count=max_task_retry_count

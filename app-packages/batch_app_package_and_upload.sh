@@ -91,6 +91,31 @@ package_and_upload_schimpy(){
     popd
 }
 
+package_and_upload_suxarray(){
+    batch_name=$1
+    resource_group_name=$2
+    app_name="suxarray"
+    # todays date in 2024.06.11 format
+    today=$(date +"%Y.%m.%d")
+    version=${today}
+    rm -rf /tmp/${app_name}_${version}
+    mkdir -p /tmp/${app_name}_${version}
+    pushd /tmp/${app_name}_${version}
+    conda env remove -n ${app_name} -y || true
+    conda create -n ${app_name} -y -c conda-forge python=3.11 pandas xarray dask netcdf4 h5netcdf numba scipy scikit-learn matplotlib pyarrow requests spatialpandas cartopy datashader antimeridian shapely geoviews pyogrio
+    conda activate pack
+    conda pack -n ${app_name} -o ${app_name}.tar.gz
+    zip -r ${app_name}_${version}.zip ${app_name}.tar.gz
+    conda deactivate
+    conda env remove -n ${app_name} -y
+    package_file="${app_name}_${version}.zip"
+
+    module load azure_cli
+    az batch application package create --application-name "${app_name}" --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
+    az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
+    popd
+}
+
 package_and_upload_pydelmod(){
     batch_name=$1
     resource_group_name=$2
@@ -136,3 +161,4 @@ package_and_upload_pydelmod(){
 #package_and_upload_schimpy schismbatch dwrbdo_schism_rg
 #package_and_upload_schimpy dwrbdodspbatch dwrbdo_dsp
 #package_and_upload_pydelmod dwrmodelingbatchaccount azure_model_batch
+#package_and_upload_suxarray dwrbdodspbatch dwrbdo_dsp
