@@ -24,18 +24,18 @@ mpi_command: |
   cd ../;
   echo "SFLUX LINKS MADE";
   source dsp_suisun_lhc_3.clinic.from_baseline.sh no-interp;
+  current_date=$(date);
   if [ -f $AZ_BATCH_TASK_ID.state.txt ]; then
-    echo $(date) >> $AZ_BATCH_TASK_ID.state.txt;
-    current_date=$(date);
+    echo $current_date >> $AZ_BATCH_TASK_ID.state.txt;
     echo "Restarting from previous run: $current_date";
-    iterations=$($SCHISM_SCRIPTS_HOME/batch/get_iterations_from_mirror.sh);
-    echo "mirror.out @ $iterations. Copying hotstart_\d+_$iterations\.nc files";
+    iterations=$($SCHISM_SCRIPTS_HOME/batch/get_iterations_from_fluxout.sh);
+    echo "flux.out @ $iterations. Copying hotstart_\d+_$iterations\.nc files";
     azcopy copy --include-regex="hotstart_\d+_$iterations\.nc" --recursive "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}/outputs/?{sas}" . || true;
     echo "Generating and linking hotstart for $iterations";
     $SCHISM_SCRIPTS_HOME/batch/generate_and_link_hotstart.sh $iterations;
     $SCHISM_SCRIPTS_HOME/batch/schism_scripts/batch/update_param_for_restart.sh param.nml;
   else
-    echo $(date) > $AZ_BATCH_TASK_ID.state.txt;
+    echo $current_date > $AZ_BATCH_TASK_ID.state.txt;
   fi
   mpirun -np {num_cores} -f hostfile {mpi_opts} pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}
 # template for the pool name, which is used to create the pool with appropriate settings
