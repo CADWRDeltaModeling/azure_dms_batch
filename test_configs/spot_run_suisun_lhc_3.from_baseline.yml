@@ -25,6 +25,10 @@ mpi_command: |
   echo "SFLUX LINKS MADE";
   source dsp_suisun_lhc_3.clinic.from_baseline.sh no-interp;
   current_date=$(date);
+  copy_out_dir="outputs_$(date +'%Y%m%d%H%M')";
+  mkdir "$copy_out_dir" -p;
+  cp outputs/staout* "$copy_out_dir/";
+  cp outputs/flux.out "$copy_out_dir/";
   if [ -f $AZ_BATCH_TASK_ID.state.txt ]; then
     echo $current_date >> $AZ_BATCH_TASK_ID.state.txt;
     echo "Restarting from previous run: $current_date";
