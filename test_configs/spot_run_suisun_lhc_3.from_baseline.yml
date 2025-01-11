@@ -43,5 +43,5 @@ mpi_command: |
   fi
   mpirun -np {num_cores} -f hostfile {mpi_opts} pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}
 # template for the pool name, which is used to create the pool with appropriate settings
-template_name: "alma87_mvapich2_20240426" # this is the template name for the pool, e.g. "centos7" or "alma8"
+template_name: "alma87_mvapich2_20241018" # this is the template name for the pool, e.g. "centos7" or "alma8"
 delete_after_mins: 600 # delete the job after this many minutes
