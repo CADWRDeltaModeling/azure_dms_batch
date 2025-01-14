@@ -1,5 +1,13 @@
 #!/bin/env bash
 
+########################################################################################
+# Instruction
+# 1. Make sure the hard-wired paths are correct (those that follow "zip -r")
+# 2. Run the following command to make the script accessible:
+#    source batch_app_package_and_upload.sh
+# 3. From the "Call the function" section, locate the lines of command you want to run.
+#    Comment them out, copy, and paste the functions into the terminal.
+########################################################################################
 package_and_upload_telegraf() {
     telegraf_dir=$1
     batch_name=$2
