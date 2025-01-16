@@ -35,24 +35,31 @@ slight delay to the same location as reference files (on the Blob container).
 
 #### Install the batch application packages
 
- Azure batch requires the setup and installation to happen via zip files that are called application packages. The user should specify these packages with the version names as specified in the template. Here we will refer to the [alma8 template](dmsbatch/templates/alma8/pool.bicep). 
+ Azure batch requires the setup and installation to happen via zip files that are called application packages. The user should specify these packages with the version names as specified in the template. Here we will refer to the [alma87_mvapich2 template](dmsbatch/templates/alma87_mvapich2_20241018/pool.bicep). 
 
  Look for the applicationPackages section shown below
 ```
-    applicationPackages: [
-      {
-        id: '${batchAccount.id}/applications/batch_setup'
-        version: 'alma8.7'
-      }
-      {
-        id: '${batchAccount.id}/applications/nfs'
-        version: 'alma8.7'
-      }
-      {
-        id: '${batchAccount.id}/applications/schism_with_deps'
-        version: '5.11_alma8.7hpc_ucx'
-      }
-    ]
+        "appPkgs": {
+            "value": [
+                {
+                    "name": "batch_setup"
+                },
+                {
+                    "name": "nfs"
+                },
+                {
+                    "name": "schism_with_deps"
+                },
+                {
+                    "name": "schimpy_with_deps"
+                },
+                {
+                    "name": "baydeltaschism"
+                },
+                {
+                    "name": "telegraf"
+                }
+          ]
 ```
 
 Using the Azure portal upload the zip files with names (after /applications in the id) and the version (value in the version tag). E.g. upload batch_setup.zip as name batch_setup and version alma8.7
