@@ -64,11 +64,11 @@ slight delay to the same location as reference files (on the Blob container).
 
 Using the Azure portal upload the zip files with names (after /applications in the id) and the version (value in the version tag). E.g. upload batch_setup.zip as name batch_setup and version alma8.7
 
-The [app-packages/batch_app_package_and_upload.sh] script can be used to upload the packages. For this git clone this repo and download the zip files from the release page to azure_dms_batch/app-packages. Then see example below on setting up the app packages in your batch account. 
+The [app-packages/batch_app_package_and_upload.sh](app-packages/batch_app_package_and_upload.sh) script can be used to upload the packages. For this git clone this repo and download the zip files from the [release page](https://github.com/CADWRDeltaModeling/azure_dms_batch/releases) to azure_dms_batch/app-packages. Then see script below on setting up the app packages in your batch account. 
 
 The script below assumes you have logged into az, i.e. `az login --use-device-code`
 
-> ![NOTE]
+> [!NOTE]
 > For telegraf package, please edit the telegraf.conf and add your [application insights instrumentation key](https://github.com/influxdata/telegraf/blob/master/plugins/outputs/application_insights/README.md) there if you want to do monitoring. 
 
 ```
