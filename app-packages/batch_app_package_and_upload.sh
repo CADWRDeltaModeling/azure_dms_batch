@@ -9,6 +9,7 @@
 #    Comment them out, copy, and paste the functions into the terminal.
 ########################################################################################
 package_and_upload_telegraf() {
+    # Make sure that the telegraf.conf file in the telegraf directory has the instrumentation key specified or it will not be able to send data to the app insights
     telegraf_dir=$1
     batch_name=$2
     resource_group_name=$3
@@ -25,11 +26,28 @@ package_and_upload_telegraf() {
 }
 
 package_and_upload_bdschism() {
-    bdschism_dir=$1
-    batch_name=$2
-    resource_group_name=$3
+    # if only 2 arguments are provided, the function will clone the repository
+    if [ $# -eq 2 ]; then
+        bdschism_dir="/tmp/BayDeltaSCHISM"
+        batch_name=$1
+        resource_group_name=$2
+    else
+        bdschism_dir=$1
+        batch_name=$2
+        resource_group_name=$3
+    fi
 
-    pushd $bdschism_dir
+    # if bdschism_dir is not a directory, clone the repository
+    if [ $# -eq 2 ]; then
+        pushd /tmp
+        rm -rf BayDeltaSCHISM # clean up the directory if it exists
+        echo "Cloning the BayDeltaSCHISM repository from github"
+        git clone https://github.com/CADWRDeltaModeling/BayDeltaSCHISM
+        cd BayDeltaSCHISM
+        bdschism_dir=$(pwd)
+    else
+        pushd $bdschism_dir
+    fi
 
     # todays date in 2024.06.11 format
     today=$(date +"%Y.%m.%d")
@@ -42,18 +60,18 @@ package_and_upload_bdschism() {
     az batch application set --application-name BayDeltaSCHISM --default-version "${today}" --name ${batch_name} --resource-group ${resource_group_name}
 }
 
-package_and_upload_schism() {
-    schism_dir=$1
-    batch_name=$2
-    resource_group_name=$3
-
-    version="5.11_alma8.7hpc"
-    package_file="schism_${version}.zip"
-    zip -r "${package_file}" $schism_dir
+package_and_upload_app() {
+    app_name=$1
+    version=$2
+    package_file=$3
+    batch_name=$4
+    resource_group_name=$5
 
     module load azure_cli
-    az batch application package create --application-name schism_with_deps --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
-    az batch application set --application-name schism_with_deps --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
+    echo "Creating application package ${app_name} with version ${version} using ${package_file} for ${batch_name} in ${resource_group_name}"
+    az batch application package create --application-name ${app_name} --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
+    echo "Making ${version} the default version for ${app_name} for ${batch_name} in ${resource_group_name}"
+    az batch application set --application-name ${app_name} --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
 }
 
 package_and_upload_batch_setup(){
@@ -150,7 +168,9 @@ package_and_upload_pydelmod(){
     az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
     popd
 }
-# Call the function
+
+
+
 #package_and_upload_bdschism "../../BayDeltaSCHISM" schismbatch dwrbdo_schism_rg
 #package_and_upload_bdschism "../../BayDeltaSCHISM" dwrbdodspbatch dwrbdo_dsp
 #package_and_upload_telegraf "telegraf" schismbatch dwrbdo_schism_rg

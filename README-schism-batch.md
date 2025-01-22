@@ -63,7 +63,27 @@ slight delay to the same location as reference files (on the Blob container).
 ```
 
 Using the Azure portal upload the zip files with names (after /applications in the id) and the version (value in the version tag). E.g. upload batch_setup.zip as name batch_setup and version alma8.7
-These zip files are available for the alma8 template in [this release page.](https://github.com/CADWRDeltaModeling/azure_dms_batch/releases/tag/schism_5.11)
+
+The [app-packages/batch_app_package_and_upload.sh] script can be used to upload the packages. For this git clone this repo and download the zip files from the release page to azure_dms_batch/app-packages. Then see example below on setting up the app packages in your batch account. 
+
+The script below assumes you have logged into az, i.e. `az login --use-device-code`
+
+> ![NOTE]
+> For telegraf package, please edit the telegraf.conf and add your [application insights instrumentation key](https://github.com/influxdata/telegraf/blob/master/plugins/outputs/application_insights/README.md) there if you want to do monitoring. 
+
+```
+export MY_BATCH_ACCOUNT="mybatch"
+export MY_RG="my_rg"
+cd azure_dms_batch/app-packages
+source batch_app_package_and_upload.sh
+package_and_upload_telegraf "telegraf" $MY_BATCH_ACCOUNT $MY_RG
+package_and_upload_bdschism $MY_BATCH_ACCOUNT $MY_RG
+package_and_upload_app schism_with_deps 5.11.1_alma8.7hpc_v4_mvapich2 schism_with_deps_5.11.1_alma8.7hpc_v4_mvapich2.zip  $MY_BATCH_ACCOUNT $MY_RG
+package_and_upload_app nfs_alma8.7 nfs_alma8.7.zip  $MY_BATCH_ACCOUNT $MY_RG
+package_and_upload_batch_setup "../schism_scripts/" $MY_BATCH_ACCOUNT $MY_RG
+package_and_upload_schimpy $MY_BATCH_ACCOUNT $MY_RG
+```
+
 
 
 #### Install azure_dms_batch from repo
