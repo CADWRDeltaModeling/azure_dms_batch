@@ -1,7 +1,7 @@
 
 # Azure Batch runs for Models 
 
-Models are processes that take input and process via files and environment variables and run an exectuable producing output
+Models are processes that take input and process via files and environment variables and run an executable producing output
 
 (input(s) --> EXE --> output(s))
 
@@ -10,7 +10,7 @@ Models are processes that take input and process via files and environment varia
 Azure Batch runs for a model, i.e., a executable that runs independently based on a set of input files and environment
 variables and produces a set of output files.
 
-This module is currently tested with "Windows" based exes but shoud be easily adapatable to "Linux"
+This module is currently tested with "Windows" based exes but should be easily adaptable to "Linux"
 
 # Setup package
 Use the environment.yml with conda to create an environment called azure
@@ -40,7 +40,7 @@ Setup can be done via az commands. Here we setup a batch account with associated
 
 ## Create a resource group in the desired location
 
-See the Azure docs for details. To use the commands below, enter your values (replacing the angle brackets and values)
+See the [Azure docs](https://docs.microsoft.com/en-us/azure/azure-resource-manager/management/manage-resource-groups-portal) for details. To use the commands below, enter your values (replacing the angle brackets and values)
 
 ```az group create --name <resource_group_name> --location <location_name>```
 
@@ -64,7 +64,7 @@ Update the Batch and Storage account credential strings below with the values
 unique to your accounts. These are used when constructing connection strings
 for the Batch and Storage client objects. You can find these as explained here https://docs.microsoft.com/en-us/azure/batch/batch-account-create-portal#view-batch-account-properties
 
-Create a file with the following structure and replace the <> brackets and the text within them with the appropriate values. See [this code](dmsbatch/commands.py#L17) for more details
+Create a file with the following structure and replace the <> brackets and the text within them with the appropriate values. See the code in [dmsbatch/commands.py at line 17](dmsbatch/commands.py#L17) for more details
 
 ```
 [DEFAULT]
@@ -140,9 +140,9 @@ Model is considered to be something that :-
 See the [sample notebooks](./notebooks/) for examples
 The samples explain step by step and can be used as a template for writing your own batch run
 
-The [simplest example](./notebooks/sample_submit_dsm2_hydro_version.ipynb) is a run of dsm2 hydro outputting its version
+See the [simplest example notebook for running dsm2 hydro and outputting its version](./notebooks/sample_submit_dsm2_hydro_version.ipynb)
 
-A [slightly more involved example](./notebooks/sample_submit_dsm2_historical.ipynb) is a run of dsm2 hydro that uploads the input files as a zip and then uploads the output directory next to the uploaded input files at the end of the run
+See the [slightly more involved example notebook for running dsm2 hydro with input and output file handling](./notebooks/sample_submit_dsm2_historical.ipynb) which uploads the input files as a zip and then uploads the output directory next to the uploaded input files at the end of the run
 
 ## Parameterized runs
 
@@ -156,7 +156,7 @@ A [slightly more involved example](./notebooks/sample_submit_dsm2_historical.ipy
 
  In each case, the model run is expressed as a *task*
 
- An [example of this](./notebooks/sample_submit_ptm_batch.ipynb) demos it for PTM batch runs that vary based on environment variables. It also shows an example where a large file needs to be uploaded and shared with all the running tasks
+ An [example notebook for PTM batch runs that vary based on environment variables](./notebooks/sample_submit_ptm_batch.ipynb) demos it. It also shows an example where a large file needs to be uploaded and shared with all the running tasks
 
 ## Beopest runs
 
@@ -170,7 +170,7 @@ A [slightly more involved example](./notebooks/sample_submit_dsm2_historical.ipy
  multiple slaves as batch runs.  beopest master should then be able to register these slave tasks as they come in and 
  submit runs to them through its own mechanism (MPI). 
  
- This [notebook](./notebooks/sample_submit_beopest.ipynb) shows an implementation of the scheme above.
+ This [notebook for an implementation of the beopest run scheme](./notebooks/sample_submit_beopest.ipynb) shows an implementation of the scheme above.
 
  ## MPI runs
 
@@ -184,7 +184,7 @@ A [slightly more involved example](./notebooks/sample_submit_dsm2_historical.ipy
 
 
 # SCHISM specific runs
- SCHISM specific run setup [is documented in detail in this readme ](README-schism-batch.md)
+ See the detailed documentation for SCHISM specific run setup in [README-schism-batch.md](README-schism-batch.md)
 
  
 # References
