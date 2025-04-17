@@ -1,6 +1,6 @@
 # ignoring app_packages, add by force when needed
 app-packages
-*.yml
+*_config*/*.yml
 *.config
 # jupyter notebooks temp dir
 **/.ipynb_checkpoints
