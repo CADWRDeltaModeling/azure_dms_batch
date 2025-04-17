@@ -1,0 +1,18 @@
+maxNumberofVMs = 50;
+// Set the number of task slots per node times two to allow atleast three passes of tasks for a node.
+// tasks are typically short and there is no point in asking for too many hosts and resusing a running host is preferable.
+taskSlotsPerNode={task_slots_per_node};
+timesince = time() - time("{startTime}");
+timelimit = TimeInterval_Minute * 5;
+// Get pending tasks for the past 5 minutes. Batch doesn't check quicker than 5 minutes anyways
+$samples = $PendingTasks.GetSamplePercent(TimeInterval_Second * 1);
+// If you have fewer than 70 percent data points, use the last sample point,
+// otherwise use the maximum of last sample point and the history average.
+$tasks = $samples < 70 ? max(0,$PendingTasks.GetSample(1)) : max( $PendingTasks.GetSample(1), avg($PendingTasks.GetSample(TimeInterval_Second * 1)));
+$overflow = $tasks - {num_hosts}*{task_slots_per_node};
+// For tasks, set targetVMs to {num_hosts} initially and then expand out if necessary. If all done goto 0 nodes.
+$numberNodes = min(maxNumberofVMs, $overflow/taskSlotsPerNode+0.999);
+$TargetLowPriorityNodes = $tasks > 0 ? $numberNodes: 0;
+$TargetDedicatedNodes = (timesince > timelimit ? ($tasks > 0 ? {num_hosts}: 0): {num_hosts});
+// Set node deallocation mode - let running tasks finish before removing a node
+$NodeDeallocationOption = taskcompletion;
