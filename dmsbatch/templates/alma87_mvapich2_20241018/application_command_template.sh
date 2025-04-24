@@ -1,3 +1,4 @@
+# Setup environment
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
@@ -10,7 +11,8 @@ source $AZ_BATCH_APP_PACKAGE_schism_with_deps/schism/setup_paths.sh;
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup;
 export BAY_DELTA_SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_baydeltaschism;
 ulimit -s unlimited;
-#
+
+# Setup directories
 echo "Copying from blob to local for the setup first time";
 cd $AZ_BATCH_TASK_WORKING_DIR/simulations; # make sure to match this to the coordination command template
 # do setup directories first to avoid link issues 
