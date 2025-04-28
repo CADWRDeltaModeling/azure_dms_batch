@@ -3,12 +3,11 @@
 
 # File to keep track of processed files
 # make this filename unique to the command
-command=$1
-command_basename=$(basename $command)
-processed_files="processed_files_${command_basename}.txt"
-# get the rest of the args
-shift
-command_args=$@
+all_but_last=("${@:1:$(($#-1))}")
+last="${@: -1}"
+command_hash=$(echo $all_but_last | sha1sum | awk '{print $1}')
+echo "For command: $all_but_last the hash is $command_hash"
+processed_files="processed_files_${command_hash}.txt"
 # Function to check if a file has been processed before
 function has_been_processed {
     file=$1
@@ -32,19 +31,17 @@ function mark_as_processed {
     echo "$file" >> $processed_files
 }
 
-# Main loop
-for file in "$@"
-do
-    # Check if the file has been processed before
-    if has_been_processed "$file"
-    then
-        echo "Skipping $file because it has been processed before"
-    else
-        echo "Processing $file"
-        # Process the file here
-        # run command here with the file as the last argument
-        $command $command_args $file
-        # Mark the file as processed
-        mark_as_processed "$file"
-    fi
-done
+# last argument is the file to process
+file="$last"
+# Check if the file has been processed before
+if has_been_processed "$file"
+then
+    echo "Skipping $file because it has been processed before"
+else
+    echo "Processing $file"
+    # Process the file here
+    # run command here with the file as the last argument
+    $all_but_last $file
+    # Mark the file as processed
+    mark_as_processed "$file"
+fi
