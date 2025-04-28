@@ -217,4 +217,4 @@ package_and_upload_pydelmod(){
 #package_and_upload_schimpy dwrbdodspbatch dwrbdo_dsp
 #package_and_upload_pydelmod dwrmodelingbatchaccount azure_model_batch
 #package_and_upload_suxarray dwrbdodspbatch dwrbdo_dsp
-package_and_upload_suxarray_with_deps schismbatch dwrbdo_schism_rg
+#package_and_upload_suxarray_with_deps schismbatch dwrbdo_schism_rg
