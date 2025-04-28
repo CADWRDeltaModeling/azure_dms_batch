@@ -124,8 +124,8 @@ package_and_upload_suxarray_with_deps(){
     # todays date in 2024.06.11 format
     today=$(date +"%Y.%m.%d")
     version=${today}
-    rm -rf /tmp/suxarray__with_deps_${version}
-    mkdir -p /tmp/suxarray__with_deps_${version}
+    rm -rf /tmp/suxarray_with_deps_${version}
+    mkdir -p /tmp/suxarray_with_deps_${version}
     pushd /tmp/suxarray_with_deps_${version}
     conda env remove -n suxarray_${version} -y || true
     conda create -n suxarray_${version} -y -c conda-forge python=3.11 pandas xarray dask netcdf4 h5netcdf numba scipy scikit-learn matplotlib pyarrow requests spatialpandas cartopy datashader antimeridian shapely geoviews pyogrio uxarray=2024.07.1
