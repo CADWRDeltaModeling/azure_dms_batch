@@ -128,12 +128,14 @@ package_and_upload_suxarray_with_deps(){
     mkdir -p /tmp/suxarray_with_deps_${version}
     pushd /tmp/suxarray_with_deps_${version}
     conda env remove -n suxarray_${version} -y || true
-    conda create -n suxarray_${version} -y -c conda-forge python=3.11 pandas xarray dask netcdf4 h5netcdf numba scipy scikit-learn matplotlib pyarrow requests spatialpandas cartopy datashader antimeridian shapely geoviews pyogrio uxarray=2024.07.1
-    conda activate suxarray
-    pip install --no-deps git+https://github.com/cadwrdeltamodeling/suxarray.git@v2024.09.0
+    conda create -n suxarray_${version} -y -c conda-forge -c cadwr-dms python=3.11 dask netcdf4 h5netcdf numba scipy scikit-learn matplotlib pyarrow requests spatialpandas cartopy datashader antimeridian shapely geoviews pyogrio pandas=2.0.3 xarray=2024.7.0 pyproj schimpy # these are pinned dependencies for suxarray branch v2024.09.0
+    conda activate suxarray_${version}
+    pip install --use-pep517 git+https://github.com/cadwrdeltamodeling/suxarray.git@v2024.09.0
     conda activate pack
     conda pack -n suxarray_${version} -o suxarray.tar.gz
     zip -r suxarray_${version}.zip suxarray.tar.gz
+    conda deactivate
+    conda deactivate
     conda deactivate
     conda env remove -n suxarray_${version} -y
     package_file="suxarray_${version}.zip"

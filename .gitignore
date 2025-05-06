@@ -1,5 +1,6 @@
 # ignoring app_packages, add by force when needed
 app-packages
+!app-packages/batch_app_package_and_upload.sh
 *_config*/*.yml
 *.config
 # jupyter notebooks temp dir
