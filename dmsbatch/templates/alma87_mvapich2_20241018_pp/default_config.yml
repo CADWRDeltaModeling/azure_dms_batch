@@ -14,6 +14,7 @@ pool_bicep_resource: 'templates/{template_name}/pool.bicep'
 pool_parameters_resource: 'templates/{template_name}/pool.parameters.json'
 autoscale_formula: 'templates/{template_name}/autoscale_formula.txt'
 created_by: '' # this is the user who created the job
+start_task_script: 'printenv && $AZ_BATCH_APP_PACKAGE_batch_setup/batch/pool_setup_alma8_hpcx_pp.sh' # commands to run on the pool nodes before the job starts
 app_pkgs:
     - name: batch_setup
     - name: nfs
