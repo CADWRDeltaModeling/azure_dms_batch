@@ -19,5 +19,6 @@ app_pkgs:
     - name: nfs
     - name: schism_with_deps
     - name: schimpy_with_deps
+    - name: suxarray_with_deps
     - name: baydeltaschism
     - name: telegraf
