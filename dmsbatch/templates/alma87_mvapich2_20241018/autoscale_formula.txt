@@ -5,6 +5,22 @@ timelimit = TimeInterval_Minute * 10;
 $samples = $PendingTasks.GetSamplePercent(TimeInterval_Minute);
 // If data points are fewer than 70%, use the last point, otherwise, take the max of last point and average
 $tasks = $samples < 70 ? max(0, $PendingTasks.GetSample(1)) : max($PendingTasks.GetSample(1), avg($PendingTasks.GetSample(TimeInterval_Minute)));
-${nodeType} = timesince > timelimit ? ($tasks > 0 ? {num_hosts}: 0): {num_hosts};
+
+// Initialize the target node counts
+$TargetDedicatedNodes = 0;
+$TargetLowPriorityNodes = 0;
+
+maxNumberOfVMs = {num_hosts};
+// Calculate the number of hosts
+${nodeType} = timesince > timelimit ? ($tasks > 0 ? maxNumberOfVMs: 0): maxNumberOfVMs;
+
+// Replace preempted nodes with dedicated nodes only if preempted node count is greater than zero
+// Check if we have sufficient sample data before using GetSample
+preemptedSamples = $PreemptedNodeCount.GetSamplePercent(180 * TimeInterval_Second);
+preemptedCount = preemptedSamples >= 70 ? avg($PreemptedNodeCount.GetSample(180 * TimeInterval_Second)) : 0;
+// Adjust target node counts based on preempted nodes
+$TargetDedicatedNodes = preemptedCount > 0 ? min(maxNumberOfVMs, preemptedCount) : $TargetDedicatedNodes;
+$TargetLowPriorityNodes = preemptedCount > 0 ? max(0, maxNumberOfVMs - $TargetDedicatedNodes) : $TargetLowPriorityNodes;
+
 // Node deallocation - finish tasks before removing nodes
 $NodeDeallocationOption = taskcompletion;
