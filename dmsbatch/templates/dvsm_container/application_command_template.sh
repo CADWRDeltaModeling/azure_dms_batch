@@ -5,7 +5,7 @@ run_commands() {{
 {command}
 }}
 set +e;
-run_commands | tee -a >(cat >> $AZ_BATCH_TASK_DIR/stdout_command.txt) >(cat >> $AZ_BATCH_TASK_DIR/stdout.txt) 2>&1 | tee -a >(cat >> $AZ_BATCH_TASK_DIR/stderr_command.txt) >(cat >> $AZ_BATCH_TASK_DIR/stderr.txt) >&2;
+run_commands 2> >(tee -a "$AZ_BATCH_TASK_DIR/stderr_command.txt" >&2) > >(tee -a "$AZ_BATCH_TASK_DIR/stdout_command.txt")
 set -e;
 exit_code=${{PIPESTATUS[0]}}; 
 echo Run Done;

@@ -29,7 +29,7 @@ output_files:
     upload_condition: "taskcompletion" # tasksuccess, taskfailure, taskcompletion
 command: |
   echo "Hello from the container!"
-  echo "This is a test of the containerized job."
+  echo "Testing stderr redirection" >&2  echo "This is a test of the containerized job."
   echo "The container is running on host: $(hostname)"
   echo "The container is running on node: $(uname -n)"
   echo "The container is running on VM: $(uname -m)"
@@ -39,4 +39,5 @@ command: |
   echo "The container is running on version: $(uname -s)"
   cd {study_dir}
   hydro -v
+  echo "Testing stderr redirection second time" >&2
 template_name: "dvsm_container"
