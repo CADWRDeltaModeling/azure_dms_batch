@@ -88,3 +88,6 @@ target/
 
 # pyenv python configuration file
 .python-version
+
+# include all sample ymls:
+!sample_configs/*.yml
