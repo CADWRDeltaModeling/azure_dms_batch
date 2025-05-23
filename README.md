@@ -1,4 +1,47 @@
 
+
+# AZURE DMS BATCH
+## YAML Configuration System - The Power of Templates
+
+**The YAML configuration and template system is what makes Azure DMS Batch uniquely powerful and flexible.**
+
+With just a simple YAML file, you can define and submit complex Azure Batch jobs without writing any code:
+
+```yaml
+# Basic job configuration
+resource_group: my_resource_group
+job_name: test_job
+batch_account_name: my_batch_account
+storage_account_name: my_storage_account
+template_name: win_dsm2
+
+# VM configuration
+vm_size: standard_ds2_v2
+num_hosts: 1
+
+# Command to execute
+command: 'echo "This is a test job"'
+```
+
+Submit your job with a single command:
+
+```bash
+dmsbatch submit-job --file my_config.yml
+```
+
+### Key Benefits:
+
+1. **Simple Job Definition** - Define all aspects of your job in a clean, readable YAML format
+2. **Pre-built Templates** - Use specialized templates for different workloads (DSM2, SCHISM, MPI, etc.)
+3. **Minimal Configuration** - Override only the parameters you need; inherit sensible defaults from templates
+4. **Dynamic Substitution** - Use variable references and custom tags for flexible configurations
+5. **Template-Based Architecture** - Standardized approach for different model types
+
+### Documentation:
+
+* [**Job YAML Configuration Guide**](README-batch-job-yaml.md) - How to write job configuration YAML files
+* [**Template System Documentation**](README-batch-yaml-template.md) - Deep dive into how the template system works
+
 # Azure Batch runs for Models 
 
 Models are processes that take input and process via files and environment variables and run an executable producing output
@@ -10,7 +53,6 @@ Models are processes that take input and process via files and environment varia
 Azure Batch runs for a model, i.e., a executable that runs independently based on a set of input files and environment
 variables and produces a set of output files.
 
-This module is currently tested with "Windows" based exes but should be easily adaptable to "Linux"
 
 # Setup package
 Use the environment.yml with conda to create an environment called azure
@@ -50,32 +92,15 @@ See the [Azure docs](https://docs.microsoft.com/en-us/azure/azure-resource-manag
 
 You can also create the batch account and associated account as explained here https://docs.microsoft.com/en-us/azure/batch/batch-account-create-portal
 
-## Applications
-
-Applications are binary executable packages. These are uploaded as application packages with a version number. A pool can be specified
-so that these application packages are pre-downloaded to the nodes of the pool before a job/tasks are run on it.
-See details here 
-* https://docs.microsoft.com/en-us/azure/batch/nodes-and-pools#application-packages
-* https://docs.microsoft.com/en-us/azure/batch/batch-application-packages
-
-## Config file
-
-Update the Batch and Storage account credential strings below with the values
-unique to your accounts. These are used when constructing connection strings
-for the Batch and Storage client objects. You can find these as explained here https://docs.microsoft.com/en-us/azure/batch/batch-account-create-portal#view-batch-account-properties
-
-Create a file with the following structure and replace the <> brackets and the text within them with the appropriate values. See the code in [dmsbatch/commands.py at line 17](dmsbatch/commands.py#L17) for more details
-
-```
-[DEFAULT]
-_BATCH_ACCOUNT_NAME = <batch_account_name>
-_BATCH_ACCOUNT_KEY = <batch_account_key>
-_BATCH_ACCOUNT_URL = https://<batch_account_name>.<location>.batch.azure.com
-_STORAGE_ACCOUNT_NAME = <storage_account_name>
-_STORAGE_ACCOUNT_KEY = <storage_account_key>
-```
-
 ## VM sizes available
+
+This is needed later when deciding what machine sizes to use
+
+```az batch location list-skus --location <location_name> --output table```
+
+You can also browse [the availability by region](https://azure.microsoft.com/en-us/global-infrastructure/services/?regions=us-west-2&products=virtual-machines) as not all VMs are available in every region
+
+This [page is to guide selection of VMs](https://azure.microsoft.com/en-us/pricing/vm-selector/) by different attributes
 
 This is needed later when deciding what machine sizes to use
 
@@ -103,38 +128,41 @@ desktop apps useful for working with these services.
 
 [Storage Explorer](https://azure.microsoft.com/en-us/features/storage-explorer/) is a desktop tool for working with storage containers
 
-# Classes
+## Sample Configuration Files
 
-There are two classes in batch.commands
+For all new projects, we recommend using the YAML configuration system instead of writing Python code directly:
 
-* [*AzureBlob*](dmsbatch/commands.py#L898) to work with uploading/downloading to blobs
+```bash
+# Submit a job using a YAML configuration file
+dmsbatch submit-job --file my_config.yml
+```
 
-* [*AzureBatch*](dmsbatch/commands.py#L120) to work with pools, jobs and tasks. Depends upon [*AzureBlob*](dmsbatch/commands.py#L898) but not other way around
+This approach is much simpler than the notebook examples and provides all the same capabilities. We have several example configuration files in the [sample_configs](./sample_configs/) directory, such as:
 
-Management of batch resources such as creation of batch account, storage account, etc is a low repeat activity and can be managed via the az command line options or web console.
+- [sample_dsm2_ptm.yml](./sample_configs/sample_dsm2_ptm.yml) - DSM2 Particle Tracking Model
+- [sample_container_echo.yml](./sample_configs/sample_container_echo.yml) - Container-based job
+- [sample_schism_pp.yml](./sample_configs/sample_schism_pp.yml) - SCHISM post-processing
 
-## Model
+## SCHISM specific runs
+ See the detailed documentation for SCHISM specific run setup in [README-schism-batch.md](README-schism-batch.md)
 
-Model is considered to be something that :-
- - needs application packages, versions and the location of the binary directory (i.e. ApplicationPackage[])
- - can have one or more input file(s), common ones or unique ones. 
-  * These need to be uploaded to storage as blobs and then referenced
- - needs environment variables
-  * These are specified as name, value pairs (i.e. python dicts)
- - can have output file(s), which are uploaded to the associated storage via directives to the batch service
+## MPI runs
 
- If the input and output files are specified by the [create...spec](dmsbatch/commands.py#L265) methods on [*AzureBatch*](dmsbatch/commands.py#L120) then those are directives to the  batch service to download the inputs and upload the outputs without writing specfic code.
+> **Note:** For MPI workloads, YAML configuration is now the recommended approach. See the [SCHISM-specific configuration guide](README-schism-batch.md) and the [template system documentation](README-batch-yaml-template.md#coordination_command_templateshbat-for-mpi-jobs) for details.
 
 
-## Model run
+## Parameterized runs
 
- Model run is a particular execution that is submitted to the batch service as a *task* 
- Each run :-  
-  - needs a unique task name 
-  - will have an output unique to it
-  - could have a set of unique input files
-  - could have environment settings unique to each run
+> **Note:** For information on how to submit parameterized runs, see the [architecture documentation](README-architecture.md#parameterized-runs).
 
+An [example notebook for PTM batch runs that vary based on environment variables](./notebooks/sample_submit_ptm_batch.ipynb) demonstrates this capability. It also shows an example where a large file needs to be uploaded and shared with all the running tasks.
+
+## Beopest runs
+
+> **Note:** For information on how BeoPEST is implemented, see the [architecture documentation](README-architecture.md#beopest-implementation).
+ 
+This [notebook showing an implementation of the beopest run scheme](./notebooks/sample_submit_beopest.ipynb) demonstrates how this works.
+ 
 # Sample Notebooks
 
 See the [sample notebooks](./notebooks/) for examples
@@ -144,60 +172,25 @@ See the [simplest example notebook for running dsm2 hydro and outputting its ver
 
 See the [slightly more involved example notebook for running dsm2 hydro with input and output file handling](./notebooks/sample_submit_dsm2_historical.ipynb) which uploads the input files as a zip and then uploads the output directory next to the uploaded input files at the end of the run
 
-## Parameterized runs
+> **Note:** While these notebooks demonstrate how to use the Azure DMS Batch API directly, we recommend using the YAML configuration system for new projects.
 
- Many times the model runs are closely related to each other and only a few parameters are varied. These are
- submitted as a *task* to the batch service and perhaps reuse the same *pool* 
- The batch submission script samples the paramter space and submits the *task*.
-
- The best way to submit these *tasks* is to vary the environment variables and have the model use those 
- environment variables to change the parameter values. A less efficient but equally effective way would be to 
- express the change in parameter input as a changed input file that can be overlaid on top of the other inputs
-
- In each case, the model run is expressed as a *task*
-
- An [example notebook for PTM batch runs that vary based on environment variables](./notebooks/sample_submit_ptm_batch.ipynb) demos it. It also shows an example where a large file needs to be uploaded and shared with all the running tasks
-
-## Beopest runs
-
- PEST (Parameterized ESTimation) is a software package for non-linear optimization. Beopest is a master/slave model 
- to implement a parallel version of estimation runs. Each run is a separate process that needs to run on its own set of
- a model run. The difference between the "Parameterized" runs and this is that the orchestration of the parameters is 
- done by beopest.
-
- First a beopest master is submitted to the batch service. Then that tasks stdout.txt is polled and the first line is 
- assumed to have the hostname which is then captured. This hostname is then passed as an environment variable to start
- multiple slaves as batch runs.  beopest master should then be able to register these slave tasks as they come in and 
- submit runs to them through its own mechanism (MPI). 
- 
- This [notebook for an implementation of the beopest run scheme](./notebooks/sample_submit_beopest.ipynb) shows an implementation of the scheme above.
-
- ## MPI runs
-
- SCHISM is a multi dimensional model that uses multiple cores and multiple hosts for computation. These are networked
- computers that form "clusters" using MPI for communication. 
- This [notebook](./notebooks/sample_submit_hello_schism.ipynb) demos the setup. Some of the 
- differences are :-
- * Use multi-instance tasks using AZ_BATCH_HOST_LIST to get list of networked hosts available
- * Use H series VMs capable of leveraging Infiniband (though other VM/os combinations may work)
- * Use Linux OS with *HPC images with appropriate device drivers
-
-
-# SCHISM specific runs
- See the detailed documentation for SCHISM specific run setup in [README-schism-batch.md](README-schism-batch.md)
-
- 
 # References
 
-[Python SDK Setup](https://docs.microsoft.com/en-us/azure/developer/python/azure-sdk-overview)
+## Documentation
 
-[BlobStorage Python Example](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-blob)
+- [**Job YAML Configuration Guide**](README-batch-job-yaml.md) - How to write job configuration YAML files
+- [**Template System Documentation**](README-batch-yaml-template.md) - Details on how the template system works
+- [**Script Templates Documentation**](README-script-templates.md) - In-depth information on script templates
+- [**SCHISM-specific Configuration**](README-schism-batch.md) - For SCHISM model workloads
+- [**Architecture Documentation**](README-architecture.md) - Implementation details for developers
 
-[Azure Batch Python API](https://docs.microsoft.com/en-us/python/api/overview/azure/batch?view=azure-python)
+## Azure Documentation
 
-[Azure Batch Python Samples](https://github.com/Azure-Samples/azure-batch-samples/tree/master/Python)
-
-[Azure Batch Shipyard](https://github.com/Azure/batch-shipyard)
+- [Python SDK Setup](https://docs.microsoft.com/en-us/azure/developer/python/azure-sdk-overview)
+- [BlobStorage Python Example](https://github.com/Azure/azure-sdk-for-python/tree/main/sdk/storage/azure-storage-blob)
+- [Azure Batch Python API](https://docs.microsoft.com/en-us/python/api/overview/azure/batch?view=azure-python)
+- [Azure Batch Python Samples](https://github.com/Azure-Samples/azure-batch-samples/tree/master/Python)
+- [Azure Batch Shipyard](https://github.com/Azure/batch-shipyard)
 
 ## MPI specific
 
