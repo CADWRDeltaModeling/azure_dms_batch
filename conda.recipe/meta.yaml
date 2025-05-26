@@ -1,40 +1,32 @@
-{% set data = load_setup_py_data() %}
+{% set name = "dmsbatch" %}
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev0') %}
 
 package:
-  name: dmsbatch
-  version: {{ data['version'] }}
+  name: {{ name|lower }}
+  version: {{ version }}
 
 source:
   path: ..
 
 build:
-  # If the installation is complex, or different between Unix and Windows, use
-  # separate bld.bat and build.sh files instead of this key.  Add the line
-  # "skip: True  # [py<35]" (for example) to limit to Python 3.5 and newer, or
-  # "skip: True  # [not win]" to limit to Windows.
   script: {{ PYTHON }} -m pip install --no-deps --ignore-installed -vv .
   noarch: python
-  
   entry_points:
-    {% for entry in data['entry_points']['console_scripts'] %}
-      - {{ entry.split('=')[0].strip() }} = {{ entry.split('=')[1].strip() }}
-    {% endfor %}
-  
+    - dmsbatch = dmsbatch.cli:main
 
 requirements:
-  # if you need compilers, uncomment these
-  #    read more at https://docs.conda.io/projects/conda-build/en/latest/resources/compiler-tools.html
-  # build:
-  #   - {{ compilers('c') }}
   host:
     - python
     - pip
+    - setuptools >=45
+    - wheel
+    - setuptools_scm >=6.2
   run:
     - python
-    # dependencies are defined in setup.py
-    {% for dep in data['install_requires'] %}
-    - {{ dep.lower() }}
-    {% endfor %}
+    - azure-batch >=11.0.0
+    - azure-storage-blob >=2.1.0
+    - azure-mgmt-resource >=18.0.0
+    - azure-identity >=1.5.0
 
 test:
   source_files:
@@ -48,6 +40,6 @@ test:
    - dmsbatch
 about:
   home: https://github.com/CADWRDeltaModeling/azure_dms_batch
-  summary: Azure Batch for Delta Modeling Section 
-  license: {{ data.get('license') }}
+  summary: Azure Batch for Delta Modeling Section
+  license: MIT
   license_file: LICENSE

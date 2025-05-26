@@ -1,0 +1,49 @@
+[build-system]
+requires = [
+    "setuptools>=45",
+    "wheel",
+    "setuptools_scm>=6.2",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "azure_dms_batch"
+dynamic = ["version"]
+description = "Azure Batch for Delta Modeling Section"
+authors = [
+    {name = "Nicky Sandhu", email = "psandhu@water.ca.gov"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.6"
+classifiers = [
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+]
+dependencies = [
+    'azure-batch>=11.0.0',
+    'azure-storage-blob>=2.1.0',
+    'azure-mgmt-resource>=18.0.0',
+    'azure-identity>=1.5.0'
+]
+
+[project.scripts]
+dmsbatch = "dmsbatch.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/CADWRDeltaModeling/azure_dms_batch"
+
+[tool.setuptools]
+py-modules = []
+
+[tool.setuptools.packages.find]
+include = ["dmsbatch*"]
+exclude = ["bicep*", "notebooks*", "test_configs*", "schism_scripts*", "sample_configs*", "tests*", "conda.recipe*"]
+
+[tool.setuptools_scm]
+# This section is used to configure setuptools_scm
+write_to = "dmsbatch/_version.py"
+version_scheme = "post-release"
+local_scheme = "node-and-date"
+fallback_version = "0.0.0"

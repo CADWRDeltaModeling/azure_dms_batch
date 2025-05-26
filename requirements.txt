@@ -1,10 +1,11 @@
 #pip install -r requirements.txt
 #then pip install -e .
-azure-batch
-azure-storage-blob
-azure-mgmt-resource
-azure-identity
+azure-batch>=11.0.0
+azure-storage-blob>=2.1.0
+azure-mgmt-resource>=18.0.0
+azure-identity>=1.5.0
 msrest
 click
 pyyaml
 tqdm
+setuptools_scm>=6.2

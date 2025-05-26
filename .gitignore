@@ -89,5 +89,19 @@ target/
 # pyenv python configuration file
 .python-version
 
+# setuptools_scm generated version file
+dmsbatch/_version.py
+
+# conda build and pip build artifacts
+conda-bld/
+.eggs/
+pip-wheel-metadata/
+*.conda
+
+# jupyter notebook specific
+.ipython/
+.jupyter/
+.local/
+
 # include all sample ymls:
 !sample_configs/*.yml

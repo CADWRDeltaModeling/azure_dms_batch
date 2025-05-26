@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # This is important for setuptools_scm to get the git history
       - name: Set up Python 3.8
         uses: actions/setup-python@v2
         with:
@@ -22,6 +22,17 @@ jobs:
         run: |
           # $CONDA is an environment variable pointing to the root of the miniconda directory
           echo $CONDA/bin >> $GITHUB_PATH
+      - name: Extract tag version for conda build
+        id: get_version
+        run: |
+          # Extract the tag name without 'refs/tags/' prefix
+          GIT_TAG=${GITHUB_REF#refs/tags/}
+          # Set tag as environment variable for conda build
+          echo "GIT_DESCRIBE_TAG=$GIT_TAG" >> $GITHUB_ENV
+          # Also set SETUPTOOLS_SCM_PRETEND_VERSION for consistent versioning
+          echo "SETUPTOOLS_SCM_PRETEND_VERSION=$GIT_TAG" >> $GITHUB_ENV
+          # Print for verification
+          echo "Using version: $GIT_TAG"
       - name: Conda build package and upload to anaconda.org
         env:
           ANACONDA_CHANNEL_UPLOAD_TOKEN: ${{ secrets.ANACONDA_CHANNEL_UPLOAD_TOKEN }}
@@ -30,6 +41,16 @@ jobs:
           source $CONDA/etc/profile.d/conda.sh
           conda activate test_dmsbatch
           conda config --set anaconda_upload yes
+          echo "Building with GIT_DESCRIBE_TAG=$GIT_DESCRIBE_TAG and SETUPTOOLS_SCM_PRETEND_VERSION=$SETUPTOOLS_SCM_PRETEND_VERSION"
           conda build -c defaults -c conda-forge --user cadwr-dms --token "$ANACONDA_CHANNEL_UPLOAD_TOKEN" conda.recipe
           conda activate
           conda remove -n test_dmsbatch --all
+          
+      - name: Build and upload PyPI package
+        if: ${{ false }}  # Disabled by default - enable when ready to publish to PyPI
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine upload --skip-existing dist/* --username __token__ --password "$PYPI_API_TOKEN"
