@@ -1,6 +1,7 @@
 standard_ds2_v2: 2
 standard_ds5_v2: 16
 standard_f16s_v2: 16
+standard_f64s_v2: 64
 standard_hb120rs_v2: 120
 standard_hb120rs_v3: 120
 standard_hb176rs_v4: 176
