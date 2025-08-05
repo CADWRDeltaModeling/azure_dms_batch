@@ -36,6 +36,10 @@ package_and_upload_bdschism() {
         batch_name=$2
         resource_group_name=$3
     fi
+    # todays date in 2024.06.11 format
+    today=$(date +"%Y.%m.%d")
+    package_file="BayDeltaSCHISM_${today}.zip"
+    this_dir=$(pwd)
 
     # if bdschism_dir is not a directory, clone the repository
     if [ $# -eq 2 ]; then
@@ -43,17 +47,16 @@ package_and_upload_bdschism() {
         rm -rf BayDeltaSCHISM # clean up the directory if it exists
         echo "Cloning the BayDeltaSCHISM repository from github"
         git clone https://github.com/CADWRDeltaModeling/BayDeltaSCHISM
-        cd BayDeltaSCHISM
+        pushd ./BayDeltaSCHISM
         bdschism_dir=$(pwd)
     else
         pushd $bdschism_dir
     fi
 
-    # todays date in 2024.06.11 format
-    today=$(date +"%Y.%m.%d")
-    package_file="BayDeltaSCHISM_${today}.zip"
-    zip -r "../azure_dms_batch/app-packages/${package_file}" *
+    zip -r "${package_file}" *
+    mv "${package_file}" $this_dir
 
+    popd
     popd
     module load azure_cli
     az batch application package create --application-name BayDeltaSCHISM --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${today}"
@@ -101,9 +104,9 @@ package_and_upload_schimpy(){
     rm -rf /tmp/schimpy_with_deps_${version}
     mkdir -p /tmp/schimpy_with_deps_${version}
     pushd /tmp/schimpy_with_deps_${version}
-    wget https://raw.githubusercontent.com/CADWRDeltaModeling/BayDeltaSCHISM/master/schism_env.yml
+    wget https://raw.githubusercontent.com/CADWRDeltaModeling/BayDeltaSCHISM/master/schism_env.linux.yml
     conda env remove -n schimpy_${version} -y || true
-    conda env create -f schism_env.yml -n schimpy_${version}
+    conda env create -f schism_env.linux.yml -n schimpy_${version}
     conda activate pack
     conda pack -n schimpy_${version} -o schimpy.tar.gz
     zip -r schimpy_${version}.zip schimpy.tar.gz
