@@ -126,7 +126,7 @@ def recursive_format(value, current_data):
         try:
             return value.format(**current_data)
         except KeyError as e:
-            logger.debug(
+            logger.warning(
                 f"Failed to format ... KeyError: Missing key {e} for value '{value}'"
             )
             return value
@@ -466,7 +466,7 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
             coordination_cmd = None
         output_file_specs = []
         spec = client.create_output_file_spec(
-            "../std*",
+            "../*.txt",
             "https://{}.blob.core.windows.net/{}?{}".format(
                 storage_account_name, storage_container_name, config_dict["sas"]
             ),
