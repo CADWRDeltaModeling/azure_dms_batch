@@ -11,8 +11,14 @@ junit.xml
 tests/data
 tests/junit.xml
 # dss and h5 binary files
-*.dss
+*.ds[scdk]
 *.h5
+*.nc
+# schism files
+local_to_global*
+mirror*
+flux.out
+*.dat
 # package binary files
 *.tgz
 *.targz

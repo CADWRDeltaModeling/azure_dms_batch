@@ -15,7 +15,8 @@ package_and_upload_telegraf() {
     resource_group_name=$3
 
     pushd $telegraf_dir
-    version="1.31.0"
+    # todays date in 2024.06.11 format
+    version=$(date +"%Y.%m.%d")
     package_file="telegraf_${version}.zip"
     zip -r "../${package_file}" *
 

@@ -1,9 +1,9 @@
-cat <<EOF | sudo tee /etc/yum.repos.d/influxdb.repo
-[influxdb]
-name = InfluxData Repository - Stable
-baseurl = https://repos.influxdata.com/stable/\$basearch/main
-enabled = 1
-gpgcheck = 1
-gpgkey = https://repos.influxdata.com/influxdata-archive_compat.key
-EOF
-sudo yum install -y telegraf
+#do this to cache the rpms for offline install
+#yumdownloader --resolve --destdir ${LOCAL_INSTALL_DIR}/telegraf-rpms telegraf -y
+# install telegraf from cached rpms
+if [ -z "${AZ_BATCH_APP_PACKAGE_telegraf}" ]; then
+    echo "AZ_BATCH_APP_PACKAGE_telegraf is not set. Exiting."
+    exit 0; # Telegraf is optional
+fi
+echo "Installing telegraf from cached rpms in ${AZ_BATCH_APP_PACKAGE_telegraf}/telegraf-rpms"
+yum localinstall --nogpgcheck ${AZ_BATCH_APP_PACKAGE_telegraf}/telegraf-rpms/*.rpm -y
