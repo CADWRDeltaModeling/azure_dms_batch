@@ -5,7 +5,7 @@ import re
 
 import datetime
 import tempfile
-import pkg_resources
+from importlib.resources import files, as_file
 import json
 import yaml
 import base64
@@ -38,8 +38,10 @@ def setup_logging(log_level=logging.INFO):
 
 def load_command_from_resourcepath(fname):
     try:
-        return pkg_resources.resource_string(__name__, fname).decode("utf-8")
-    except FileNotFoundError as e:
+        package = files(__name__.split(".")[0])
+        resource = package.joinpath(fname.replace(__name__.split(".")[0] + "/", ""))
+        return resource.read_text(encoding="utf-8")
+    except (FileNotFoundError, AttributeError) as e:
         return fname  # assume the fname is the command itself
 
 
@@ -59,8 +61,9 @@ def modify_json_file(json_file, modified_file, **kwargs):
 
 
 def build_autoscaling_formula(config_dict):
-    formula = pkg_resources.resource_string(__name__, config_dict["autoscale_formula"])
-    formula = formula.decode("utf-8")
+    package = files(__name__.split(".")[0])
+    resource = package.joinpath(config_dict["autoscale_formula"])
+    formula = resource.read_text(encoding="utf-8")
     config_dict = config_dict.copy()
     if "startTime" not in config_dict:
         config_dict["startTime"] = (
@@ -189,57 +192,61 @@ def create_pool(config_dict):
     pool_bicep_resource = config_dict["pool_bicep_resource"]
     pool_parameters_resource = config_dict["pool_parameters_resource"]
 
-    bicep_file = pkg_resources.resource_filename(__name__, pool_bicep_resource)
-    parameters_file = pkg_resources.resource_filename(
-        __name__, pool_parameters_resource
-    )
-    # create a temporary file with the modified parameters in a temporary directory
-    modified_parameters_file = tempfile.NamedTemporaryFile(
-        prefix=f"batch_{pool_name}", suffix=".json"
-    ).name
-    json_config_dict = convert_keys_to_camel_case(config_dict)
-    try:
-        # build json file from template using config_dict values
-        modify_json_file(
-            parameters_file,
-            modified_parameters_file,
-            formula=build_autoscaling_formula(config_dict),
-            **json_config_dict,
-        )
-        # Run the command and capture its output
-        azdebug = "--debug" if logger.level == logging.DEBUG else ""
-        cmdstr = f"az deployment group create {azdebug} --name {pool_name} --resource-group {resource_group_name} --template-file {bicep_file} --parameters {modified_parameters_file}"
-        logger.debug(cmdstr)
-        result = subprocess.check_output(cmdstr, shell=True).decode("utf-8").strip()
-        # Print the output -- for debug ---
-        logger.debug(result)
-        logger.info("created pool {}".format(pool_name))
-        return pool_name
-    except Exception as e:
-        logger.error("Error creating pool {}".format(pool_name))
-        logger.error(e)
+    package = files(__name__.split(".")[0])
+    bicep_resource = package.joinpath(pool_bicep_resource)
+    parameters_resource = package.joinpath(pool_parameters_resource)
+
+    with as_file(bicep_resource) as bicep_file, as_file(
+        parameters_resource
+    ) as parameters_file:
+        bicep_file = str(bicep_file)
+        parameters_file = str(parameters_file)
+        # create a temporary file with the modified parameters in a temporary directory
+        modified_parameters_file = tempfile.NamedTemporaryFile(
+            prefix=f"batch_{pool_name}", suffix=".json"
+        ).name
+        json_config_dict = convert_keys_to_camel_case(config_dict)
         try:
-            logger.info("cmdstr is {}".format(cmdstr))
-            # save the bicep and parameters file for future inspection
-            dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-            os.makedirs(f"/tmp/failed_{dtstr}", exist_ok=True)
-            shutil.copy(bicep_file, f"/tmp/failed_{dtstr}")
-            shutil.copy(modified_parameters_file, f"/tmp/failed_{dtstr}")
-            logger.info(
-                f"The parameters and bicep file has been saved in directory /tmp/failed_{dtstr} for future inspection"
+            # build json file from template using config_dict values
+            modify_json_file(
+                parameters_file,
+                modified_parameters_file,
+                formula=build_autoscaling_formula(config_dict),
+                **json_config_dict,
             )
+            # Run the command and capture its output
+            azdebug = "--debug" if logger.level == logging.DEBUG else ""
+            cmdstr = f"az deployment group create {azdebug} --name {pool_name} --resource-group {resource_group_name} --template-file {bicep_file} --parameters {modified_parameters_file}"
+            logger.debug(cmdstr)
+            result = subprocess.check_output(cmdstr, shell=True).decode("utf-8").strip()
+            # Print the output -- for debug ---
+            logger.debug(result)
+            logger.info("created pool {}".format(pool_name))
+            return pool_name
         except Exception as e:
-            logger.error("Error while saving bicep and parameters: {}".format(e))
-        finally:
-            raise e
+            logger.error("Error creating pool {}".format(pool_name))
+            logger.error(e)
+            try:
+                logger.info("cmdstr is {}".format(cmdstr))
+                # save the bicep and parameters file for future inspection
+                dtstr = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                os.makedirs(f"/tmp/failed_{dtstr}", exist_ok=True)
+                shutil.copy(bicep_file, f"/tmp/failed_{dtstr}")
+                shutil.copy(modified_parameters_file, f"/tmp/failed_{dtstr}")
+                logger.info(
+                    f"The parameters and bicep file has been saved in directory /tmp/failed_{dtstr} for future inspection"
+                )
+            except Exception as e:
+                logger.error("Error while saving bicep and parameters: {}".format(e))
+            finally:
+                raise e
 
 
 def get_core_count(vm_size, location):
     try:
-        with open(
-            pkg_resources.resource_filename(__name__, "templates/vm_core_map.yml")
-        ) as f:
-            VM_CORE_MAP = yaml.safe_load(f)
+        package = files(__name__.split(".")[0])
+        resource = package.joinpath("templates/vm_core_map.yml")
+        VM_CORE_MAP = yaml.safe_load(resource.read_text(encoding="utf-8"))
     except FileNotFoundError as e:
         logger.error(e)
         VM_CORE_MAP = {
@@ -248,10 +255,11 @@ def get_core_count(vm_size, location):
             "standard_hb120rs_v3": 120,
             "standard_hb176rs_v4": 176,
         }
-        with open(
-            pkg_resources.resource_filename(__name__, "templates/vm_core_map.yml"), "w"
-        ) as f:
-            yaml.dump(VM_CORE_MAP, f)
+        package = files(__name__.split(".")[0])
+        resource = package.joinpath("templates/vm_core_map.yml")
+        with as_file(resource) as vm_core_file:
+            with open(vm_core_file, "w") as f:
+                yaml.dump(VM_CORE_MAP, f)
 
     vm_size = vm_size.lower()
     if not vm_size in VM_CORE_MAP:
@@ -267,10 +275,11 @@ def get_core_count(vm_size, location):
             logger.error(e)
             core_count_per_host = 1
         VM_CORE_MAP[vm_size] = core_count_per_host
-        with open(
-            pkg_resources.resource_filename(__name__, "templates/vm_core_map.yml"), "w"
-        ) as f:
-            yaml.dump(VM_CORE_MAP, f)
+        package = files(__name__.split(".")[0])
+        resource = package.joinpath("templates/vm_core_map.yml")
+        with as_file(resource) as vm_core_file:
+            with open(vm_core_file, "w") as f:
+                yaml.dump(VM_CORE_MAP, f)
     core_count_per_host = VM_CORE_MAP.get(vm_size, 1)
     return core_count_per_host
 
@@ -607,10 +616,12 @@ def initialize_config(config_file, pool_name=None):
                 "Required key {} not found in config file: {}".format(key, config_file)
             )
     # load defaults from default_config.yml and update undefined ones
-    default_config_file = pkg_resources.resource_filename(
-        __name__, f'templates/{config_dict["template_name"]}/default_config.yml'
+    package = files(__name__.split(".")[0])
+    default_config_resource = package.joinpath(
+        f'templates/{config_dict["template_name"]}/default_config.yml'
     )
-    default_config_dict = parse_yaml_file(default_config_file)
+    with as_file(default_config_resource) as default_config_file:
+        default_config_dict = parse_yaml_file(str(default_config_file))
     update_if_not_defined(config_dict, **default_config_dict)
     # get user info
     user_info = get_user_info()
@@ -823,8 +834,11 @@ def upload_batch_scripts(
             resource_group_name, storage_account_name
         )
     sas = get_sas(storage_account_name, storage_account_key, batch_container_name)
-    batch_dir = pkg_resources.resource_filename("dmsbatch", "../schism_scripts/batch")
-    # upload batch scripts
-    cmd = f'cd {batch_dir} && azcopy cp "./*"  "https://{storage_account_name}.blob.core.windows.net/{batch_container_name}?{sas}" --recursive=true'
-    subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
+    package = files("dmsbatch")
+    batch_resource = package.parent.joinpath("schism_scripts/batch")
+    with as_file(batch_resource) as batch_dir:
+        batch_dir = str(batch_dir)
+        # upload batch scripts
+        cmd = f'cd {batch_dir} && azcopy cp "./*"  "https://{storage_account_name}.blob.core.windows.net/{batch_container_name}?{sas}" --recursive=true'
+        subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
     return
