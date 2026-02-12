@@ -52,6 +52,7 @@ echo "Running command with {num_cores} cores and {num_hosts} hosts";
 run_commands() {{
 {mpi_command}
 }}
+generate_env_script "$AZ_BATCH_TASK_DIR/env_vars.sh";
 set +e;
 run_commands 2> >(tee -a "$AZ_BATCH_TASK_DIR/stderr_command.txt" >&2) > >(tee -a "$AZ_BATCH_TASK_DIR/stdout_command.txt");
 set -e;
