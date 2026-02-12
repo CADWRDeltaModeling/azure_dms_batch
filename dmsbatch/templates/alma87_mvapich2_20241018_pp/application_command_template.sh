@@ -36,6 +36,7 @@ cd {study_dir};
 run_commands() {{
 {command}
 }}
+source $SCHISM_SCRIPTS_HOME/batch/generate_env_script.sh;
 generate_env_script "$AZ_BATCH_TASK_DIR/env_vars.sh";
 set +e;
 run_commands 2> >(tee -a "$AZ_BATCH_TASK_DIR/stderr_command.txt" >&2) > >(tee -a "$AZ_BATCH_TASK_DIR/stdout_command.txt");
