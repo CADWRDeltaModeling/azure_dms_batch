@@ -429,7 +429,13 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
     tasks = []
     task_ids = config_dict.pop("task_ids")
     unsubstitued_config_dict = move_key_to_first(config_dict, "task_id")
-    for task_id in tqdm.tqdm(task_ids):
+    
+    # Variables to store script file paths (created once for the first task)
+    app_script_path = None
+    coord_script_path = None
+    script_ext = ".bat" if ostype == "windows" else ".sh"
+    
+    for task_id_idx, task_id in enumerate(tqdm.tqdm(task_ids)):
         unsubstitued_config_dict["task_id"] = task_id
         config_dict = create_substituted_dict(
             unsubstitued_config_dict, pool_name=pool_name
@@ -446,6 +452,15 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
         application_command_template = config_dict["application_command_template"]
         app_cmd = load_command_from_resourcepath(fname=application_command_template)
         app_cmd = app_cmd.format(**config_dict)  # do we need an order for substitution?
+        
+        # Create script files only for the first task (as a representative example)
+        if task_id_idx == 0:
+            temp_dir = tempfile.gettempdir()
+            app_script_path = os.path.join(temp_dir, f"app_cmd_{job_name}{script_ext}")
+            with open(app_script_path, 'w') as app_script_file:
+                app_script_file.write(app_cmd)
+            logger.debug(f"Created application command script: {app_script_path}")
+        
         if ostype == "windows":
             # Encode the commands as base64
             encoded_commands = base64.b64encode(app_cmd.encode("utf-8")).decode("utf-8")
@@ -458,6 +473,7 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
             )
         else:
             cmds = [app_cmd]
+            
             app_cmd = client.wrap_commands_in_shell(cmds, ostype=ostype)
         logger.debug("Application command: {}".format(app_cmd))
         #
@@ -467,6 +483,15 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
                 fname=coordination_command_template
             )
             coordination_cmd = coordination_cmd.format(**config_dict)
+            
+            # Create coordination script file only for the first task
+            if task_id_idx == 0:
+                temp_dir = tempfile.gettempdir()
+                coord_script_path = os.path.join(temp_dir, f"coord_cmd_{job_name}{script_ext}")
+                with open(coord_script_path, 'w') as coord_script_file:
+                    coord_script_file.write(coordination_cmd)
+                logger.debug(f"Created coordination command script: {coord_script_path}")
+            
             coordination_cmd = client.wrap_commands_in_shell(
                 [coordination_cmd], ostype=ostype
             )
@@ -558,7 +583,9 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
         print(e)
         raise e
     logger.info(f"Submitted task {job_name} to pool {pool_name}.")
-    return job_name, task_name
+    
+    # Return the script file paths for upload
+    return job_name, task_name, app_script_path, coord_script_path
 
 
 def parse_yaml_file(config_file):
@@ -735,13 +762,15 @@ def submit_job(config_file, pool_name=None):
     else:
         pool_exists = True
 
-    job_name, task_name = submit_task(
+    job_name, task_name, app_script_path, coord_script_path = submit_task(
         client, pool_name, config_dict, pool_exists=pool_exists
     )
     try:
         blob_client = AzureBlob(
             config_dict["storage_account_name"], config_dict["storage_account_key"]
         )
+        
+        # Upload the yaml config file
         config_filename = os.path.basename(config_file)
         logger.debug(
             f"uploading config file {config_file} to storage container under jobs/{job_name}/{config_filename}"
@@ -751,9 +780,42 @@ def submit_job(config_file, pool_name=None):
             f"jobs/{job_name}/{config_filename}",
             config_file,
         )
+        
+        # Upload the application command script file
+        app_script_filename = os.path.basename(app_script_path)
+        logger.debug(
+            f"uploading application script file {app_script_path} to storage container under jobs/{job_name}/{app_script_filename}"
+        )
+        blob_client.upload_file_to_container(
+            config_dict["storage_container_name"],
+            f"jobs/{job_name}/{app_script_filename}",
+            app_script_path,
+        )
+        
+        # Upload the coordination command script file (if it exists)
+        if coord_script_path:
+            coord_script_filename = os.path.basename(coord_script_path)
+            logger.debug(
+                f"uploading coordination script file {coord_script_path} to storage container under jobs/{job_name}/{coord_script_filename}"
+            )
+            blob_client.upload_file_to_container(
+                config_dict["storage_container_name"],
+                f"jobs/{job_name}/{coord_script_filename}",
+                coord_script_path,
+            )
+        
+        # Clean up temporary files
+        try:
+            os.unlink(app_script_path)
+            if coord_script_path:
+                os.unlink(coord_script_path)
+            logger.debug("Cleaned up temporary script files")
+        except Exception as cleanup_error:
+            logger.warning(f"Failed to clean up temporary files: {cleanup_error}")
+            
     except Exception as e:
         logger.error(e)
-        logger.error("Error uploading config file to storage account")
+        logger.error("Error uploading files to storage account")
 
 
 def get_user_info():
