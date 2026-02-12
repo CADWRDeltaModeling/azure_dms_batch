@@ -508,6 +508,17 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
             upload_condition=batchmodels.OutputFileUploadCondition.task_completion,
         )
         output_file_specs.append(spec)
+        # Add spec for shell/batch script files
+        script_pattern = "../*.bat" if ostype == "windows" else "../*.sh"
+        spec = client.create_output_file_spec(
+            script_pattern,
+            "https://{}.blob.core.windows.net/{}?{}".format(
+                storage_account_name, storage_container_name, config_dict["sas"]
+            ),
+            f"jobs/{job_name}/{task_name}",
+            upload_condition=batchmodels.OutputFileUploadCondition.task_completion,
+        )
+        output_file_specs.append(spec)
         #
         if "container_run_options" in config_dict:
             task_container_settings = batchmodels.TaskContainerSettings(
