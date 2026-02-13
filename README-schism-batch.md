@@ -178,3 +178,93 @@ shutdown the VMs. The job standard out and error will also be available in the s
 
 If the job fails, one can resize the pool manually to the size requested and then use the Azure portal (or Batch Explorer) to resubmit the task (in the job) associated with that pool.
 One can then login using SSH to the cluster master node and issue commands manually. This can help with troubleshooting and testing new commands.
+
+
+
+#### Accessing Job Execution Details
+
+When a batch job is submitted, several files are automatically uploaded to the storage container for debugging and troubleshooting purposes:
+
+##### Command Script Files
+The system creates and uploads script files containing the exact commands that were executed:
+- **Application command script**: `app_cmd_<job_name>.sh` (or `.bat` for Windows) - Contains the main application command template after variable substitution
+- **Coordination command script**: `coord_cmd_<job_name>.sh` (or `.bat` for Windows) - Contains the coordination command for MPI runs (if applicable)
+
+These files are uploaded to `jobs/<job_name>/` in the storage container and can be downloaded to review the exact commands that were executed on the compute nodes.
+
+##### Task Output Files
+Task standard output and error files are automatically uploaded upon task completion:
+- **stdout.txt**: Standard output from the task
+- **stderr.txt**: Standard error from the task  
+- **Other log files**: Any `*.txt`, `*.sh`, or `*.bat` files created in the task working directory
+
+These files are uploaded to `jobs/<job_name>/<task_name>/` in the storage container.
+
+##### Job Configuration File
+The original YAML configuration file used to submit the job is also uploaded to `jobs/<job_name>/` for reference.
+
+#### SSH Access to Master Node for Interactive Debugging
+
+For more advanced troubleshooting, you can SSH directly into the cluster master node to interactively debug and test commands:
+
+##### Step 1: Identify the Master Node
+First, identify which node is the master by inspecting the `stdout.txt` file for each node in the cluster. Look for a statement indicating "This is the master node" or similar identifier in the output.
+
+You can access these files via:
+- **Azure Batch Explorer**: Navigate to Jobs → Select your job → Select the task → Click on a node → Navigate to task working directory → View stdout.txt
+- **Azure Portal**: Navigate to your Batch account → Jobs → Select your job → Select the task → Click on a node → View Files → Navigate to wd/ → View stdout.txt
+
+##### Step 2: Connect to the Master Node
+Once you've identified the master node:
+1. Open **Azure Batch Explorer**
+2. Navigate to the **Pools** section and select your pool
+3. Find the master node you identified in Step 1
+4. Click the **Connect** icon next to the node
+5. Follow the SSH connection instructions provided (typically using the provided SSH command or credentials)
+
+##### Step 3: Navigate to the Job Directory
+After connecting via SSH:
+```bash
+# Switch to root user
+sudo bash
+
+# Navigate to the job directory
+# Replace <job_id> with your actual job ID
+cd /mnt/batch/tasks/workitems/<job_id>/.../<task_name>/wd/
+```
+
+##### Step 4: Restore the Environment
+Inside the job directory, you'll find an `env_vars.sh` script that was automatically generated during task execution. Source it to restore all environment variables:
+```bash
+# Navigate to the task directory (one level up from working directory)
+cd ..
+
+# Source the environment variables script
+source env_vars.sh
+```
+
+##### Step 5: Review and Reproduce Commands
+Now you can review the application command script under [storage container]/jobs/<<job_id>>/app_cmd_*.sh to see exactly what was executed:
+```bash
+# View the application command script
+cat app_cmd_*.sh
+
+# Or if you want to re-run specific commands, you can execute them manually
+# Copy the commands you want to test and run them interactively in the shell
+```
+
+This approach allows you to:
+- Reproduce the exact environment that was used during the batch run
+- Test commands interactively before resubmitting the job
+- Debug issues that only appear in the Azure Batch environment
+- Modify and test commands without creating a new job submission
+
+
+#### Accessing Files via Azure Storage Explorer
+
+All uploaded files can be browsed and downloaded using:
+1. **Azure Portal**: Navigate to your storage account → Containers → Select your container → Navigate to `jobs/<job_name>/`
+2. **Azure Storage Explorer**: A standalone application that provides a user-friendly interface for browsing blob storage
+3. **azcopy**: Command-line tool for bulk downloading files from blob storage
+
+This makes it easy to review exactly what commands were run and troubleshoot any issues that occurred during execution.
