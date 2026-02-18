@@ -10,9 +10,11 @@ chmod +x *.sh
 ./enable_sudo_for_batch.sh
 echo "Starting pool install script..."
 ./install-azcopy.sh
+echo "Starting NFS installation..."
+./nfs_install.sh
+echo "Done with NFS install"
 echo "Installing telegraf..."
 ./install-telegraf.sh
-echo "Done with telegraf install"
 echo "Done with pool installs"
 popd
 echo "Done with pool setup script"
