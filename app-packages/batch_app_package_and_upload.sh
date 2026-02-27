@@ -7,6 +7,8 @@
 #    source batch_app_package_and_upload.sh
 # 3. From the "Call the function" section, locate the lines of command you want to run.
 #    Comment them out, copy, and paste the functions into the terminal.
+# 4. Make sure you have the Azure CLI installed and are logged in with access to the target batch accounts.
+#
 ########################################################################################
 package_and_upload_telegraf() {
     # Make sure that the telegraf.conf file in the telegraf directory has the instrumentation key specified or it will not be able to send data to the app insights
@@ -20,7 +22,7 @@ package_and_upload_telegraf() {
     package_file="telegraf_${version}.zip"
     zip -r "../${package_file}" *
     popd
-    module load azure_cli
+    #module load azure_cli
     az batch application package create --application-name telegraf --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
     az batch application set --application-name telegraf --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}    
 }
@@ -58,7 +60,7 @@ package_and_upload_bdschism() {
 
     popd
     popd
-    module load azure_cli
+    #module load azure_cli
     az batch application package create --application-name BayDeltaSCHISM --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${today}"
     az batch application set --application-name BayDeltaSCHISM --default-version "${today}" --name ${batch_name} --resource-group ${resource_group_name}
 }
@@ -70,7 +72,7 @@ package_and_upload_app() {
     batch_name=$4
     resource_group_name=$5
 
-    module load azure_cli
+    #module load azure_cli
     echo "Creating application package ${app_name} with version ${version} using ${package_file} for ${batch_name} in ${resource_group_name}"
     az batch application package create --application-name ${app_name} --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
     echo "Making ${version} the default version for ${app_name} for ${batch_name} in ${resource_group_name}"
@@ -89,7 +91,7 @@ package_and_upload_batch_setup(){
     zip -r "${package_file}" batch
     mv "${package_file}" $this_dir
     popd
-    module load azure_cli
+    #module load azure_cli
     az batch application package create --application-name batch_setup --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
     az batch application set --application-name batch_setup --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
 }
@@ -114,7 +116,7 @@ package_and_upload_schimpy(){
     conda env remove -n schimpy_${version} -y
     package_file="schimpy_${version}.zip"
 
-    module load azure_cli
+    #module load azure_cli
     az batch application package create --application-name "${app_name}" --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
     az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
     popd
@@ -143,7 +145,7 @@ package_and_upload_suxarray_with_deps(){
     conda env remove -n suxarray_${version} -y
     package_file="suxarray_${version}.zip"
 
-    module load azure_cli
+    #module load azure_cli
     az batch application package create --application-name "${app_name}" --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
     az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
     popd
@@ -168,7 +170,7 @@ package_and_upload_suxarray(){
     conda env remove -n ${app_name} -y
     package_file="${app_name}_${version}.zip"
 
-    module load azure_cli
+    #module load azure_cli
     az batch application package create --application-name "${app_name}" --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
     az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
     popd
@@ -329,7 +331,7 @@ package_and_upload_pydelmod(){
     conda env remove -n ${app_name}_${version} -y
     package_file="${app_name}_${version}.zip"
 
-    module load azure_cli
+    #module load azure_cli
     az batch application package create --application-name "${app_name}" --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
     az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
     popd
