@@ -25,7 +25,10 @@ dependencies = [
     'azure-batch>=11.0.0',
     'azure-storage-blob>=2.1.0',
     'azure-mgmt-resource>=18.0.0',
-    'azure-identity>=1.5.0'
+    'azure-identity>=1.5.0',
+    'pyyaml>=5.4.0',
+    'tqdm>=4.0.0',
+    'click>=8.0.0',
 ]
 
 [project.scripts]
