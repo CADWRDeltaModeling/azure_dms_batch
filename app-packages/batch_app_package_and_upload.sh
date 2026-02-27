@@ -19,7 +19,6 @@ package_and_upload_telegraf() {
     version=$(date +"%Y.%m.%d")
     package_file="telegraf_${version}.zip"
     zip -r "../${package_file}" *
-
     popd
     module load azure_cli
     az batch application package create --application-name telegraf --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
@@ -173,6 +172,140 @@ package_and_upload_suxarray(){
     az batch application package create --application-name "${app_name}" --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
     az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
     popd
+}
+
+download_batch_app_package() {
+    # Downloads a Batch application package zip from an existing batch account.
+    # If version is omitted or set to "default", the account's default version is used.
+    # Usage:
+    #   download_batch_app_package <app_name> <batch_name> <resource_group> [version] [output_dir]
+    #
+    # Examples:
+    #   download_batch_app_package telegraf schismbatch dwrbdo_schism_rg
+    #   download_batch_app_package telegraf schismbatch dwrbdo_schism_rg default /tmp/packages
+    #   download_batch_app_package schism_with_deps schismbatch dwrbdo_schism_rg 5.11.1_alma8.7hpc_hpcx
+    local app_name=$1
+    local batch_name=$2
+    local resource_group=$3
+    local version=${4:-default}
+    local output_dir=${5:-.}
+
+    # Resolve "default" to the actual default version string
+    if [[ "$version" == "default" ]]; then
+        version=$(az batch application show \
+            --application-name "${app_name}" \
+            --name "${batch_name}" \
+            --resource-group "${resource_group}" \
+            --query defaultVersion \
+            --output tsv)
+        if [[ -z "$version" ]]; then
+            echo "ERROR: No default version set for application '${app_name}' in batch account '${batch_name}'." >&2
+            return 1
+        fi
+        echo "Resolved default version: ${version}"
+    fi
+
+    # Get the SAS URL for the package blob
+    local storage_url
+    storage_url=$(az batch application package show \
+        --application-name "${app_name}" \
+        --name "${batch_name}" \
+        --resource-group "${resource_group}" \
+        --version-name "${version}" \
+        --query storageUrl \
+        --output tsv)
+
+    if [[ -z "$storage_url" ]]; then
+        echo "ERROR: Could not retrieve storage URL for ${app_name} v${version}." >&2
+        return 1
+    fi
+
+    mkdir -p "${output_dir}"
+    local output_file="${output_dir}/${app_name}_${version}.zip"
+    echo "Downloading ${app_name} v${version} -> ${output_file}"
+
+    # Prefer azcopy if available (faster for large packages), fall back to wget
+    if command -v azcopy &>/dev/null; then
+        azcopy copy "${storage_url}" "${output_file}"
+    else
+        wget -q --show-progress -O "${output_file}" "${storage_url}"
+    fi
+
+    echo "Done: ${output_file}"
+}
+
+download_all_default_packages() {
+    # Downloads the default version of every application in a batch account.
+    # Usage:
+    #   download_all_default_packages <batch_name> <resource_group> [output_dir]
+    local batch_name=$1
+    local resource_group=$2
+    local output_dir=${3:-.}
+
+    local app_names
+    app_names=$(az batch application list \
+        --name "${batch_name}" \
+        --resource-group "${resource_group}" \
+        --query "[].name" \
+        --output tsv)
+
+    if [[ -z "$app_names" ]]; then
+        echo "No applications found in batch account '${batch_name}'." >&2
+        return 1
+    fi
+
+    echo "Applications found in '${batch_name}':"
+    while IFS= read -r app_name; do
+        echo "  - ${app_name}"
+    done < <(echo "$app_names")
+    echo ""
+
+    while IFS= read -r app_name <&3; do
+        echo "--- Downloading ${app_name} ---"
+        ( download_batch_app_package "${app_name}" "${batch_name}" "${resource_group}" default "${output_dir}" ) \
+            || echo "WARNING: skipping ${app_name} (no default version or error)"
+    done 3< <(echo "$app_names")
+}
+
+generate_upload_commands() {
+    # Generates package_and_upload_app commands for all default-version packages in a
+    # source batch account, ready to be run against a target batch account.
+    # Usage:
+    #   generate_upload_commands <src_batch> <src_resource_group> <dst_batch> <dst_resource_group> [package_dir]
+    #
+    # Examples:
+    #   generate_upload_commands schismbatch dwrbdo_schism_rg newbatch new_rg /tmp/packages
+    #   generate_upload_commands schismbatch dwrbdo_schism_rg newbatch new_rg   # uses current dir
+    local src_batch=$1
+    local src_rg=$2
+    local dst_batch=$3
+    local dst_rg=$4
+    local package_dir=${5:-.}
+
+    local app_data
+    app_data=$(az batch application list \
+        --name "${src_batch}" \
+        --resource-group "${src_rg}" \
+        --query "[].[name, defaultVersion]" \
+        --output tsv)
+
+    if [[ -z "$app_data" ]]; then
+        echo "No applications found in batch account '${src_batch}'." >&2
+        return 1
+    fi
+
+    echo "# Upload commands for target batch account: ${dst_batch} (${dst_rg})"
+    echo "# Package directory: ${package_dir}"
+    echo ""
+
+    while IFS=$'\t' read -r app_name default_version <&3; do
+        if [[ -z "$default_version" ]]; then
+            echo "# SKIPPED ${app_name}: no default version set"
+            continue
+        fi
+        local package_file="${package_dir}/${app_name}_${default_version}.zip"
+        echo "package_and_upload_app \"${app_name}\" \"${default_version}\" \"${package_file}\" ${dst_batch} ${dst_rg}"
+    done 3< <(echo "$app_data")
 }
 
 package_and_upload_pydelmod(){
