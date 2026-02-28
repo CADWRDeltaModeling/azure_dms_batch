@@ -9,6 +9,7 @@ from importlib.resources import files, as_file
 import json
 import yaml
 import base64
+import shlex
 
 import azure.batch.models as batchmodels
 from azure.batch.models import BatchErrorException
@@ -356,6 +357,28 @@ def commands_to_string(commands, ostype="linux"):
         raise ValueError("Invalid ostype. Use 'linux' or 'windows'.")
 
 
+def build_linux_script_execution_commands(
+    script_content, script_filename, generate_env_snapshot=False
+):
+    encoded_content = base64.b64encode(script_content.encode("utf-8")).decode("ascii")
+    safe_filename = shlex.quote(script_filename)
+    commands = [
+        'TASK_SCRIPT_DIR="${AZ_BATCH_TASK_DIR:-$PWD}"',
+        f'SCRIPT_PATH="$TASK_SCRIPT_DIR/{safe_filename}"',
+        f"echo '{encoded_content}' | base64 --decode > \"$SCRIPT_PATH\"",
+        'chmod +x "$SCRIPT_PATH"',
+    ]
+    if generate_env_snapshot:
+        commands.extend(
+            [
+                'ENV_SCRIPT_SOURCE="$AZ_BATCH_APP_PACKAGE_batch_setup/batch/generate_env_script.sh"',
+                'if [ -f "$ENV_SCRIPT_SOURCE" ]; then source "$ENV_SCRIPT_SOURCE"; generate_env_script "$TASK_SCRIPT_DIR/env_vars.sh"; fi',
+            ]
+        )
+    commands.append('/bin/bash "$SCRIPT_PATH"')
+    return commands
+
+
 def move_key_to_first(d, key):
     if key not in d:
         raise KeyError(f"Key '{key}' not found in the dictionary.")
@@ -430,11 +453,6 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
     task_ids = config_dict.pop("task_ids")
     unsubstitued_config_dict = move_key_to_first(config_dict, "task_id")
     
-    # Variables to store script file paths (created once for the first task)
-    app_script_path = None
-    coord_script_path = None
-    script_ext = ".bat" if ostype == "windows" else ".sh"
-    
     for task_id_idx, task_id in enumerate(tqdm.tqdm(task_ids)):
         unsubstitued_config_dict["task_id"] = task_id
         config_dict = create_substituted_dict(
@@ -453,14 +471,6 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
         app_cmd = load_command_from_resourcepath(fname=application_command_template)
         app_cmd = app_cmd.format(**config_dict)  # do we need an order for substitution?
         
-        # Create script files only for the first task (as a representative example)
-        if task_id_idx == 0:
-            temp_dir = tempfile.gettempdir()
-            app_script_path = os.path.join(temp_dir, f"app_cmd_{job_name}{script_ext}")
-            with open(app_script_path, 'w') as app_script_file:
-                app_script_file.write(app_cmd)
-            logger.debug(f"Created application command script: {app_script_path}")
-        
         if ostype == "windows":
             # Encode the commands as base64
             encoded_commands = base64.b64encode(app_cmd.encode("utf-8")).decode("utf-8")
@@ -472,9 +482,14 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
                 'cmd /c $env:AZ_BATCH_TASK_WORKING_DIR\\temp_commands.bat"'
             )
         else:
-            cmds = [app_cmd]
-            
-            app_cmd = client.wrap_commands_in_shell(cmds, ostype=ostype)
+            app_cmd = client.wrap_commands_in_shell(
+                build_linux_script_execution_commands(
+                    app_cmd,
+                    "application_command.sh",
+                    generate_env_snapshot=True,
+                ),
+                ostype=ostype,
+            )
         logger.debug("Application command: {}".format(app_cmd))
         #
         if "mpi_command" in config_dict:
@@ -483,18 +498,18 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
                 fname=coordination_command_template
             )
             coordination_cmd = coordination_cmd.format(**config_dict)
-            
-            # Create coordination script file only for the first task
-            if task_id_idx == 0:
-                temp_dir = tempfile.gettempdir()
-                coord_script_path = os.path.join(temp_dir, f"coord_cmd_{job_name}{script_ext}")
-                with open(coord_script_path, 'w') as coord_script_file:
-                    coord_script_file.write(coordination_cmd)
-                logger.debug(f"Created coordination command script: {coord_script_path}")
-            
-            coordination_cmd = client.wrap_commands_in_shell(
-                [coordination_cmd], ostype=ostype
-            )
+
+            if ostype == "linux":
+                coordination_cmd = client.wrap_commands_in_shell(
+                    build_linux_script_execution_commands(
+                        coordination_cmd, "coordination_command.sh"
+                    ),
+                    ostype=ostype,
+                )
+            else:
+                coordination_cmd = client.wrap_commands_in_shell(
+                    [coordination_cmd], ostype=ostype
+                )
             logger.debug("Coordination command: {}".format(coordination_cmd))
         else:
             coordination_cmd = None
@@ -508,6 +523,24 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
             upload_condition=batchmodels.OutputFileUploadCondition.task_completion,
         )
         output_file_specs.append(spec)
+        if ostype == "linux":
+            for script_pattern in [
+                "application_command.sh",
+                "coordination_command.sh",
+                "env_vars.sh",
+                "../application_command.sh",
+                "../coordination_command.sh",
+                "../env_vars.sh",
+            ]:
+                spec = client.create_output_file_spec(
+                    script_pattern,
+                    "https://{}.blob.core.windows.net/{}?{}".format(
+                        storage_account_name, storage_container_name, config_dict["sas"]
+                    ),
+                    f"jobs/{job_name}/{task_name}",
+                    upload_condition=batchmodels.OutputFileUploadCondition.task_completion,
+                )
+                output_file_specs.append(spec)
         # Add spec for shell/batch script files
         script_pattern = "../*.bat" if ostype == "windows" else "../*.sh"
         spec = client.create_output_file_spec(
@@ -595,8 +628,7 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
         raise e
     logger.info(f"Submitted task {job_name} to pool {pool_name}.")
     
-    # Return the script file paths for upload
-    return job_name, task_name, app_script_path, coord_script_path
+    return job_name, task_name
 
 
 def parse_yaml_file(config_file):
@@ -773,7 +805,7 @@ def submit_job(config_file, pool_name=None):
     else:
         pool_exists = True
 
-    job_name, task_name, app_script_path, coord_script_path = submit_task(
+    job_name, task_name = submit_task(
         client, pool_name, config_dict, pool_exists=pool_exists
     )
     try:
@@ -791,38 +823,6 @@ def submit_job(config_file, pool_name=None):
             f"jobs/{job_name}/{config_filename}",
             config_file,
         )
-        
-        # Upload the application command script file
-        app_script_filename = os.path.basename(app_script_path)
-        logger.debug(
-            f"uploading application script file {app_script_path} to storage container under jobs/{job_name}/{app_script_filename}"
-        )
-        blob_client.upload_file_to_container(
-            config_dict["storage_container_name"],
-            f"jobs/{job_name}/{app_script_filename}",
-            app_script_path,
-        )
-        
-        # Upload the coordination command script file (if it exists)
-        if coord_script_path:
-            coord_script_filename = os.path.basename(coord_script_path)
-            logger.debug(
-                f"uploading coordination script file {coord_script_path} to storage container under jobs/{job_name}/{coord_script_filename}"
-            )
-            blob_client.upload_file_to_container(
-                config_dict["storage_container_name"],
-                f"jobs/{job_name}/{coord_script_filename}",
-                coord_script_path,
-            )
-        
-        # Clean up temporary files
-        try:
-            os.unlink(app_script_path)
-            if coord_script_path:
-                os.unlink(coord_script_path)
-            logger.debug("Cleaned up temporary script files")
-        except Exception as cleanup_error:
-            logger.warning(f"Failed to clean up temporary files: {cleanup_error}")
             
     except Exception as e:
         logger.error(e)
