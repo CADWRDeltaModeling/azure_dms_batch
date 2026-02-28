@@ -1,5 +1,25 @@
 ## Documentation for `run_modified_loop.sh`
 
+## Interactive Debugging in Azure Batch SCHISM Tasks
+
+When SCHISM batch jobs are submitted through `dmsbatch`, Linux task command scripts are generated in the task directory and uploaded under `jobs/<job_name>/<task_name>/`:
+
+- `application_command.sh`
+- `coordination_command.sh` (if MPI coordination is enabled; mainly for setup/coordination failures)
+- `env_vars.sh` (generated before `application_command.sh` runs)
+
+For interactive troubleshooting, SSH to a node in the pool, go to the task folder, source `env_vars.sh`, and then run the full application script or selected command blocks manually:
+
+```bash
+cd /mnt/batch/tasks/workitems/<job_id>/job-1/<task_id>/wd/..
+source env_vars.sh
+bash application_command.sh
+# use only when setup/coordination failed
+bash coordination_command.sh
+```
+
+This reproduces the runtime environment and command flow used by the batch task. If setup succeeded but task execution failed, you typically only need `env_vars.sh` + `application_command.sh` (or a subset of its commands).
+
 ### Overview
 `run_modified_loop.sh` is a bash script designed to run a specified command on files within a directory that have been modified within a certain time frame. It allows for customization of the time parameters and the file pattern to watch, making it versatile for various automation tasks.
 

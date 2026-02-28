@@ -186,11 +186,14 @@ One can then login using SSH to the cluster master node and issue commands manua
 When a batch job is submitted, several files are automatically uploaded to the storage container for debugging and troubleshooting purposes:
 
 ##### Command Script Files
-The system creates and uploads script files containing the exact commands that were executed:
-- **Application command script**: `app_cmd_<job_name>.sh` (or `.bat` for Windows) - Contains the main application command template after variable substitution
-- **Coordination command script**: `coord_cmd_<job_name>.sh` (or `.bat` for Windows) - Contains the coordination command for MPI runs (if applicable)
+For Linux SCHISM runs, the task now generates script files directly in the task directory before execution:
+- **Application command script**: `application_command.sh`
+- **Coordination command script**: `coordination_command.sh` (for MPI jobs, mainly useful when setup/coordination on nodes failed)
+- **Environment snapshot**: `env_vars.sh`
 
-These files are uploaded to `jobs/<job_name>/` in the storage container and can be downloaded to review the exact commands that were executed on the compute nodes.
+`env_vars.sh` is generated before `application_command.sh` is executed, so you can restore the same task environment during debugging.
+
+These files are uploaded to `jobs/<job_name>/<task_name>/` in the storage container and can be downloaded to review exactly what was executed on compute nodes.
 
 ##### Task Output Files
 Task standard output and error files are automatically uploaded upon task completion:
@@ -244,20 +247,32 @@ source env_vars.sh
 ```
 
 ##### Step 5: Review and Reproduce Commands
-Now you can review the application command script under [storage container]/jobs/<<job_id>>/app_cmd_*.sh to see exactly what was executed:
+Now you can review the command scripts from the task directory and reproduce them interactively:
 ```bash
-# View the application command script
-cat app_cmd_*.sh
+# Ensure environment from task runtime is restored first
+source env_vars.sh
 
-# Or if you want to re-run specific commands, you can execute them manually
-# Copy the commands you want to test and run them interactively in the shell
+# Review generated scripts
+cat application_command.sh
+cat coordination_command.sh   # if present
+
+# For task-only failures, re-run all or selected application commands
+bash application_command.sh
+
+# Use coordination command only when setup/coordination failed
+# (for example node setup/coordination problems before app command execution)
+bash coordination_command.sh
 ```
+
+> [!NOTE]
+> Re-running these scripts manually is intended for interactive debugging. Stop any background processes you start (for example monitoring or copy loops) before exiting your SSH session.
 
 This approach allows you to:
 - Reproduce the exact environment that was used during the batch run
-- Test commands interactively before resubmitting the job
+- Source `env_vars.sh` and test commands interactively before resubmitting the job
 - Debug issues that only appear in the Azure Batch environment
-- Modify and test commands without creating a new job submission
+- For task-only failures, run all or portions of `application_command.sh` without creating a new job submission
+- Use `coordination_command.sh` only when investigating setup/coordination-stage failures
 
 
 #### Accessing Files via Azure Storage Explorer
