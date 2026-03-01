@@ -283,3 +283,8 @@ All uploaded files can be browsed and downloaded using:
 3. **azcopy**: Command-line tool for bulk downloading files from blob storage
 
 This makes it easy to review exactly what commands were run and troubleshoot any issues that occurred during execution.
+
+
+### Prototyping and Debugging with a Live Node
+
+For a step-by-step interactive debugging workflow — including submitting a "dummy wait" job, creating a remote SSH user, connecting via VS Code, and replaying task scripts — see [README-schism-debug-prototype.md](README-schism-debug-prototype.md).
