@@ -6,6 +6,7 @@ from dmsbatch import mount_blob
 
 import click
 import sys
+import logging
 
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
@@ -86,6 +87,84 @@ def create_pool(file, pool_name, log_level):
     batch.create_pool_from_config(file, pool_name)
 
 
+@click.command(
+    help=(
+        "Restart a stuck Azure Batch pool by resizing it to 0 nodes and restoring "
+        "the original autoscale formula. Useful when spot/low-priority VMs are "
+        "preempted and the run stalls."
+    )
+)
+@click.option(
+    "--subscription-id",
+    envvar="AZURE_SUBSCRIPTION_ID",
+    required=True,
+    help="Azure subscription ID (or set AZURE_SUBSCRIPTION_ID env var).",
+)
+@click.option(
+    "--resource-group",
+    required=True,
+    help="Resource group containing the Batch account.",
+)
+@click.option(
+    "--batch-account",
+    required=True,
+    help="Batch account name.",
+)
+@click.option(
+    "--pool-id",
+    required=True,
+    help="ID of the pool to restart.",
+)
+@click.option(
+    "--wait-minutes",
+    default=30,
+    show_default=True,
+    type=int,
+    help="Minutes to wait for pool to drain to 0 before restoring autoscale.",
+)
+@click.option(
+    "--node-dealloc",
+    default="requeue",
+    show_default=True,
+    type=click.Choice(
+        ["requeue", "terminate", "taskcompletion", "retaineddata"],
+        case_sensitive=False,
+    ),
+    help=(
+        "Node deallocation option. 'requeue' (default) cancels stuck tasks so they "
+        "can restart on fresh nodes."
+    ),
+)
+@click.option(
+    "--log-level",
+    default="INFO",
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+    ),
+    show_default=True,
+    help="Log level.",
+)
+def restart_stuck_pool(
+    subscription_id,
+    resource_group,
+    batch_account,
+    pool_id,
+    wait_minutes,
+    node_dealloc,
+    log_level,
+):
+    batch.setup_logging(log_level)
+    from dmsbatch.restart_stuck_pool import restart_stuck_pool as _restart
+    _restart(
+        subscription_id=subscription_id,
+        resource_group=resource_group,
+        batch_account=batch_account,
+        pool_id=pool_id,
+        wait_timeout_minutes=wait_minutes,
+        node_dealloc_option=node_dealloc,
+    )
+
+
 @click.command(help="set batch and storage account keys")
 @click.option(
     "--resource-group-name", prompt="resource group name", help="resource group name"
@@ -137,11 +216,13 @@ def upload_batch_scripts(resource_group_name, storage_account_name):
 schism.add_command(submit_job, name="submit-job")
 schism.add_command(set_keys, name="set-keys")
 schism.add_command(upload_batch_scripts, name="upload-batch-scripts")
+schism.add_command(restart_stuck_pool, name="restart-stuck-pool")
 
 main.add_command(config_generate_cmd, name="config-generate")
 main.add_command(schism, name="schism")
 main.add_command(submit_job, name="submit-job")
 main.add_command(create_pool, name="create-pool")
+main.add_command(restart_stuck_pool, name="restart-stuck-pool")
 main.add_command(mount_blob.mount_blob, name="mount-blob")
 main.add_command(mount_blob.unmount_all_blobs)
 
