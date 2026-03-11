@@ -469,7 +469,10 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
         num_hosts = config_dict["num_hosts"]
         application_command_template = config_dict["application_command_template"]
         app_cmd = load_command_from_resourcepath(fname=application_command_template)
-        app_cmd = app_cmd.format(**config_dict)  # do we need an order for substitution?
+        format_dict = dict(config_dict)
+        if isinstance(format_dict.get("setup_dirs"), list):
+            format_dict["setup_dirs"] = " ".join(format_dict["setup_dirs"])
+        app_cmd = app_cmd.format(**format_dict)  # do we need an order for substitution?
         
         if ostype == "windows":
             # Encode the commands as base64
