@@ -84,6 +84,72 @@ package_and_upload_batch_setup "../schism_scripts/" $MY_BATCH_ACCOUNT $MY_RG
 package_and_upload_schimpy $MY_BATCH_ACCOUNT $MY_RG
 ```
 
+#### Migrating application packages to another batch account
+
+When setting up a new batch account you can copy all application packages from an existing account rather than rebuilding them from source. The [app-packages/batch_app_package_and_upload.sh](app-packages/batch_app_package_and_upload.sh) script provides three helper functions for this workflow.
+
+##### Step 1: Download packages from the source account
+
+Download a single package (optionally specifying a version; omit or pass `default` to use the account's default version):
+
+```bash
+source batch_app_package_and_upload.sh
+
+# Download the default version of a single package
+download_batch_app_package <app_name> <src_batch> <src_resource_group>
+
+# Download a specific version into a custom output directory
+download_batch_app_package <app_name> <src_batch> <src_resource_group> <version> /tmp/packages
+```
+
+To download **all** packages at their default versions in one shot:
+
+```bash
+export SRC_BATCH="source_batch_account"
+export SRC_RG="source_resource_group"
+export PKG_DIR="/tmp/packages"
+
+download_all_default_packages $SRC_BATCH $SRC_RG $PKG_DIR
+```
+
+This will create one zip file per application under `$PKG_DIR`, named `<app_name>_<version>.zip`.
+
+##### Step 2: Generate upload commands for the target account
+
+Once the zip files are downloaded, generate the corresponding `package_and_upload_app` commands ready to run against the new account:
+
+```bash
+export DST_BATCH="target_batch_account"
+export DST_RG="target_resource_group"
+
+generate_upload_commands $SRC_BATCH $SRC_RG $DST_BATCH $DST_RG $PKG_DIR
+```
+
+This prints a list of `package_and_upload_app` calls to stdout, for example:
+
+```
+# Upload commands for target batch account: target_batch_account (target_resource_group)
+# Package directory: /tmp/packages
+
+package_and_upload_app "batch_setup" "alma8.7" "/tmp/packages/batch_setup_alma8.7.zip" target_batch_account target_resource_group
+package_and_upload_app "schism_with_deps" "5.11.1_alma8.7hpc_v4_mvapich2" "/tmp/packages/schism_with_deps_5.11.1_alma8.7hpc_v4_mvapich2.zip" target_batch_account target_resource_group
+...
+```
+
+##### Step 3: Run the upload commands
+
+Review the generated output, then execute it (pipe directly or copy-paste):
+
+```bash
+generate_upload_commands $SRC_BATCH $SRC_RG $DST_BATCH $DST_RG $PKG_DIR | bash
+```
+
+> [!NOTE]
+> `azcopy` is used for downloading if available (faster for large packages); otherwise `wget` is used as a fallback.
+
+> [!WARNING]
+> Ensure you are logged in (`az login --use-device-code`) and that the active subscription contains **both** the source and target batch accounts, or switch subscriptions between the download and upload steps if they reside in different subscriptions.
+
 
 
 #### Install azure_dms_batch from repo
