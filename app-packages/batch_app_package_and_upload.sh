@@ -11,20 +11,77 @@
 #
 ########################################################################################
 package_and_upload_telegraf() {
-    # Make sure that the telegraf.conf file in the telegraf directory has the instrumentation key specified or it will not be able to send data to the app insights
+    # Prompts for an Application Insights resource name, looks up its instrumentation key,
+    # substitutes it into telegraf.conf, packages and uploads to the batch account.
+    # The original telegraf.conf is never modified on disk — substitution happens in a temp copy.
     telegraf_dir=$1
     batch_name=$2
     resource_group_name=$3
 
-    pushd $telegraf_dir
+    # --- Interactive: get Application Insights resource name ---
+    read -r -p "Enter Application Insights resource name (searched across the current subscription): " appinsights_name
+    if [[ -z "$appinsights_name" ]]; then
+        echo "ERROR: No Application Insights name provided. Aborting." >&2
+        return 1
+    fi
+
+    echo "Looking up '${appinsights_name}' across the current subscription..."
+    local match_count resource_id
+    match_count=$(az resource list \
+        --resource-type "microsoft.insights/components" \
+        --name "${appinsights_name}" \
+        --query "length(@)" \
+        --output tsv 2>/dev/null)
+
+    if [[ -z "$match_count" || "$match_count" -eq 0 ]]; then
+        echo "ERROR: No Application Insights resource named '${appinsights_name}' found in the current subscription." >&2
+        echo "       Verify the name and that you are logged in to the correct subscription." >&2
+        return 1
+    fi
+    if [[ "$match_count" -gt 1 ]]; then
+        echo "WARNING: ${match_count} resources named '${appinsights_name}' found. Using the first one." >&2
+        az resource list --resource-type "microsoft.insights/components" --name "${appinsights_name}" \
+            --query "[].{Name:name, ResourceGroup:resourceGroup, Location:location}" --output table >&2
+    fi
+
+    resource_id=$(az resource list \
+        --resource-type "microsoft.insights/components" \
+        --name "${appinsights_name}" \
+        --query "[0].id" \
+        --output tsv 2>/dev/null)
+
+    instrumentation_key=$(az monitor app-insights component show \
+        --ids "${resource_id}" \
+        --query instrumentationKey \
+        --output tsv 2>/dev/null)
+
+    if [[ -z "$instrumentation_key" ]]; then
+        echo "ERROR: Could not retrieve instrumentation key for '${appinsights_name}' (id: ${resource_id})." >&2
+        return 1
+    fi
+    echo "Instrumentation key retrieved successfully."
+
+    # --- Build package from a temp directory so the source telegraf.conf is never modified ---
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    cp -r "${telegraf_dir}/." "${tmp_dir}/"
+
+    # Substitute the placeholder key in the temp copy
+    sed -i "s|instrumentation_key = \"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\"|instrumentation_key = \"${instrumentation_key}\"|" \
+        "${tmp_dir}/telegraf.conf"
+
     # todays date in 2024.06.11 format
     version=$(date +"%Y.%m.%d")
     package_file="telegraf_${version}.zip"
-    zip -r "../${package_file}" *
+
+    pushd "${tmp_dir}"
+    zip -r "${OLDPWD}/${package_file}" *
     popd
+    rm -rf "${tmp_dir}"
+
     #module load azure_cli
     az batch application package create --application-name telegraf --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
-    az batch application set --application-name telegraf --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}    
+    az batch application set --application-name telegraf --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
 }
 
 package_and_upload_bdschism() {
