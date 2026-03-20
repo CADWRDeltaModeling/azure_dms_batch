@@ -190,9 +190,8 @@ package_and_upload_suxarray_with_deps(){
     mkdir -p /tmp/suxarray_with_deps_${version}
     pushd /tmp/suxarray_with_deps_${version}
     conda env remove -n suxarray_${version} -y || true
-    conda create -n suxarray_${version} -y -c conda-forge -c cadwr-dms python=3.11 dask netcdf4 h5netcdf numba scipy scikit-learn matplotlib pyarrow requests spatialpandas cartopy datashader antimeridian shapely geoviews pyogrio pandas=2.0.3 xarray=2024.7.0 pyproj schimpy # these are pinned dependencies for suxarray branch v2024.09.0
+    conda create -n suxarray_${version} -y -c conda-forge -c cadwr-dms python=3.12 dask netcdf4 h5netcdf numba scipy scikit-learn matplotlib pyarrow requests spatialpandas cartopy datashader antimeridian shapely geoviews pyogrio pandas xarray pyproj schimpy suxarray
     conda activate suxarray_${version}
-    pip install --use-pep517 git+https://github.com/cadwrdeltamodeling/suxarray.git@v2024.09.0
     conda activate pack
     conda pack -n suxarray_${version} -o suxarray.tar.gz
     zip -r suxarray_${version}.zip suxarray.tar.gz
@@ -219,7 +218,7 @@ package_and_upload_suxarray(){
     mkdir -p /tmp/${app_name}_${version}
     pushd /tmp/${app_name}_${version}
     conda env remove -n ${app_name} -y || true
-    conda create -n ${app_name} -y -c conda-forge python=3.11 pandas xarray dask netcdf4 h5netcdf numba scipy scikit-learn matplotlib pyarrow requests spatialpandas cartopy datashader antimeridian shapely geoviews pyogrio
+    conda create -n ${app_name} -y -c conda-forge python=3.12 pandas xarray dask netcdf4 h5netcdf numba scipy scikit-learn matplotlib pyarrow requests spatialpandas cartopy datashader antimeridian shapely geoviews pyogrio suxarray
     conda activate pack
     conda pack -n ${app_name} -o ${app_name}.tar.gz
     zip -r ${app_name}_${version}.zip ${app_name}.tar.gz
