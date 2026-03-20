@@ -1,0 +1,44 @@
+resource_group: schism_rg # the resource group containing the batch account
+job_name: run_uv3d_batch # job name, will be used to name the pool and the job
+batch_account_name: mybatch # batch account name
+storage_account_name: mystorageaccount # storage account name
+storage_container_name: mycontainer # this is mounted to $AZ_BATCH_MOUNTS_DIR/<<storage_container_name>> in addition to batch container which is mounted to $AZ_BATCH_MOUNTS_DIR/batch
+study_dir: simulations/mystudy # path within storage container to the completed SCHISM run
+# task_ids define which timestep indices to extract.
+# Each task processes the per-core SCHISM output file at that index (e.g. salinity_{task_id}.nc).
+task_ids: "range(1, 20)" # adjust range to match the number of output chunks in your run
+# Only copy output files matching this task's chunk index plus auxiliary station/grid files
+study_copy_flags: --recursive --preserve-symlinks --exclude-path "sflux" --include-regex ".*_{task_id}\.nc;flux.*;.*grid.*;.*bp;.*\.sh;.*nml.*"
+
+delete_after_mins: 1000 # job and pool nodes auto-deleted after this many idle minutes
+
+num_hosts: 1 # one compute node is sufficient; tasks are embarrassingly parallel
+# DS5_v2 (16 vCPU) is cost-effective for extract; no InfiniBand needed
+vm_size: standard_ds5_v2
+task_slots_per_node: 16 # each extract task is lightweight — pack many onto one node
+
+
+schism_run_start_date: 2015-03-01 # simulation start date; probably not needed here.
+num_scribes: 1 # not used for MPI; kept for template compatibility
+
+# Note: this template uses 'command' for post-processing tasks
+command: |
+  set -u
+
+  nfile={task_id}                                              # inherited per task from array numbers (above)
+  source $AZ_BATCH_APP_PACKAGE_batch_setup/batch/get_rndays_from_param_nml.sh # source the function to get rndays from param.nml
+  rnday_int=$(get_rndays_from_param_nml param.nml.tropic)          # extract rnday from param.nml using the function defined in get_rndays_from_param_nml.sh
+
+  if (( nfile <= rnday_int )); then
+    echo "[RUN]  nfile=$nfile, rnday=$rnday_int"
+    bds uv3d_single "$nfile" -o outputs.tropic/uv3d --overwrite     # compute single uv3d file from $nfile
+  else
+    echo "[SKIP] nfile=$nfile > rnday=$rnday_int"
+    return 0
+  fi
+
+  azcopy copy outputs.tropic/uv3d_${{nfile}}.th.nc \
+    "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}/outputs.tropic/uv3d_${{nfile}}.th.nc?{sas}" || true;
+
+# No inter-node communication required; tasks run independently by task_id.
+template_name: "alma87_mvapich2_20241018_pp" # this is the template name for the pool. Found in azure_dms_batch/dmsbatch/templates

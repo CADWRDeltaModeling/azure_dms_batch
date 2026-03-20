@@ -122,38 +122,25 @@ package_and_upload_bdschism() {
     az batch application set --application-name BayDeltaSCHISM --default-version "${today}" --name ${batch_name} --resource-group ${resource_group_name}
 }
 
-package_and_upload_app() {
-    app_name=$1
-    version=$2
-    package_file=$3
-    batch_name=$4
-    resource_group_name=$5
-
-    #module load azure_cli
-    echo "Creating application package ${app_name} with version ${version} using ${package_file} for ${batch_name} in ${resource_group_name}"
-    az batch application package create --application-name ${app_name} --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
-    echo "Making ${version} the default version for ${app_name} for ${batch_name} in ${resource_group_name}"
-    az batch application set --application-name ${app_name} --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
-}
-
 package_and_upload_batch_setup(){
     batch_setup_dir=$1
     batch_name=$2
     resource_group_name=$3
 
-    version="alma8.7"
-    package_file="batch_setup_${version}.zip"
+    # todays date in 2024.06.11 format
+    today=$(date +"%Y.%m.%d")
+    package_file="batch_setup_${today}.zip"
     this_dir=$(pwd)
     pushd $batch_setup_dir
     zip -r "${package_file}" batch
     mv "${package_file}" $this_dir
     popd
     #module load azure_cli
-    az batch application package create --application-name batch_setup --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
-    az batch application set --application-name batch_setup --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
+    az batch application package create --application-name batch_setup --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${today}"
+    az batch application set --application-name batch_setup --default-version "${today}" --name ${batch_name} --resource-group ${resource_group_name}
 }
 
-package_and_upload_schimpy(){
+package_and_upload_schimpy_with_deps(){
     batch_name=$1
     resource_group_name=$2
     app_name="schimpy_with_deps"
@@ -207,29 +194,46 @@ package_and_upload_suxarray_with_deps(){
     popd
 }
 
-package_and_upload_suxarray(){
+package_and_upload_pydelmod(){
     batch_name=$1
     resource_group_name=$2
-    app_name="suxarray"
+    app_name="pydelmod"
     # todays date in 2024.06.11 format
     today=$(date +"%Y.%m.%d")
     version=${today}
     rm -rf /tmp/${app_name}_${version}
     mkdir -p /tmp/${app_name}_${version}
     pushd /tmp/${app_name}_${version}
-    conda env remove -n ${app_name} -y || true
-    conda create -n ${app_name} -y -c conda-forge python=3.12 pandas xarray dask netcdf4 h5netcdf numba scipy scikit-learn matplotlib pyarrow requests spatialpandas cartopy datashader antimeridian shapely geoviews pyogrio suxarray
+    wget https://raw.githubusercontent.com/CADWRDeltaModeling/pydelmod/master/environment.yml
+    sed -i '/- pyhecdss/i\  - libgfortran' environment.yml # add libgfortran to the environment.yml
+    conda env remove -n ${app_name}_${version} -y || true
+    conda env create -f environment.yml -n ${app_name}_${version}
     conda activate pack
-    conda pack -n ${app_name} -o ${app_name}.tar.gz
+    conda pack -n ${app_name}_${version} -o ${app_name}.tar.gz
     zip -r ${app_name}_${version}.zip ${app_name}.tar.gz
     conda deactivate
-    conda env remove -n ${app_name} -y
+    conda env remove -n ${app_name}_${version} -y
     package_file="${app_name}_${version}.zip"
 
     #module load azure_cli
     az batch application package create --application-name "${app_name}" --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
     az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
     popd
+}
+
+# --------- The following functions are examples of how to package, download and upload different types of applications. They can be adapted or used as templates for other applications. ---------
+package_and_upload_app() {
+    app_name=$1
+    version=$2
+    package_file=$3
+    batch_name=$4
+    resource_group_name=$5
+
+    #module load azure_cli
+    echo "Creating application package ${app_name} with version ${version} using ${package_file} for ${batch_name} in ${resource_group_name}"
+    az batch application package create --application-name ${app_name} --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
+    echo "Making ${version} the default version for ${app_name} for ${batch_name} in ${resource_group_name}"
+    az batch application set --application-name ${app_name} --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
 }
 
 download_batch_app_package() {
@@ -366,42 +370,10 @@ generate_upload_commands() {
     done 3< <(echo "$app_data")
 }
 
-package_and_upload_pydelmod(){
-    batch_name=$1
-    resource_group_name=$2
-    app_name="pydelmod"
-    # todays date in 2024.06.11 format
-    today=$(date +"%Y.%m.%d")
-    version=${today}
-    rm -rf /tmp/${app_name}_${version}
-    mkdir -p /tmp/${app_name}_${version}
-    pushd /tmp/${app_name}_${version}
-    wget https://raw.githubusercontent.com/CADWRDeltaModeling/pydelmod/master/environment.yml
-    sed -i '/- pyhecdss/i\  - libgfortran' environment.yml # add libgfortran to the environment.yml
-    conda env remove -n ${app_name}_${version} -y || true
-    conda env create -f environment.yml -n ${app_name}_${version}
-    conda activate pack
-    conda pack -n ${app_name}_${version} -o ${app_name}.tar.gz
-    zip -r ${app_name}_${version}.zip ${app_name}.tar.gz
-    conda deactivate
-    conda env remove -n ${app_name}_${version} -y
-    package_file="${app_name}_${version}.zip"
-
-    #module load azure_cli
-    az batch application package create --application-name "${app_name}" --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
-    az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
-    popd
-}
-
-
-
-#package_and_upload_bdschism "../../BayDeltaSCHISM" schismbatch dwrbdo_schism_rg
-#package_and_upload_bdschism "../../BayDeltaSCHISM" dwrbdodspbatch dwrbdo_dsp
 #package_and_upload_telegraf "telegraf" schismbatch dwrbdo_schism_rg
 #package_and_upload_telegraf "telegraf" dwrbdodspbatch dwrbdo_dsp
 #package_and_upload_schism "schism" schismbatch dwrbdo_schism_rg
 #package_and_upload_schism "schism" dwrbdodspbatch dwrbdo_dsp
-#package_and_upload_batch_setup "../schism_scripts/" schismbatch dwrbdo_schism_rg
 #package_and_upload_batch_setup "../schism_scripts/" dwrbdodspbatch dwrbdo_dsp
 #az batch application package create --application-name schism_with_deps --name schismbatch --package-file schism_with_deps_5.11.1_alma8.7hpc_mvapich2.zip -g dwrbdo_schism_rg --version-name "5.11.1_alma8.7hpc_mvapich2"
 #az batch application package create --application-name schism_with_deps --name schismbatch --package-file schism_with_deps_5.11.1_alma8.7hpc_v4_mvapich2.zip -g dwrbdo_schism_rg --version-name "5.11.1_alma8.7hpc_v4_mvapich2"
@@ -410,8 +382,8 @@ package_and_upload_pydelmod(){
 #az batch application package create --application-name schism_with_deps --name schismbatch --package-file schism_with_deps_5.11.1_alma8.7hpc_hpcx.zip -g dwrbdo_schism_rg --version-name "5.11.1_alma8.7hpc_hpcx"
 #az batch application package create --application-name mvapich2 --name schismbatch --package-file mvapich2-2.3.7-1-ndr-patch.zip -g dwrbdo_schism_rg --version-name "2.3.7-1-ndr-patch"
 #az batch application package create --application-name schism_with_deps --name schismbatch --package-file schism_with_deps_v5.11.1_alma8.7hpc_mvapich2_ndr_patch.zip -g dwrbdo_schism_rg --version-name "5.11.1_alma8.7hpc_mvapich2_ndr_patch"
-#package_and_upload_schimpy schismbatch dwrbdo_schism_rg
-#package_and_upload_schimpy dwrbdodspbatch dwrbdo_dsp
 #package_and_upload_pydelmod dwrmodelingbatchaccount azure_model_batch
-#package_and_upload_suxarray dwrbdodspbatch dwrbdo_dsp
 #package_and_upload_suxarray_with_deps schismbatch dwrbdo_schism_rg
+#package_and_upload_schimpy_with_deps schismbatch dwrbdo_schism_rg
+#package_and_upload_bdschism schismbatch dwrbdo_schism_rg
+#package_and_upload_batch_setup "../schism_scripts/" schismbatch dwrbdo_schism_rg

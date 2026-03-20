@@ -787,6 +787,7 @@ def initialize_config(config_file, pool_name=None):
     else:
         config_dict["task_ids"] = [""]
     config_dict["task_id"] = config_dict["task_ids"][0]  # for now
+    config_dict = move_key_to_first(config_dict, "task_id")  # ensure task_id is substituted before study_copy_flags and command
     # add in app_pkgs_script
     config_dict["app_pkgs_script"] = build_app_pkg_scripts(config_dict)
     logger.info("config initialized...")
