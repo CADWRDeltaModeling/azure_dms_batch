@@ -2,9 +2,13 @@
 # assumes root user is running this script. 
 # Build all from a clean (Almalinx) Linux machine
 set -e
+# Initialize module system (needed when running under sudo)
+if [ -f /etc/profile.d/modules.sh ]; then
+  source /etc/profile.d/modules.sh
+fi
 #
 export SCHISM_VERSION="v5.11.1"
-export OSVER="alma8.7hpc"
+export OSVER="alma8.10hpc"
 # Activate MVAPICH2 if argument to this script is mvapich2 else if openmpi activate openmpi
 if [ "$1" == "mvapich2" ]; then
   module load mpi/mvapich2
@@ -31,18 +35,23 @@ else
   exit 1
 fi
 
-# Set the compilers
-export CC=mpicc
-export CXX=mpicxx
-export FC=mpif90
+# Set the compilers for MPI builds (used by SCHISM)
+export MPI_CC=mpicc
+export MPI_CXX=mpicxx
+export MPI_FC=mpif90
 # -fcheck=all -fno-omit-frame-pointer # for debugging only
 export INFO_FLAGS="-g -fbacktrace"
 if [ "$1" == "intelmpi" ]; then
-  export CC=mpiicc
-  export CXX=mpiicpc
-  export FC=mpiifort
+  export MPI_CC=mpiicc
+  export MPI_CXX=mpiicpc
+  export MPI_FC=mpiifort
   export INFO_FLAGS="-g -traceback"
 fi
+# Use plain compilers for building libraries (HDF5, NetCDF) to avoid
+# libtool embedding libmpi.la dependencies in .la files
+export CC=gcc
+export CXX=g++
+export FC=gfortran
 # Install dependencies
 dnf install -y --nogpgcheck gcc gcc-c++ git procps-ng ncurses cmake python39 
 dnf install -y --nogpgcheck curl-devel # libcurl-devel, libxml2-devel, zlib-devel, m4, and diffutils.
@@ -92,7 +101,10 @@ tar -xzf ${TAR_NETCDF_FORTRAN} && cd ${TAR_NETCDF_FORTRAN%.tar.gz} && mkdir buil
 LD_LIBRARY_PATH=${PREFIX_NETCDF}/lib:${PREFIX_HDF5}/lib:$LD_LIBRARY_PATH CFLAGS="-I${PREFIX_NETCDF}/include -I${PREFIX_HDF5}/include" LDFLAGS="-L${PREFIX_NETCDF}/lib -L${PREFIX_HDF5}/lib" LIBS="-lnetcdf -lhdf5" ../configure --prefix=${PREFIX_NETCDF_FORTRAN}
 make -j $(nproc) install
 
-# Install SCHISM
+# Install SCHISM - switch to MPI compilers
+export CC=${MPI_CC}
+export CXX=${MPI_CXX}
+export FC=${MPI_FC}
 cd /tmp
 export LD_LIBRARY_PATH=${PREFIX_NETCDF_FORTRAN}/lib:${PREFIX_NETCDF}/lib:${PREFIX_HDF5}/lib:$LD_LIBRARY_PATH
 export LDFLAGS="-L${PREFIX_NETCDF_FORTRAN}/lib -L${PREFIX_NETCDF}/lib -L${PREFIX_HDF5}/lib"
@@ -124,7 +136,7 @@ cmake -E make_directory build
 cd build
 
 cmake -DCMAKE_Fortran_FLAGS_INIT="$INFO_FLAGS" -DTVD_LIM=VL -DPREC_EVAP=ON -DUSE_GOTM=ON -DGOTM_BASE=../gotm ../src
-make -j $(nproc)
+make -j $(nproc) pschism
 
 cmake -DCMAKE_Fortran_FLAGS_INIT="$INFO_FLAGS" -DTVD_LIM=VL -DPREC_EVAP=ON -DUSE_GOTM=ON -DGOTM_BASE=../gotm -DUSE_GEN=ON ../src
 make -j $(nproc) pschism
@@ -164,7 +176,16 @@ EOF
 export FULL_VERSION=${SCHISM_VERSION}_${OSVER}_${1}
 echo "Full version: $FULL_VERSION"
 zip -r /tmp/schism_with_deps_$FULL_VERSION.zip schism netcdf-c netcdf-fortran hdf5
+# cp /tmp/schism_with_deps_$FULL_VERSION.zip .
+# # Install azcli
+#sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
+#sudo dnf install -y https://packages.microsoft.com/config/rhel/8/packages-microsoft-prod.rpm
+#sudo dnf install azure-cli
+#az --version
+# # Done installing azcli, now upload the package to azure batch
+# az login --use-device-code
 # export BATCH_ACCOUNT="schismbatch"
 # export BATCH_RESOURCE_GROUP="dwrbdo_schism_rg"
-# az batch application package create --application-name schism_with_deps --name $BATCH_ACCOUNT --package-file /tmp/schism_with_deps_$FULL_VERSION.zip -g $BATCH_RESOURCE_GROUP --version-name "$FULL_VERSION"
+# export FULL_VERSION=${SCHISM_VERSION}_${OSVER}_${1}_{machine_type}
+# az batch application package create --application-name schism_with_deps --name $BATCH_ACCOUNT --package-file schism_with_deps_$FULL_VERSION.zip -g $BATCH_RESOURCE_GROUP --version-name "$FULL_VERSION"
 echo "Done building SCHISM with dependencies"
