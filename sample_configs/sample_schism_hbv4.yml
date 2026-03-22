@@ -1,0 +1,65 @@
+resource_group: schism_rg # the resource group containing the batch account
+job_name: simulation_scenario # job name, will be used to name the pool and the job
+batch_account_name: mybatchaccount # batch account name
+storage_account_name: mybatchassociatedstore # storage account name
+storage_container_name: test # this is mounted to $AZ_BATCH_MOUNTS_DIR/<<storage_container_name>> in addition to batch container which is mounted to $AZ_BATCH_MOUNTS_DIR/batch
+study_copy_flags: --recursive --preserve-symlinks --exclude-regex ".*out.*nc"
+study_dir: simulations/my_scenario # path to simulation directory within storage_container_name
+setup_dirs: # supplementary directories copied alongside study_dir
+ - hrrr # meteorological forcing data directory
+num_hosts: 2 # number of compute nodes in the pool
+# num_cores: 352 # optional; defaults to num_hosts * cores_per_node from vm_core_map
+# HBv4 has 176 physical cores (4 NUMA domains x 44 cores), so num_cores = 2 * 176 = 352 by default
+num_scribes: 10 # number of SCHISM scribes; use fewer for GEN_TVD-VL output variant
+
+# HBv4 (Standard_HB176rs_v4): 176 cores AMD EPYC Genoa-X, 4 NUMA domains x 44 cores,
+# 688 GiB RAM, NDR400 InfiniBand (ConnectX-7). Genoa-X has large L3 V-Cache which benefits
+# dense-mesh simulations. Uses HPC-X MPI (OpenMPI-based) with UCX/HCOLL for NDR InfiniBand.
+vm_size: "Standard_HB176rs_v4"
+
+node_type: 'TargetDedicatedNodes' # 'TargetDedicatedNodes' or 'TargetLowPriorityNodes' (spot/preemptible)
+task_slots_per_node: 1
+max_retry_count: 3 # retry a task up to this many times if it fails
+delete_after_mins: 1000 # job and nodes auto-deleted after this many idle minutes
+
+# HBv4-specific MPI tuning: map by NUMA domain (44 cores each), enable HCOLL collective
+# acceleration, and route over NDR400 InfiniBand (mlx5_ib0). UCX rc_x for RDMA + sm for shared memory.
+mpi_tuning_opts: "--map-by ppr:44:numa -mca coll_hcoll_enable 1 -x HCOLL_MAIN_IB=mlx5_ib0:1 -x UCX_TLS=rc_x,sm -x UCX_NET_DEVICES=mlx5_ib0:1"
+mpi_opts: --bind-to core --np {num_cores} --hostfile hostfile -x PATH -x LD_LIBRARY_PATH {mpi_tuning_opts}
+mpi_command: |
+  cd sflux; rm -f *.nc; python3 make_links_full.py; cd ../;
+  rm -f *.nc;
+  echo "------running make_links";
+  python make_links.py;
+  echo "------sflux links made";
+  ls | head ;
+  cd ../; 
+  echo "------checking param.nml link";
+  ls -l param.nml;
+  echo "------checking param.nml content";
+  head -10 param.nml
+  current_date=$(date);
+  if [ -f $AZ_BATCH_TASK_ID.state.txt ]; then
+    echo $current_date >> $AZ_BATCH_TASK_ID.state.txt;
+    echo "Restarting from previous run: $current_date";
+    iterations=$($SCHISM_SCRIPTS_HOME/batch/get_iterations_from_fluxout.sh);
+    echo "flux.out @ $iterations. Copying hotstart_\d+_$iterations\.nc files";
+    azcopy copy --include-regex="hotstart_\d+_$iterations\.nc" --recursive "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}/outputs/?{sas}" . || true;
+    echo "Generating and linking hotstart for $iterations";
+    $SCHISM_SCRIPTS_HOME/batch/generate_and_link_hotstart.sh $iterations;
+    $SCHISM_SCRIPTS_HOME/batch/update_param_for_restart.sh param.nml;
+  else
+    echo $current_date > $AZ_BATCH_TASK_ID.state.txt;
+  fi
+  echo "------checking files with ls";
+  ls;
+  echo "------starting SCHISM";
+  mpirun {mpi_opts} pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}
+
+  # GEN_TVD-VL variant includes GEN tracer transport (e.g. for salmon/nutrient simulations)
+  # Replace with pschism_PREC_EVAP_GOTM_TVD-VL if GEN tracers are not needed
+  #mpirun {mpi_opts} pschism_PREC_EVAP_GOTM_GEN_TVD-VL {num_scribes}
+
+# template — Alma Linux 8.10 HPC image with HPC-X (OpenMPI) optimized for HBv4 (Standard_HB176rs_v4)
+# Use this when targeting HBv4 nodes with NDR400 InfiniBand (ConnectX-7).
+template_name: "alma810_hpcx_latest_hbv4" # this is the template name for the pool. Found in azure_dms_batch/dmsbatch/templates
