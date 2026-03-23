@@ -120,6 +120,14 @@ az batch pool supported-images list --output table
 ```
 A [sample output](notebooks/osimage.list.txt) is included for quick reference 
 
+# Prerequisites
+## conda-pack
+`conda-pack` is a command-line tool for creating conda environments, and azure_dms_batch uses it to package and upload apps to a storage account (see [batch_app_package_and_upload.sh](app-packages/batch_app_package_and_upload.sh)). The `conda-pack` tool needs to be installed in a conda environment called `pack` as follows:
+```bash
+conda create -n pack python=3.9
+conda activate pack
+conda install -c conda-forge conda-pack
+```
 # Tools
 Azure allows you to do most things via the command line interface (cli) or the web console. However I have found the following
 desktop apps useful for working with these services.
