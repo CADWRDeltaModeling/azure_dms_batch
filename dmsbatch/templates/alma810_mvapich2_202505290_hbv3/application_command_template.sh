@@ -52,12 +52,8 @@ run_commands() {{
 {mpi_command}
 }}
 set +e;
-export MV2_HOMOGENEOUS_CLUSTER=1
-export MV2_NDREG_ENTRIES_MAX=131072
-export MV2_NDREG_ENTRIES=32768
-export MV2_ENABLE_AFFINITY=1
-export MV2_CPU_BINDING_POLICY=scatter
-export MV2_CPU_BINDING_LEVEL=core
+# MV2 tuning env vars are passed via mpi_tuning_opts in the job YAML using mpirun -env flags.
+# They are NOT exported here so that the YAML remains the single source of truth.
 run_commands 2> >(tee -a "$AZ_BATCH_TASK_DIR/stderr_command.txt" >&2) > >(tee -a "$AZ_BATCH_TASK_DIR/stdout_command.txt");
 set -e;
 exit_code=${{PIPESTATUS[0]}}; 

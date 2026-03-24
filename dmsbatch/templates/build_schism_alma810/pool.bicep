@@ -4,7 +4,7 @@ param poolName string
 param dmsbatchVersion string = 'unknown'
 param vmSize string = 'Standard_HB120rs_v3'
 param taskSlotsPerNode int = 1
-// AlmaLinux 8.10 HPC — same image as alma810_mvapich2_latest_hbv3
+// AlmaLinux 8.10 HPC — same image as alma810_mvapich2_202505290_hbv3
 param imageReference object = {
   publisher: 'almalinux'
   offer: 'almalinux-hpc'

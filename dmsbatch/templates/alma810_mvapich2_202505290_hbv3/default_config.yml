@@ -5,6 +5,13 @@ vm_size: "standard_hb120rs_v2" # use any of the H series from https://learn.micr
 study_copy_flags: "--recursive --preserve-symlinks --exclude-regex='.*outputs.*nc'"
 setup_dirs_copy_flags: "--recursive --preserve-symlinks"
 delete_after_mins: 240 # delete the job after this many minutes
+# HBv3 MVAPICH2 tuning (benchmark: schism_mpi_timing_test_mvapich2.sh, alma810_mvapich2_202505290_hbv3 template):
+# Winner: numa_bunch_ndreg — 0.1344 d/min (+10.3% vs baseline 0.1218, 632s wall, exit=0)
+# All 6 MV2 vars are passed here via mpirun -env so the YAML is the single source of truth.
+# MV2_CPU_BINDING_POLICY=bunch fills 15 cores per NUMA domain before moving to the next.
+# NDREG values 131072/32768 are required; 65536/34688 crashes with exit=255 on this image.
+mpi_tuning_opts: "-env MV2_HOMOGENEOUS_CLUSTER 1 -env MV2_NDREG_ENTRIES_MAX 131072 -env MV2_NDREG_ENTRIES 32768 -env MV2_ENABLE_AFFINITY 1 -env MV2_CPU_BINDING_POLICY bunch -env MV2_CPU_BINDING_LEVEL core"
+mpi_opts: --bind-to core --np {num_cores} -f hostfile {mpi_tuning_opts}
 mpi_command: 'printenv; echo "define mpi_command in job config yaml file";'
 task_slots_per_node: 1
 # translates to pkg_resources.resource_filename('dmsbatch', 'templates/<template_name>/a>
@@ -20,7 +27,7 @@ app_pkgs:
 - name: batch_setup
 - name: nfs
 - name: schism_with_deps
-  version: v5.11.1_alma8.10hpc_hpcx_hbv4
+  version: v5.11.1_alma8.10hpc_mvapich2
 - name: schimpy_with_deps
 - name: baydeltaschism
 - name: telegraf

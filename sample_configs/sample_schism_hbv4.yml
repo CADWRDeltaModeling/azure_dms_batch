@@ -22,9 +22,11 @@ task_slots_per_node: 1
 max_retry_count: 3 # retry a task up to this many times if it fails
 delete_after_mins: 1000 # job and nodes auto-deleted after this many idle minutes
 
-# HBv4-specific MPI tuning: map by NUMA domain (44 cores each), enable HCOLL collective
-# acceleration, and route over NDR400 InfiniBand (mlx5_ib0). UCX rc_x for RDMA + sm for shared memory.
-mpi_tuning_opts: "--map-by ppr:44:numa -mca coll_hcoll_enable 1 -x HCOLL_MAIN_IB=mlx5_ib0:1 -x UCX_TLS=rc_x,sm -x UCX_NET_DEVICES=mlx5_ib0:1"
+# HBv4-specific MPI tuning (Round 2 benchmark, 2-node 352-rank, HPC-X / UCX):
+# ud_x (Unreliable Datagram) beat dc_x on ConnectX-7 NDR400 for SCHISM's small-message halo-exchange pattern.
+# Winner: numa_udx_sm — 482s vs 547s baseline (12% faster). rc_x avoided (QP exhaustion at 352 ranks).
+# mpi_tuning_opts: "--map-by ppr:44:numa -mca coll_hcoll_enable 1 -x HCOLL_MAIN_IB=mlx5_ib0:1 -x UCX_TLS=rc_x,sm -x UCX_NET_DEVICES=mlx5_ib0:1"  # rc_x crashes at scale
+mpi_tuning_opts: "--map-by ppr:44:numa -x UCX_TLS=ud_x,sm -x UCX_NET_DEVICES=mlx5_ib0:1"
 mpi_opts: --bind-to core --np {num_cores} --hostfile hostfile -x PATH -x LD_LIBRARY_PATH {mpi_tuning_opts}
 mpi_command: |
   cd sflux; rm -f *.nc; python3 make_links_full.py; cd ../;
@@ -62,4 +64,4 @@ mpi_command: |
 
 # template — Alma Linux 8.10 HPC image with HPC-X (OpenMPI) optimized for HBv4 (Standard_HB176rs_v4)
 # Use this when targeting HBv4 nodes with NDR400 InfiniBand (ConnectX-7).
-template_name: "alma810_hpcx_latest_hbv4" # this is the template name for the pool. Found in azure_dms_batch/dmsbatch/templates
+template_name: "alma810_hpcx_202505290_hbv4" # this is the template name for the pool. Found in azure_dms_batch/dmsbatch/templates

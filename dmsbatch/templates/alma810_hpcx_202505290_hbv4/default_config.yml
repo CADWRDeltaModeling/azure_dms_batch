@@ -5,7 +5,12 @@ vm_size: "standard_hb120rs_v2" # use any of the H series from https://learn.micr
 study_copy_flags: "--recursive --preserve-symlinks --exclude-regex='.*outputs.*nc'"
 setup_dirs_copy_flags: "--recursive --preserve-symlinks"
 delete_after_mins: 240 # delete the job after this many minutes
-mpi_command: 'printenv; echo "define mpi_command in job config yaml file";'
+# HBv4 HPC-X/UCX tuning (benchmark: schism_mpi_timing_test.sh, alma810_hpcx_202505290_hbv4 template):
+# Winner: numa_hcoll_udx — 0.1635 d/min (+6.8% vs baseline 0.1531, 513s wall, exit=0)
+# NUMA placement ppr:44:numa + HCOLL collectives + UD transport (ud_x) avoids RC QP exhaustion at scale.
+mpi_tuning_opts: "--map-by ppr:44:numa -mca coll_hcoll_enable 1 -x HCOLL_MAIN_IB=mlx5_ib0:1 -x UCX_TLS=ud_x,sm -x UCX_NET_DEVICES=mlx5_ib0:1"
+mpi_opts: --bind-to core --np {num_cores} --hostfile hostfile -x PATH -x LD_LIBRARY_PATH {mpi_tuning_opts}
+mpi_command: 'printenv; echo "define mpi_command in job config yaml file"; echo "e.g. mpi_command: mpirun {mpi_opts} your_schism_executable"'
 task_slots_per_node: 1
 # translates to pkg_resources.resource_filename('dmsbatch', 'templates/<template_name>/a>
 application_command_template: 'templates/{template_name}/application_command_template.sh' 
@@ -20,7 +25,7 @@ app_pkgs:
 - name: batch_setup
 - name: nfs
 - name: schism_with_deps
-  version: v5.11.1_alma8.10hpc_mvapich2
+  version: v5.11.1_alma8.10hpc_hpcx_hbv4
 - name: schimpy_with_deps
 - name: baydeltaschism
 - name: telegraf

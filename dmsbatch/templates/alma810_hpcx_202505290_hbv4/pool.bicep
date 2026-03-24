@@ -14,7 +14,7 @@ param imageReference object = {
   publisher: 'almalinux'
   offer: 'almalinux-hpc'
   sku: '8-hpc-gen2'
-  version: 'latest'
+  version: '8.10.202505290' //'latest'
 }
 param nodeAgentSKUId string = 'batch.node.el 8'
 param startTaskScript string =  'printenv'

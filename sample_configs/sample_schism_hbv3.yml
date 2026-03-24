@@ -23,7 +23,6 @@ task_slots_per_node: 1
 max_retry_count: 3 # retry a task up to this many times if it fails
 delete_after_mins: 1000 # job and nodes auto-deleted after this many idle minutes
 
-mpi_opts: --bind-to core --np {num_cores} -f hostfile
 mpi_command: |
   cd sflux; rm -f *.nc; python3 make_links_full.py; cd ../;
   rm -f *.nc;
@@ -60,4 +59,4 @@ mpi_command: |
 
 # template — Alma Linux 8.7 HPC image with MVAPICH2 optimized for HBv3 (Standard_HB120rs_v3)
 # Use this when targeting HBv3 nodes with their larger on-chip L3 cache.
-template_name: "alma810_mvapich2_latest_hbv3" # this is the template name for the pool. Found in azure_dms_batch/dmsbatch/templates
+template_name: "alma810_mvapich2_202505290_hbv3" # this is the template name for the pool. Found in azure_dms_batch/dmsbatch/templates
