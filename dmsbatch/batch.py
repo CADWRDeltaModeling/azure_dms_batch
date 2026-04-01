@@ -115,6 +115,14 @@ def create_substitutions_for_keywords(dict, **kwargs):
     return dict
 
 
+class _PartialFormatDict(dict):
+    """A dict subclass that returns the original {key} placeholder for missing keys,
+    enabling partial str.format_map() substitution without raising KeyError."""
+
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
 def recursive_format(value, current_data):
     """
     Recursively formats strings within nested structures using values from the dictionary.
@@ -128,10 +136,12 @@ def recursive_format(value, current_data):
     """
     if isinstance(value, str):
         try:
-            return value.format(**current_data)
-        except KeyError as e:
+            # Partial substitution: keys present in current_data are replaced;
+            # missing keys are left as {key} rather than aborting the whole string.
+            return value.format_map(_PartialFormatDict(current_data))
+        except (ValueError, KeyError) as e:
             logger.warning(
-                f"Failed to format ... KeyError: Missing key {e} for value '{value}'"
+                f"Failed to format ... error: {e} for value '{value}'"
             )
             return value
     elif isinstance(value, dict):
