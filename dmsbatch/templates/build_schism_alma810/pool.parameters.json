@@ -1,0 +1,38 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "batchAccountName": {
+            "value": "batch_account_name"
+        },
+        "poolName": {
+            "value": "pool_name"
+        },
+        "vmSize": {
+            "value": "Standard_HB120rs_v3"
+        },
+        "taskSlotsPerNode": {
+            "value": 1
+        },
+        "nodeAgentSKUId": {
+            "value": "batch.node.el 8"
+        },
+        "startTaskScript": {
+            "value": "printenv && $AZ_BATCH_APP_PACKAGE_batch_setup/batch/pool_setup_alma8_hpcx.sh"
+        },
+        "formula": {
+            "value": "formula"
+        },
+        "createdBy": {
+            "value": ""
+        },
+        "dmsbatchVersion": {
+            "value": "1.0.0"
+        },
+        "appPkgs": {
+            "value": [
+                { "name": "batch_setup" }
+            ]
+        }
+    }
+}

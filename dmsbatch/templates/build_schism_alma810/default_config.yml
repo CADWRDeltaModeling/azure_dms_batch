@@ -1,0 +1,18 @@
+location: southcentralus
+pool_name: "{job_name}"
+num_hosts: 1
+vm_size: "Standard_HB120rs_v3"
+delete_after_mins: 480
+command: 'echo "define command in job config yaml file"'
+task_slots_per_node: 1
+application_command_template: 'templates/{template_name}/application_command_template.sh'
+coordination_command_template: 'templates/{template_name}/coordination_command_template.sh'
+job_start_command_template: 'templates/{template_name}/job_start_command_template.sh'
+pool_bicep_resource: 'templates/{template_name}/pool.bicep'
+pool_parameters_resource: 'templates/{template_name}/pool.parameters.json'
+node_type: 'TargetDedicatedNodes'
+autoscale_formula: 'templates/{template_name}/autoscale_formula.txt'
+created_by: ''
+run_as_admin: true
+app_pkgs:
+- name: batch_setup

@@ -605,6 +605,11 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
             ]
             output_file_specs.extend(output_files)
 
+        elevation_level = (
+            batchmodels.ElevationLevel.admin
+            if config_dict.get("run_as_admin", False)
+            else None
+        )
         if coordination_cmd is not None:
             task = client.create_task(
                 task_name,
@@ -615,6 +620,7 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
                 env_settings=config_dict.get("environment_variables", None),
                 output_files=output_file_specs,
                 container_settings=task_container_settings,
+                elevation_level=elevation_level,
             )
         else:
             task = client.create_task(
@@ -624,6 +630,7 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
                 env_settings=config_dict.get("environment_variables", None),
                 output_files=output_file_specs,
                 container_settings=task_container_settings,
+                elevation_level=elevation_level,
             )
         tasks.append(task)
         if len(tasks) == 100:
@@ -690,7 +697,6 @@ def initialize_config(config_file, pool_name=None):
         "batch_account_name",
         "storage_account_name",
         "storage_container_name",
-        "study_dir",
         "job_name",
     ]
     for key in required_keys:
@@ -706,6 +712,9 @@ def initialize_config(config_file, pool_name=None):
     with as_file(default_config_resource) as default_config_file:
         default_config_dict = parse_yaml_file(str(default_config_file))
     update_if_not_defined(config_dict, **default_config_dict)
+    # default study_dir to current working dir if not specified
+    if "study_dir" not in config_dict:
+        config_dict["study_dir"] = "."
     # get user info
     user_info = get_user_info()
     if "user" in user_info:

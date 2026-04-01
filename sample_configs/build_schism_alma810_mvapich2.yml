@@ -1,0 +1,73 @@
+resource_group: dwrbdo_schism_scus_rg
+location: southcentralus
+job_name: build_schism_alma810
+batch_account_name: schismbatchscus
+storage_account_name: schismsascus
+storage_container_name: batch
+vm_size: Standard_HB120rs_v3
+num_hosts: 1
+node_type: 'TargetDedicatedNodes'
+max_task_retry_count: 0
+task_slots_per_node: 1
+delete_after_mins: 480
+template_name: "build_schism_alma810"
+run_as_admin: true
+
+# Version variables — adjust here to rebuild a different variant or version
+mpi_variant: mvapich2
+schism_version: v5.11.1
+os_ver: alma8.10hpc
+# Derived names: built once by Python substitution so they're consistent throughout
+full_version: "{schism_version}_{os_ver}_{mpi_variant}"
+zip_name: "schism_with_deps_{full_version}.zip"
+register_script_name: "register_schism_with_deps_{full_version}.sh"
+# Upload destination inside storage_container_name
+study_dir: "apps/{job_name}"
+
+command: |
+  echo "=== Building SCHISM {full_version} ===";
+  sudo bash $AZ_BATCH_APP_PACKAGE_batch_setup/batch/schism_build.sh {mpi_variant};
+  echo "=== Build complete. Generating registration script... ===";
+  cat > /tmp/{register_script_name} << 'REGSCRIPT'
+  #!/bin/bash
+  # Register schism_with_deps {full_version} as an Azure Batch application package.
+  # Run from any machine with az cli logged in (az login) and the zip local or in blob.
+  set -e
+  ZIP_NAME="{zip_name}"
+  FULL_VERSION="{full_version}"
+  BATCH_ACCOUNT="{batch_account_name}"
+  BATCH_RG="{resource_group}"
+  STORAGE_ACCOUNT="{storage_account_name}"
+  STORAGE_CONTAINER="{storage_container_name}"
+  BLOB_PATH="{study_dir}"
+  echo "Downloading $ZIP_NAME from blob..."
+  STORAGE_KEY=$(az storage account keys list \
+      --account-name $STORAGE_ACCOUNT \
+      --resource-group $BATCH_RG \
+      --query "[0].value" --output tsv)
+  az storage blob download \
+      --account-name $STORAGE_ACCOUNT \
+      --account-key "$STORAGE_KEY" \
+      --container-name $STORAGE_CONTAINER \
+      --name "$BLOB_PATH/$ZIP_NAME" \
+      --file "$ZIP_NAME"
+  echo "Registering $FULL_VERSION in $BATCH_ACCOUNT ($BATCH_RG)..."
+  az batch application package create \
+      --application-name schism_with_deps \
+      --name "$BATCH_ACCOUNT" \
+      --package-file "$ZIP_NAME" \
+      --resource-group "$BATCH_RG" \
+      --version-name "$FULL_VERSION"
+  az batch application set \
+      --application-name schism_with_deps \
+      --default-version "$FULL_VERSION" \
+      --name "$BATCH_ACCOUNT" \
+      --resource-group "$BATCH_RG"
+  echo "Done. schism_with_deps $FULL_VERSION is now the default in $BATCH_ACCOUNT."
+  REGSCRIPT
+  chmod +x /tmp/{register_script_name};
+  echo "=== Uploading {zip_name} to blob {storage_container_name}/{study_dir}/ ===";
+  azcopy copy /tmp/{zip_name} "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}/{zip_name}?{sas}";
+  echo "=== Uploading {register_script_name} ===";
+  azcopy copy /tmp/{register_script_name} "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}/{register_script_name}?{sas}";
+  echo "=== All done. Artifacts at: {storage_container_name}/{study_dir}/ ==="
