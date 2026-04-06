@@ -1,16 +1,17 @@
 location: eastus # the location of the batch account
 pool_name: "{job_name}"
 num_hosts: 1
-vm_size: "standard_hb120rs_v2" # use any of the H series from https://learn.microsoft.com/en-us/azure/virtual-machines/sizes-hpc
+vm_size: "standard_hb120rs_v3" # use any of the H series from https://learn.microsoft.com/en-us/azure/virtual-machines/sizes-hpc
 study_copy_flags: "--recursive --preserve-symlinks --exclude-regex='.*outputs.*nc'"
 setup_dirs_copy_flags: "--recursive --preserve-symlinks"
 delete_after_mins: 240 # delete the job after this many minutes
 # HBv3 MVAPICH2 tuning (benchmark: schism_mpi_timing_test_mvapich2.sh, alma810_mvapich2_202505290_hbv3 template):
-# Winner: numa_bunch_ndreg — 0.1344 d/min (+10.3% vs baseline 0.1218, 632s wall, exit=0)
-# All 6 MV2 vars are passed here via mpirun -env so the YAML is the single source of truth.
-# MV2_CPU_BINDING_POLICY=bunch fills 15 cores per NUMA domain before moving to the next.
-# NDREG values 131072/32768 are required; 65536/34688 crashes with exit=255 on this image.
-mpi_tuning_opts: "-env MV2_HOMOGENEOUS_CLUSTER 1 -env MV2_NDREG_ENTRIES_MAX 131072 -env MV2_NDREG_ENTRIES 32768 -env MV2_ENABLE_AFFINITY 1 -env MV2_CPU_BINDING_POLICY bunch -env MV2_CPU_BINDING_LEVEL core"
+# Short-run winner (1251 days): numa_bunch_ndreg — 0.1344 d/min, 632s, exit=0
+# Long-run winner  (1260 days): full_combo       — 0.1286 d/min, 4853s, exit=0
+# full_combo adds MV2_ENABLE_SHARP=1 to NUMA bunch + NDREG opts.
+# Note: numa_bunch_ndreg and baseline both failed (exit=255) in the long run; SHARP stabilizes at scale.
+# MV2_IBA_HCA is omitted (auto-detected by timing script; add -env MV2_IBA_HCA mlx5_ib0:1 if needed).
+mpi_tuning_opts: "-env MV2_HOMOGENEOUS_CLUSTER 1 -env MV2_NDREG_ENTRIES_MAX 131072 -env MV2_NDREG_ENTRIES 32768 -env MV2_ENABLE_AFFINITY 1 -env MV2_CPU_BINDING_POLICY bunch -env MV2_CPU_BINDING_LEVEL core -env MV2_ENABLE_SHARP 1"
 mpi_opts: --bind-to core --np {num_cores} -f hostfile {mpi_tuning_opts}
 mpi_command: 'printenv; echo "define mpi_command in job config yaml file";'
 task_slots_per_node: 1
