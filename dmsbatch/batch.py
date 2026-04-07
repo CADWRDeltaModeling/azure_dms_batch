@@ -174,6 +174,16 @@ def substitute_values(data):
         # Add the formatted value to the updated dictionary
         updated_data[key] = formatted_value
 
+    # Additional passes to resolve forward references (e.g., a user-defined key that
+    # references a default-config key appearing later in insertion order).
+    # Repeat until no more changes occur (or up to a safety limit).
+    for _ in range(10):
+        prev = dict(updated_data)
+        for key, value in updated_data.items():
+            updated_data[key] = recursive_format(value, updated_data)
+        if updated_data == prev:
+            break
+
     return updated_data
 
 
