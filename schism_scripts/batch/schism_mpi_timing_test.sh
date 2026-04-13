@@ -49,10 +49,16 @@ NUM_HOSTS=$(wc -l < "$HOSTFILE")
 CORES_PER_NODE=$(nproc)
 NUM_CORES="${3:-$(( NUM_HOSTS * CORES_PER_NODE ))}"
 
+# Detect NUMA topology for topology-aware MPI placement
+NUMA_NODE_COUNT=$(lscpu | awk '/^NUMA node\(s\)/{print $NF}')
+CORES_PER_NUMA=$(( CORES_PER_NODE / NUMA_NODE_COUNT ))
+
 echo "=== SCHISM MPI Timing Benchmark ==="
 echo "Study dir   : $STUDY_DIR"
 echo "Hosts       : $NUM_HOSTS  ($(cat "$HOSTFILE" | tr '\n' ',' | sed 's/,$//') )"
 echo "Cores/node  : $CORES_PER_NODE"
+echo "NUMA nodes  : $NUMA_NODE_COUNT"
+echo "Cores/NUMA  : $CORES_PER_NUMA"
 echo "Total cores : $NUM_CORES"
 echo "Scribes     : $NUM_SCRIBES"
 echo "rnday       : $BENCH_RNDAY"
@@ -163,60 +169,46 @@ echo "UCX IB device : $UCX_IB_DEV"
 # MPI variant matrix
 # All variants share the fixed base:
 #   mpirun --bind-to core --np <N> --hostfile <F> -x PATH -x LD_LIBRARY_PATH
-# Tuned for HBv4: 4 NUMA domains x 44 cores each, NDR400 InfiniBand (ConnectX-7)
 #
-# ROUND 1 results (2026-03-22):
-#   WINNER: map_ppr44_numa (4109s), numa_hcoll (4121s) — effectively equal
-#   FAILED: all UCX_TLS=rc_x,sm variants (SIGABRT/MPI abort, exit 134/16/205)
-#   Hypothesis: mlx5_ib0:1 is the WRONG device name on these HBv4 nodes.
-#   UCX without HCOLL + rc_x ran but was SLOWEST successful (4557s).
-#   HCOLL alone without NUMA placement hurt vs baseline (4358 vs 4258s).
+# Uses CORES_PER_NUMA detected at runtime from lscpu, so this script works
+# correctly on any NUMA topology (HBv4: 4 NUMA x 44 cores; HBv5: 16 NUMA x 23 cores).
 #
-# ROUND 2 — findings from UCX device discovery (2026-03-23):
-#   - mlx5_ib0:1 IS the correct device name (not the bug).
-#   - rc_x (rc_mlx5) caused SIGABRT because at 352 ranks x 2 nodes RC requires
-#     ~61K QP pairs, exhausting ConnectX-7 resources.
-#   - dc_mlx5 (UCX TLS: dc_x) IS present and IS the correct transport for NDR400.
-#     DC = Dynamic Connected: one QP per HCA port regardless of rank count —
-#     specifically designed for large-scale NDR InfiniBand.
-#   - ud_mlx5 (UCX TLS: ud_x) is connectionless, good fallback.
-#   HCOLL crash root cause (2026-03-23):
-#   - numa_hcoll without UCX_TLS crashes: HCOLL's internal UCX also defaults to
-#     rc_mlx5 → same QP exhaustion → "Destination is unreachable" → SIGBUS.
-#   - Fix: always pair HCOLL with UCX_NET_DEVICES (at minimum) so UCX auto-selects
-#     dc_mlx5, or set UCX_TLS=dc_x,sm explicitly (numa_hcoll_dcx).
+# HBv4 results summary (2026-03-22/23):
+#   WINNER long-run:  map_ppr_numa (4109s)
+#   WINNER short-run: numa_hcoll_udx (513s)
+#   FAILED: UCX_TLS=rc_x variants (SIGABRT/QP exhaustion at 352 ranks x 2 nodes)
+#   NOTE: Always pair HCOLL with UCX_NET_DEVICES to avoid rc_mlx5 QP exhaustion.
+#   dc_x (DC transport) = correct for NDR400/NDR800; one QP per HCA port, scales to any rank count.
 # ============================================================================
 
-# 1. Confirmed round-1 winner — NUMA topology placement, no UCX override
-run_schism_bench "map_ppr44_numa" "--map-by ppr:44:numa"
+# 1. NUMA topology placement, no UCX override — simple, reliable baseline
+run_schism_bench "map_ppr${CORES_PER_NUMA}_numa" "--map-by ppr:${CORES_PER_NUMA}:numa"
 
-# 2. NUMA + HCOLL + UCX auto-select — HCOLL with correct IB device, UCX picks dc_mlx5
-#    (numa_hcoll without UCX_NET_DEVICES crashes: HCOLL's UCX defaults to rc_mlx5 → QP exhaustion)
+# 2. NUMA + HCOLL + UCX auto-select
+#    Always set UCX_NET_DEVICES so HCOLL's UCX picks dc_mlx5 (not rc_mlx5 → QP exhaustion)
 run_schism_bench "numa_hcoll_ucx_auto" \
-    "--map-by ppr:44:numa -mca coll_hcoll_enable 1 -x HCOLL_MAIN_IB=${UCX_IB_DEV} -x UCX_NET_DEVICES=${UCX_IB_DEV}"
+    "--map-by ppr:${CORES_PER_NUMA}:numa -mca coll_hcoll_enable 1 -x HCOLL_MAIN_IB=${UCX_IB_DEV} -x UCX_NET_DEVICES=${UCX_IB_DEV}"
 
-# 3. NUMA + DC transport (UCX dc_x) — the CORRECT transport for NDR400 / ConnectX-7
-#    dc_mlx5 uses one QP per HCA port, scales to any number of ranks
+# 3. NUMA + DC transport — correct transport for NDR400/NDR800 ConnectX-7
+#    dc_mlx5: one QP per HCA port, scales to any number of ranks
 run_schism_bench "numa_dcx_sm" \
-    "--map-by ppr:44:numa -x UCX_TLS=dc_x,sm -x UCX_NET_DEVICES=${UCX_IB_DEV}"
+    "--map-by ppr:${CORES_PER_NUMA}:numa -x UCX_TLS=dc_x,sm -x UCX_NET_DEVICES=${UCX_IB_DEV}"
 
-# 4. NUMA + HCOLL + DC transport — should be the optimal full combo for NDR HBv4
+# 4. NUMA + HCOLL + DC — optimal full combo for NDR InfiniBand
 run_schism_bench "numa_hcoll_dcx" \
-    "--map-by ppr:44:numa -mca coll_hcoll_enable 1 -x HCOLL_MAIN_IB=${UCX_IB_DEV} -x UCX_TLS=dc_x,sm -x UCX_NET_DEVICES=${UCX_IB_DEV}"
+    "--map-by ppr:${CORES_PER_NUMA}:numa -mca coll_hcoll_enable 1 -x HCOLL_MAIN_IB=${UCX_IB_DEV} -x UCX_TLS=dc_x,sm -x UCX_NET_DEVICES=${UCX_IB_DEV}"
 
-# 5. NUMA + UD transport (ud_mlx5 hardware path, connectionless)
-#    Lower latency per message than DC for small messages, no QP scaling issues
+# 5. NUMA + UD transport (connectionless, low latency for small messages)
 run_schism_bench "numa_udx_sm" \
-    "--map-by ppr:44:numa -x UCX_TLS=ud_x,sm -x UCX_NET_DEVICES=${UCX_IB_DEV}"
+    "--map-by ppr:${CORES_PER_NUMA}:numa -x UCX_TLS=ud_x,sm -x UCX_NET_DEVICES=${UCX_IB_DEV}"
 
 # 6. NUMA + HCOLL + UD
 run_schism_bench "numa_hcoll_udx" \
-    "--map-by ppr:44:numa -mca coll_hcoll_enable 1 -x HCOLL_MAIN_IB=${UCX_IB_DEV} -x UCX_TLS=ud_x,sm -x UCX_NET_DEVICES=${UCX_IB_DEV}"
+    "--map-by ppr:${CORES_PER_NUMA}:numa -mca coll_hcoll_enable 1 -x HCOLL_MAIN_IB=${UCX_IB_DEV} -x UCX_TLS=ud_x,sm -x UCX_NET_DEVICES=${UCX_IB_DEV}"
 
-# 7. NUMA + UCX auto (no TLS override) — let UCX pick dc_mlx5 automatically
-#    UCX on NDR400 should prefer dc_mlx5 when left to auto-select
+# 7. NUMA + UCX auto (no TLS override) — let UCX auto-select dc_mlx5
 run_schism_bench "numa_ucx_auto" \
-    "--map-by ppr:44:numa -x UCX_NET_DEVICES=${UCX_IB_DEV}"
+    "--map-by ppr:${CORES_PER_NUMA}:numa -x UCX_NET_DEVICES=${UCX_IB_DEV}"
 
 # 8. Baseline — sanity reference
 run_schism_bench "baseline" ""

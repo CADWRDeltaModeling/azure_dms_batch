@@ -288,12 +288,19 @@ def get_core_count(vm_size, location):
         json_query = "[0].capabilities[?name=='vCPUs'].value | [0]"
         cmd = f'az vm list-skus --location {location} --size {vm_size} --output json --query "{json_query}"'
         try:
-            cpu_count = json.loads(
-                subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
-            )
+            output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT).decode("utf-8").strip()
+            cpu_count = json.loads(output)
+            if cpu_count is None:
+                raise ValueError(
+                    f"VM size '{vm_size}' not found in location '{location}'. "
+                    f"Run 'az vm list-skus --location {location} --size {vm_size}' to verify availability."
+                )
             core_count_per_host = int(cpu_count)
-        except subprocess.SubprocessError as e:
-            logger.error(e)
+        except (subprocess.SubprocessError, subprocess.CalledProcessError) as e:
+            logger.error(f"Failed to query VM size '{vm_size}' in location '{location}': {e}")
+            core_count_per_host = 1
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(str(e))
             core_count_per_host = 1
         VM_CORE_MAP[vm_size] = core_count_per_host
         package = files(__name__.split(".")[0])

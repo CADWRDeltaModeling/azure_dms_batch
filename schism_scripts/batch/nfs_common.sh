@@ -132,23 +132,23 @@ setup_disks()
     lsscsi
 
     # Get the root/OS disk so we know which device it uses and can ignore it later
-    rootDevice=$(mount | grep "on / type" | awk '{print $1}' | sed 's/[0-9]//g')
+    rootDevice=`mount | grep "on / type" | awk '{print $1}' | sed 's/[0-9]//g'`
 
     # Get the TMP disk so we know which device and can ignore it later
     if is_centos7; then
-        tmpDevice=$(mount | grep "on /mnt/resource type" | awk '{print $1}' | sed 's/[0-9]//g')
+        tmpDevice=`mount | grep "on /mnt/resource type" | awk '{print $1}' | sed 's/[0-9]//g'`
     else
-        tmpDevice=$(mount | grep "on /mnt type" | awk '{print $1}' | sed 's/[0-9]//g')
+        tmpDevice=`mount | grep "on /mnt type" | awk '{print $1}' | sed 's/[0-9]//g'`
     fi
 
     # Get the data disk sizes from fdisk, we ignore the disks above
-    dataDiskSize=$(fdisk -l | grep '^Disk /dev/' | grep -v $rootDevice | grep -v $tmpDevice | awk '{print $3}' | sort -n -r | tail -1)
+    dataDiskSize=`fdisk -l | grep '^Disk /dev/' | grep -v $rootDevice | grep -v $tmpDevice | awk '{print $3}' | sort -n -r | tail -1`
 
     # Compute number of disks
-    nbDisks=$(fdisk -l | grep '^Disk /dev/' | grep -v $rootDevice | grep -v $tmpDevice | wc -l)
+    nbDisks=`fdisk -l | grep '^Disk /dev/' | grep -v $rootDevice | grep -v $tmpDevice | wc -l`
     echo "nbDisks=$nbDisks"
 
-    dataDevices="$(fdisk -l | grep '^Disk /dev/' | grep $dataDiskSize | awk '{print $2}' | awk -F: '{print $1}' | sort | head -$nbDisks | tr '\n' ' ' | sed 's|/dev/||g')"
+    dataDevices="`fdisk -l | grep '^Disk /dev/' | grep $dataDiskSize | awk '{print $2}' | awk -F: '{print $1}' | sort | head -$nbDisks | tr '\n' ' ' | sed 's|/dev/||g'`"
 
     mkdir -p $NFS_MOUNT_POINT
 
