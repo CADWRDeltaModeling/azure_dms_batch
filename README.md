@@ -124,7 +124,7 @@ A [sample output](notebooks/osimage.list.txt) is included for quick reference
 ## conda-pack
 `conda-pack` is a command-line tool for creating conda environments, and azure_dms_batch uses it to package and upload apps to a storage account (see [batch_app_package_and_upload.sh](app-packages/batch_app_package_and_upload.sh)). The `conda-pack` tool needs to be installed in a conda environment called `pack` as follows:
 ```bash
-conda create -n pack python=3.9
+conda create -n pack -c conda-forge conda-pack python
 conda activate pack
 conda install -c conda-forge conda-pack
 ```
