@@ -2,12 +2,12 @@
 echo "Build task starting on $(hostname) at $(date)";
 source /usr/share/Modules/init/bash;
 printenv;
-module load mpi/mvapich2;
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup;
 ulimit -s unlimited;
 
 # Run the build command (defined in job YAML)
 run_commands() {{
+set -e;
 {command}
 }}
 set +e;

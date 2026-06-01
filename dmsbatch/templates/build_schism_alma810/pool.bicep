@@ -4,6 +4,9 @@ param poolName string
 param dmsbatchVersion string = 'unknown'
 param vmSize string = 'Standard_HB120rs_v3'
 param taskSlotsPerNode int = 1
+// Resource ID of the user-assigned managed identity used for in-node package registration.
+// Create it with app-packages/setup_build_identity.sh, then paste the output here.
+param buildIdentityResourceId string
 // AlmaLinux 8.10 HPC — same image as alma810_mvapich2_202505290_hbv3
 param imageReference object = {
   publisher: 'almalinux'
@@ -24,6 +27,12 @@ resource batchAccount 'Microsoft.Batch/batchAccounts@2023-11-01' existing = {
 resource batchPool 'Microsoft.Batch/batchAccounts/pools@2023-11-01' = {
   name: poolName
   parent: batchAccount
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${buildIdentityResourceId}': {}
+    }
+  }
   properties: {
     vmSize: vmSize
     interNodeCommunication: 'Disabled'
