@@ -1,0 +1,70 @@
+resource_group: dwrbdo_schism_rg
+location: eastus
+job_name: build-{vm_variant}-{mpi_variant}-v513-alma810
+batch_account_name: schismbatch
+storage_account_name: dwrbdoschismsa
+storage_container_name: batch
+vm_size: standard_hb120rs_v2
+num_hosts: 1
+node_type: 'TargetDedicatedNodes'
+max_task_retry_count: 0
+task_slots_per_node: 1
+delete_after_mins: 480
+template_name: "build_schism_alma810"
+run_as_admin: true
+
+# Version variables — adjust here to rebuild a different variant or version
+mpi_variant: mvapich2 # mvapich2 | mvapich2-ndr-patch | openmpi | hpcx | intelmpi
+schism_version: v5.13
+os_ver: alma8.10hpc
+vm_variant: hb120rs_v2
+make_default: "true" # if true, the registration script will set this version as the default in the Batch account
+
+# Dependency versions — override to pick up a newer release
+hdf5_version: "1.14.3"
+netcdf_c_version: "4.9.2"
+netcdf_fortran_version: "4.6.1"
+gotm_version: "v5.3"
+mvapich2_version: "2.3.7-1-ndr-patch" # only used when mpi_variant=mvapich2-ndr-patch
+# Derived names: built once by Python substitution so they're consistent throughout
+full_version: "{schism_version}_{mpi_variant}_{os_ver}_{vm_variant}"
+zip_name: "schism_with_deps_{full_version}.zip"
+# Upload destination inside storage_container_name
+study_dir: "apps/{job_name}"
+
+command: |
+  echo "=== Building SCHISM {full_version} ===";
+  sudo env \
+    SCHISM_VERSION={schism_version} \
+    OSVER={os_ver} \
+    HDF5_VERSION={hdf5_version} \
+    NETCDF_C_VERSION={netcdf_c_version} \
+    NETCDF_FORTRAN_VERSION={netcdf_fortran_version} \
+    GOTM_VERSION={gotm_version} \
+    MVAPICH2_VERSION={mvapich2_version} \
+    FULL_VERSION={full_version} \
+    bash $AZ_BATCH_APP_PACKAGE_batch_setup/batch/schism_build.sh {mpi_variant};
+  echo "=== Build complete. Uploading {zip_name} to blob... ===";
+  azcopy copy /tmp/{zip_name} "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/{study_dir}/{zip_name}?{sas}";
+  echo "=== Registering application package via managed identity... ===";
+  az login --identity;
+  az batch application package create \
+      --application-name schism_with_deps \
+      --name "{batch_account_name}" \
+      --package-file /tmp/{zip_name} \
+      --resource-group "{resource_group}" \
+      --version-name "{full_version}";
+  az batch application package activate \
+      --application-name schism_with_deps \
+      --name "{batch_account_name}" \
+      --resource-group "{resource_group}" \
+      --version-name "{full_version}" \
+      --format zip;
+  if [ "{make_default}" = "true" ]; then
+      az batch application set \
+        --application-name schism_with_deps \
+        --default-version "{full_version}" \
+        --name "{batch_account_name}" \
+        --resource-group "{resource_group}";
+  fi;
+  echo "=== Done. schism_with_deps {full_version} registered in {batch_account_name}. ==="

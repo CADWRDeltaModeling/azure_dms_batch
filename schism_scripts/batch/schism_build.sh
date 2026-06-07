@@ -105,8 +105,11 @@ curl -L ${URL_HDF5} -o ${TAR_HDF5}
 if [[ -d "${TAR_HDF5%.tar.gz}" ]]; then
   rm -rf ${TAR_HDF5%.tar.gz}
 fi
-tar -xzf ${TAR_HDF5} && cd ${TAR_HDF5%.tar.gz} && mkdir build && cd build
-../configure --prefix=${PREFIX_HDF5} --enable-fortran
+tar -xzf ${TAR_HDF5} && cd ${TAR_HDF5%.tar.gz} && mkdir -p build && cd build
+# HDF5 ≥ 1.14.0 removed the Autotools configure script; use CMake instead.
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PREFIX_HDF5} \
+      -DHDF5_BUILD_FORTRAN=ON -DBUILD_SHARED_LIBS=ON \
+      -DBUILD_TESTING=OFF -DHDF5_BUILD_TOOLS=OFF ..
 make -j $(nproc) install
 
 # Install NetCDF
