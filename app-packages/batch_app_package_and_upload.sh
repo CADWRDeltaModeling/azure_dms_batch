@@ -153,6 +153,14 @@ package_and_upload_schimpy_with_deps(){
     wget https://raw.githubusercontent.com/CADWRDeltaModeling/BayDeltaSCHISM/master/schism_env.linux.yml
     conda env remove -n schimpy_${version} -y || true
     conda env create -f schism_env.linux.yml -n schimpy_${version}
+
+    # Include bdschism as part of schimpy
+    source "$(conda info --base)/etc/profile.d/conda.sh"
+    conda activate schimpy_${version}
+    pip install --no-deps \
+        git+https://github.com/CADWRDeltaModeling/BayDeltaSCHISM.git#subdirectory=bdschism
+    conda deactivate
+
     conda activate pack
     conda pack -n schimpy_${version} -o schimpy.tar.gz
     zip -r schimpy_${version}.zip schimpy.tar.gz
