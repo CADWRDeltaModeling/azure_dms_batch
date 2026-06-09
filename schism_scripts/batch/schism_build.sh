@@ -20,6 +20,14 @@ export OSVER="${OSVER:-alma8.10hpc}"
 # MPI variant-specific settings
 MVAPICH2_VERSION="${MVAPICH2_VERSION:-2.3.7-1-ndr-patch}"
 URL_HPCKIT="${URL_HPCKIT:-https://registrationcenter-download.intel.com/akdlm/IRC_NAS/7f096850-dc7b-4c35-90b5-36c12abd9eaa/l_HPCKit_p_2024.1.0.560.sh}"
+# Compiler selection: 'gnu' (default) or 'intel' (uses icx/icpx/ifx from Intel oneAPI 2024+)
+# When COMPILER=intel with a non-Intel MPI (hpcx, mvapich2, openmpi), the Intel Base Toolkit
+# is installed for the compilers and the MPI wrappers are configured to call Intel compilers.
+# When MPI=intelmpi, Intel compilers are always used regardless of this setting.
+COMPILER="${COMPILER:-gnu}"
+# Intel Base Toolkit installer (provides icx, icpx, ifx — no Intel MPI)
+# Update URL_BASEKIT if a newer version is available: https://www.intel.com/content/www/us/en/developer/tools/oneapi/oneapi-toolkit-download.html
+URL_BASEKIT="${URL_BASEKIT:-https://registrationcenter-download.intel.com/akdlm/IRC_NAS/71180075-e4e3-4c6f-bbbb-19017ed0cf7d/intel-oneapi-toolkit-2026.0.0.198_offline.sh}"
 
 # Install prefixes
 PREFIX_HDF5="${PREFIX_HDF5:-/opt/hdf5}"
@@ -56,16 +64,36 @@ elif [ "$1" == "openmpi" ]; then
 elif [ "$1" == "hpcx" ]; then
   module load mpi/hpcx
 elif [ "$1" == "intelmpi" ]; then
-  # Install Intel oneAPI
-  # Remove Intel oneAPI if it exists
+  # Install Intel oneAPI HPC Toolkit (Intel MPI + Intel compilers)
+  # Uses intel.oneapi.lin.fortran-compiler (ifx) and dpcpp-cpp-compiler (icx/icpx)
+  # as of oneAPI 2024+; ifort-compiler is deprecated.
   rm -rf /opt/intel/oneapi
-
   cd /tmp
-  curl -L ${URL_HPCKIT} -o ${URL_HPCKIT##*/} && chmod +x ${URL_HPCKIT##*/} && ./${URL_HPCKIT##*/} -a -c --silent --eula accept --components="intel.oneapi.lin.ifort-compiler:intel.oneapi.lin.dpcpp-cpp-compiler:intel.oneapi.lin.mpi.devel"
+  HPCKIT_INSTALLER="${URL_HPCKIT##*/}"
+  curl -L "${URL_HPCKIT}" -o "${HPCKIT_INSTALLER}" && chmod +x "${HPCKIT_INSTALLER}"
+  echo "------Available HPC Toolkit components:"
+  ./${HPCKIT_INSTALLER} --list-components || true
+  ./${HPCKIT_INSTALLER} -a -c --silent --eula accept \
+    --components="intel.oneapi.lin.fortran-compiler:intel.oneapi.lin.dpcpp-cpp-compiler:intel.oneapi.lin.mpi.devel"
   source /opt/intel/oneapi/setvars.sh
 else
-  echo "Please provide either mvapich2 or openmpi or intelmpi as an argument to this script"
+  echo "Please provide either mvapich2, openmpi, hpcx, intelmpi, or mvapich2-ndr-patch as an argument"
   exit 1
+fi
+
+# Install Intel Base Toolkit compilers (icx/icpx/ifx) when COMPILER=intel
+# and a non-Intel MPI is being used (intelmpi already installs them above).
+if [ "$COMPILER" == "intel" ] && [ "$1" != "intelmpi" ]; then
+  rm -rf /opt/intel/oneapi
+  cd /tmp
+  BASEKIT_INSTALLER="${URL_BASEKIT##*/}"
+  curl -L "${URL_BASEKIT}" -o "${BASEKIT_INSTALLER}"
+  chmod +x "${BASEKIT_INSTALLER}"
+  echo "------Available Base Toolkit components:"
+  ./${BASEKIT_INSTALLER} --list-components || true
+  ./${BASEKIT_INSTALLER} -a -c --silent --eula accept \
+    --components="intel.oneapi.lin.fortran-compiler:intel.oneapi.lin.dpcpp-cpp-compiler"
+  source /opt/intel/oneapi/setvars.sh
 fi
 
 # Set the compilers for MPI builds (used by SCHISM)
@@ -73,18 +101,39 @@ export MPI_CC=mpicc
 export MPI_CXX=mpicxx
 export MPI_FC=mpif90
 # -fcheck=all -fno-omit-frame-pointer # for debugging only
-export INFO_FLAGS="-g -fbacktrace"
+if [ "$COMPILER" == "intel" ] || [ "$1" == "intelmpi" ]; then
+  export INFO_FLAGS="-g -traceback"
+else
+  export INFO_FLAGS="-g -fbacktrace"
+fi
 if [ "$1" == "intelmpi" ]; then
+  # Intel MPI 2024+: mpiicc/mpiicpc/mpiifort wrap icx/icpx/ifx (mpiicx/mpiicpx/mpiifx also available)
   export MPI_CC=mpiicc
   export MPI_CXX=mpiicpc
   export MPI_FC=mpiifort
-  export INFO_FLAGS="-g -traceback"
+elif [ "$COMPILER" == "intel" ]; then
+  # Non-Intel MPI with Intel compilers: tell MPI wrappers to call icx/icpx/ifx
+  if [ "$1" == "hpcx" ] || [ "$1" == "openmpi" ]; then
+    export OMPI_CC=icx
+    export OMPI_CXX=icpx
+    export OMPI_FC=ifx
+  elif [[ "$1" == mvapich2* ]]; then
+    export MPICH_CC=icx
+    export MPICH_CXX=icpx
+    export MPICH_FC=ifx
+  fi
 fi
-# Use plain compilers for building libraries (HDF5, NetCDF) to avoid
+# Compilers for building libraries (HDF5, NetCDF) — no MPI wrappers here to avoid
 # libtool embedding libmpi.la dependencies in .la files
-export CC=gcc
-export CXX=g++
-export FC=gfortran
+if [ "$COMPILER" == "intel" ]; then
+  export CC=icx
+  export CXX=icpx
+  export FC=ifx
+else
+  export CC=gcc
+  export CXX=g++
+  export FC=gfortran
+fi
 # Install dependencies
 dnf install -y --nogpgcheck gcc gcc-c++ git procps-ng ncurses cmake python39 
 dnf install -y --nogpgcheck curl-devel # libcurl-devel, libxml2-devel, zlib-devel, m4, and diffutils.
@@ -108,6 +157,7 @@ fi
 tar -xzf ${TAR_HDF5} && cd ${TAR_HDF5%.tar.gz} && mkdir -p build && cd build
 # HDF5 ≥ 1.14.0 removed the Autotools configure script; use CMake instead.
 cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${PREFIX_HDF5} \
+      -DCMAKE_C_COMPILER=${CC} -DCMAKE_CXX_COMPILER=${CXX} -DCMAKE_Fortran_COMPILER=${FC} \
       -DHDF5_BUILD_FORTRAN=ON -DBUILD_SHARED_LIBS=ON \
       -DBUILD_TESTING=OFF -DHDF5_BUILD_TOOLS=OFF ..
 make -j $(nproc) install

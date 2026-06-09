@@ -4,7 +4,7 @@ job_name: build-{vm_variant}-{mpi_variant}-v513-alma810
 batch_account_name: schismbatch
 storage_account_name: dwrbdoschismsa
 storage_container_name: batch
-vm_size: standard_{vm_variant}
+vm_size: standard_hb120rs_v2
 num_hosts: 1
 node_type: 'TargetDedicatedNodes'
 max_task_retry_count: 0

@@ -167,7 +167,10 @@ EOF
     TIMEOUT=120
     elapsed=0
     while [ $elapsed -lt $TIMEOUT ]; do
-        mount -a
+        # Mount only NFS entries to avoid spurious failures from local device
+        # fstab entries (e.g. /dev/nvme0n1) present in Alma 8.10 HPC images
+        # that are not formatted on non-master nodes.
+        mount -a -t nfs,nfs4
         if [ $? -eq 0 ]; then
             break
         fi
