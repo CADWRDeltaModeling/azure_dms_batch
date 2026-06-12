@@ -222,7 +222,7 @@ cmake -E make_directory build
 cd build
 
 cmake -DCMAKE_Fortran_FLAGS_INIT="$INFO_FLAGS" $CMAKE_BASE_FLAGS ../src
-make -j $(nproc) pschism
+make -j $(nproc)
 if [ -f CMakeCache.txt ]; then
   rm CMakeCache.txt
 fi
@@ -252,6 +252,12 @@ if [ -f CMakeCache.txt ]; then
 fi
 
 cmake -DCMAKE_Fortran_FLAGS_INIT="$INFO_FLAGS" $CMAKE_BASE_FLAGS -DUSE_SED=ON -DUSE_WWM=ON ../src
+make -j $(nproc) pschism
+if [ -f CMakeCache.txt ]; then
+  rm CMakeCache.txt
+fi
+
+cmake -DCMAKE_Fortran_FLAGS_INIT="$INFO_FLAGS" $CMAKE_BASE_FLAGS -DUSE_ANALYSIS=ON ../src
 make -j $(nproc) pschism
 if [ -f CMakeCache.txt ]; then
   rm CMakeCache.txt
