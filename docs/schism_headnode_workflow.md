@@ -81,7 +81,7 @@ This prevents auto-scale from shrinking the pool when the task ends.
 
 ---
 
-## Step 1 — Cost Warning ⚠️
+## Step 1b — Cost Warning ⚠️
 
 <div class="warn">
 
@@ -109,15 +109,20 @@ This prevents auto-scale from shrinking the pool when the task ends.
 
 ### Recommended: Azure Batch Explorer
 
+**Via Jobs** *(easiest — head node shown directly)*
+
 1. Open **Batch Explorer** → select your Batch account
-2. Navigate **Pools** → select your pool → **Nodes** tab
-3. Find the node whose state is **Running** — the **IP address** is shown directly in the list
-4. Note the IP — you will use it to SSH in
+2. Go to **Jobs** → select your job → select the running **Task**
+3. The head node's IP address is displayed in the **top-right corner** of the task detail pane
+
+**Via Pools** *(alternative)*
+
+1. Navigate **Pools** → select your pool → **Nodes** tab
+2. Find the node whose state is **Running** — the **IP address** is shown in the list
 
 > **Which node is the head node?**  
 > The head node is the one where `AZ_BATCH_IS_CURRENT_NODE_MASTER = true`.  
-> Confirm by clicking the node → **Files** → open `stdout.txt` — it prints:  
-> `This is the master node. <node-id>, master node ip is <ip>`
+> The task detail pane in Batch Explorer displays this node at the top right when the task is running.
 
 *Alternative — Azure Portal:* Batch Account → Pools → pool → Nodes → click node → copy Public IP.  
 *Alternative — CLI:* `az batch node list --pool-id <pool>` and look for the running task node.
@@ -128,19 +133,19 @@ This prevents auto-scale from shrinking the pool when the task ends.
 
 ### Recommended: Azure Batch Explorer
 
-1. **Pools** → select pool → **Nodes** → right-click the head node
-2. Click **Connect** (or **Add User**)
+1. **Pools** → select pool → **Nodes** → select the head node
+2. Click the **Add/Update User** button in the node detail pane
 3. Fill in:
-   - **Username** — e.g. `debuguser`
-   - **Password** or **SSH public key** — paste contents of `~/.ssh/schism_batch.pub` *(see SSH key slides)*
+   - **Username** — `batch-explorer-user`
+   - **SSH public key** — paste contents of `~/.ssh/schism_batch.pub` *(see SSH key slides)*
    - **Admin** — ✅ enable (required to access `/mnt/batch/`)
    - **Expiry** — default 24 h; extend if needed
-4. Click **Create**
+4. Click **Save**
 
 > Repeat for any worker nodes if you need to SSH into them for debugging.
 
 *Alternative — Azure Portal:* Batch Account → Pools → pool → Nodes → select node → **Add User** → same fields.  
-*Alternative — CLI:* `az batch node user create --pool-id <pool> --node-id <node> --name debuguser --ssh-public-key "$(cat ~/.ssh/schism_batch.pub)" --is-admin true`
+*Alternative — CLI:* `az batch node user create --pool-id <pool> --node-id <node> --name batch-explorer-user --ssh-public-key "$(cat ~/.ssh/schism_batch.pub)" --is-admin true`
 
 ---
 
@@ -166,21 +171,21 @@ cat ~/.ssh/schism_batch.pub
 
 ---
 
-## Step 4 — SSH Key Setup in Azure (continued)
+## Step 4b — SSH Key Setup in Azure (continued)
 
 ### 3. Add user with the SSH public key
 
 **Azure Portal** — when adding the user, paste the public key into  
 the **SSH public key** field instead of setting a password.
 
-**Azure Batch Explorer** — same **Add User** dialog, paste the key.
+**Azure Batch Explorer** — select the node → click **Add/Update User** button → paste the public key into the SSH public key field.
 
 **Azure CLI:**
 ```bash
 az batch node user create \
   --pool-id <pool-id> \
   --node-id <node-id> \
-  --name debuguser \
+  --name batch-explorer-user \
   --ssh-public-key "$(cat ~/.ssh/schism_batch.pub)" \
   --is-admin true \
   --account-name <batch_account> \
@@ -189,7 +194,7 @@ az batch node user create \
 
 ---
 
-## Step 4 — SSH Key Setup in Azure (continued)
+## Step 4c — SSH Key Setup in Azure (continued)
 
 ### 4. Configure `~/.ssh/config` on your local machine
 
@@ -197,7 +202,7 @@ az batch node user create \
 Host schism-head
     HostName      <head-node-public-ip-address>
     Port          50000
-    User          debuguser
+    User          batch-explorer-user
     IdentityFile  "C:\Users\<your-username>\OneDrive <your-org>\ssh_keys\schism_batch"
     StrictHostKeyChecking no
 ```
@@ -232,12 +237,38 @@ With the SSH config in place, connecting from VS Code is seamless:
 
 ---
 
-## Step 5 (alt) — Connect via Password / Plain SSH
+## Step 5b — Add the Batch Tasks Folder to VS Code
+
+Once connected, add `/mnt/batch/tasks` as a workspace folder so you  
+can browse all jobs, tasks, and working directories from the Explorer pane.
+
+1. In VS Code, go to **File → Add Folder to Workspace…**
+2. Type or paste `/mnt/batch/tasks` and click **OK**
+3. The folder appears in the Explorer — expand it to navigate:
+   ```
+   tasks/
+   └── workitems/
+       └── <job_id>/
+           └── job-1/
+               └── <task_id>/
+                   └── wd/       ← working directory
+                       ├── env_vars.sh
+                       ├── application_command.sh
+                       └── ...
+   ```
+4. Click any file to open it in the editor — no terminal needed to browse
+
+> You may need to first fix permissions with `chown`/`chmod` (see next slide)  
+> before VS Code can read files inside the task directory.
+
+---
+
+## Step 5c (alt) — Connect via Password / Plain SSH
 
 If you created the user with a **password** instead of an SSH key:
 
 ```bash
-ssh debuguser@<node-public-ip>
+ssh batch-explorer-user@<node-public-ip>
 # enter password when prompted
 ```
 
@@ -247,7 +278,7 @@ Add to `~/.ssh/config` for VS Code compatibility:
 Host schism-head
     HostName  <head-node-public-ip-address>
     Port      50000
-    User      debuguser
+    User      batch-explorer-user
 ```
 
 VS Code Remote-SSH will prompt for the password on connect.
@@ -281,12 +312,50 @@ tmux attach -t schism       # re-attach after reconnecting
 
 ---
 
-## Step 7 — Navigate to the Working Directory
+## Step 6b — Fix Permissions on the Working Directory
 
-Once on the node, find the task working directory:
+Add `batch-explorer-user` to the `_azbatchgrp` group for shared access.
+Create a `fix_batch_permissions.sh` with contents below
 
 ```bash
-cd /mnt/batch/tasks/workitems/<job_id>/<task_id>/wd
+#!/bin/bash
+set -e
+WD_PATH="wd"   # run from inside the task directory
+
+echo "Step 1: Adding batch-explorer-user to _azbatchgrp..."
+sudo usermod -aG _azbatchgrp batch-explorer-user
+
+echo "Step 2: Changing group ownership to _azbatchgrp..."
+sudo chown -R :_azbatchgrp "$WD_PATH"
+
+echo "Step 3: Granting group read-write permissions..."
+sudo chmod -R g+rwX "$WD_PATH"
+
+echo "Step 4: Setting setgid so new files inherit the group..."
+sudo chmod -R g+s "$WD_PATH"
+
+echo "Step 5: Verifying group memberships..."
+groups _azbatch && groups batch-explorer-user
+echo "All steps completed successfully!"
+```
+
+Run it from inside the task directory:
+
+```bash
+cd /mnt/batch/tasks/workitems/<job_id>/job-1/<task_id>
+bash ~/fix_batch_permissions.sh
+```
+
+---
+
+## Step 7 — Navigate to the Working Directory
+
+
+After Step 6, you can edit files as `batch-explorer-user` 
+Once permissions are fixed, navigate in:
+
+```bash
+cd /mnt/batch/tasks/workitems/<job_id>/job-1/<task_id>/wd
 ls
 ```
 
@@ -303,9 +372,22 @@ application_command.sh
 
 ---
 
-## Step 8 — Load the Environment
+## Step 8 — Load the Environment (env_vars.sh)
 
-### Source `env_vars.sh` — always do this first
+Environment setup and SCHISM must run **as the `_azbatch` user** so that  
+MPI host file setup and app package paths work correctly. Switch user first:
+
+```bash
+sudo su - _azbatch
+```
+
+This opens a new shell as `_azbatch`. Now navigate to the working directory:
+
+```bash
+cd /mnt/batch/tasks/workitems/<job_id>/job-1/<task_id>/wd
+```
+
+Then source `env_vars.sh`:
 
 ```bash
 source env_vars.sh
@@ -318,34 +400,26 @@ This sets everything SCHISM and MPI need:
 - `AZ_BATCH_HOST_LIST` → comma-separated list of all node IPs
 - Module paths, `LD_LIBRARY_PATH`, `PATH`
 
-### Extract only the setup lines from `application_command.sh`
+---
 
-Do **not** run `application_command.sh` in full — it will re-copy data  
-and re-launch the MPI job. Copy and run only these essential lines:
+## Step 8b — Load the Environment (application_command.sh)
+
+As `_azbatch`, run only these essential lines (do **not** run the full script):
 
 ```bash
-# 1. Initialize the module system
 source /usr/share/Modules/init/bash
-
-# 2. Load MPI (match your template — mvapich2 or hpcx)
 module load mpi/mvapich2
-
-# 3. Activate the Python environment (schimpy etc.)
 source $AZ_BATCH_APP_PACKAGE_schimpy_with_deps/bin/activate
-
-# 4. Load SCHISM shared libraries and add binary to PATH
 source $AZ_BATCH_APP_PACKAGE_schism_with_deps/schism/setup_paths.sh
-
-# 5. Set helper script paths
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup
 export BAY_DELTA_SCHISM_HOME=$AZ_BATCH_APP_PACKAGE_baydeltaschism
-
-# 6. Remove stack size limit (required for SCHISM)
 ulimit -s unlimited
 ```
 
-> `coordination_command.sh` — only needed if the NFS mount or MPI  
-> hostfile needs to be rebuilt from scratch. Skip it otherwise.
+> Skip `coordination_command.sh` unless NFS or the MPI hostfile needs rebuilding.
+
+> **`Host key verification failed.`** means you are not running as `_azbatch`.  
+> Always `sudo su - _azbatch` before sourcing `env_vars.sh`.
 
 ---
 
@@ -371,6 +445,8 @@ terminal editor needed, full syntax support.
 
 ## Step 10 — Run SCHISM Interactively
 
+> Run these commands in the `_azbatch` terminal (`sudo su - _azbatch`)
+
 ### Navigate to the study directory
 
 ```bash
@@ -394,30 +470,27 @@ mpirun -n <num_cores> \
 ```
 
 > Output appears directly in your terminal. **Ctrl-C** cancels immediately.  
-> You can redirect to a file: `mpirun ... 2>&1 | tee run.log`
+> **`Host key verification failed.`** during mpirun means you are not running  
+> as `_azbatch`. Switch user (`sudo su - _azbatch`) and retry.
 
 ---
 
-## Iterating on `param.nml`
+## Step 10b — Iterating on `param.nml`
 
 ```
-Edit param.nml  →  mpirun  →  check outputs/  →  repeat
+Edit param.nml → mpirun → check outputs/ → repeat
 ```
-
-### Useful one-liners
 
 ```bash
-# Edit a specific parameter in-place
+# Edit a parameter in-place
 sed -i 's/^\([[:space:]]*dt[[:space:]]*=\).*/\1 90.0/' param.nml
 
-# Update ihot flag for a restart run
+# Update ihot for a restart
 bash $SCHISM_SCRIPTS_HOME/batch/update_param_for_restart.sh param.nml
 
-# Check current rnday value
+# Check rnday
 bash $SCHISM_SCRIPTS_HOME/batch/get_rndays_from_param_nml.sh param.nml
 ```
-
-### Key paths (set by `env_vars.sh`)
 
 | Variable | Points to |
 |---|---|
@@ -457,18 +530,23 @@ az batch pool resize --pool-id <pool-id> \
 ## Summary
 
 ```
-1.  Keep pool alive     Fix pool size after allocation  (or dummy-wait)
-2.  Find head node      Portal / Batch Explorer → Nodes → IP
-3.  Add remote user     Portal / CLI → Add User (admin, SSH key)
-4.  SSH key setup       ssh-keygen → paste pub key → ~/.ssh/config
-5.  Connect             VS Code Remote-SSH  or  ssh schism-head
-6.  tmux (optional)     sudo yum install -y tmux  →  tmux new -s schism
-7.  Navigate            cd /mnt/batch/tasks/.../wd
-8.  Source env          source env_vars.sh
-9.  Setup libs          source .../setup_paths.sh  (from app_command)
-10. Install nano        sudo yum install -y nano
-11. Edit param.nml      nano  or  VS Code editor
-12. Run SCHISM          mpirun -n <N> -f hostfile pschism_TVD-VL
-13. Iterate             edit → run → check → repeat
-14. Cleanup             scale pool to 0  ← don't forget!
+1.   Keep pool alive        Fix pool size after allocation  (or dummy-wait)
+1b.  Cost warning           ~$4/hr per H-series node — shut down asap
+2.   Find head node         Batch Explorer: Jobs → Task → top-right IP
+3.   Add remote user        Batch Explorer: Nodes → Add/Update User
+4.   SSH key setup          ssh-keygen → paste pub key
+4b.  SSH key (add user)     Portal / Batch Explorer / CLI
+4c.  SSH config             ~/.ssh/config → HostName, User, IdentityFile
+5.   Connect (VS Code)      Remote-SSH: Connect to Host → schism-head
+5b.  Add folder             File → Add Folder to Workspace → /mnt/batch/tasks
+5c.  Connect (password)     ssh batch-explorer-user@<ip>  (fallback)
+6.   tmux (optional)        sudo yum install -y tmux → tmux new -s schism
+6b.  Fix permissions        sudo chown/chmod on task working directory
+7.   Navigate               cd /mnt/batch/tasks/.../wd
+8.   Source env_vars.sh     source env_vars.sh
+8b.  Source app_command     module load + activate + setup_paths.sh + ulimit
+9.   Install nano           sudo yum install -y nano
+10.  Run SCHISM             mpirun -n <N> -f hostfile pschism_TVD-VL
+10b. Iterate param.nml      edit → run → check → repeat
+11.  Cleanup                scale pool to 0 ← don't forget!
 ```
