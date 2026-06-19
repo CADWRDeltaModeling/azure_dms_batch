@@ -247,6 +247,11 @@ package_and_upload_app() {
 download_batch_app_package() {
     # Downloads a Batch application package zip from an existing batch account.
     # If version is omitted or set to "default", the account's default version is used.
+    #
+    # The management API storageUrl field is only populated for ~48 hours after package
+    # creation. For older packages it is absent; the function falls back to accessing the
+    # package blob directly via the batch account's linked auto-storage account.
+    #
     # Usage:
     #   download_batch_app_package <app_name> <batch_name> <resource_group> [version] [output_dir]
     #
@@ -275,24 +280,110 @@ download_batch_app_package() {
         echo "Resolved default version: ${version}"
     fi
 
-    # Get the SAS URL for the package blob
+    # --- Attempt 1: storageUrl from the management API (only valid ~48 h after upload) ---
     local storage_url
     storage_url=$(az batch application package show \
         --application-name "${app_name}" \
         --name "${batch_name}" \
         --resource-group "${resource_group}" \
         --version-name "${version}" \
-        --query storageUrl \
-        --output tsv)
+        --query properties.storageUrl \
+        --output tsv 2>/dev/null)
 
-    if [[ -z "$storage_url" ]]; then
-        echo "ERROR: Could not retrieve storage URL for ${app_name} v${version}." >&2
-        return 1
+    # --- Attempt 2: auto-storage fallback (handles expired / absent storageUrl) ---
+    local storage_account storage_rg storage_key container blob output_file
+    if [[ -z "$storage_url" || "$storage_url" == "None" ]]; then
+        echo "storageUrl not available from management API; falling back to auto-storage account..." >&2
+
+        local storage_id
+        storage_id=$(az batch account show \
+            --name "${batch_name}" \
+            --resource-group "${resource_group}" \
+            --query autoStorage.storageAccountId \
+            --output tsv)
+
+        if [[ -z "$storage_id" ]]; then
+            echo "ERROR: Could not retrieve auto-storage account for batch account '${batch_name}'." >&2
+            return 1
+        fi
+
+        storage_account=$(basename "${storage_id}")
+        storage_rg=$(echo "${storage_id}" | awk -F/ '{print $5}')
+
+        storage_key=$(az storage account keys list \
+            --account-name "${storage_account}" \
+            --resource-group "${storage_rg}" \
+            --query "[0].value" \
+            --output tsv)
+
+        if [[ -z "$storage_key" ]]; then
+            echo "ERROR: Could not retrieve storage key for '${storage_account}'." >&2
+            return 1
+        fi
+
+        # Container: Batch names it "app-{app_name}-{hash}" with underscores replaced by hyphens
+        local app_name_hyphen
+        app_name_hyphen=$(echo "${app_name}" | tr '_' '-')
+        container=$(az storage container list \
+            --account-name "${storage_account}" \
+            --account-key "${storage_key}" \
+            --query "[?starts_with(name,'app-${app_name_hyphen}-')].name | [0]" \
+            --output tsv 2>/dev/null)
+
+        if [[ -z "$container" ]]; then
+            echo "ERROR: No container matching 'app-${app_name_hyphen}-*' found in '${storage_account}'." >&2
+            return 1
+        fi
+        echo "Found package container: ${container}"
+
+        # Blob name is just the version string (no app prefix, no .zip extension)
+        blob=$(az storage blob list \
+            --account-name "${storage_account}" \
+            --container-name "${container}" \
+            --account-key "${storage_key}" \
+            --prefix "${version}" \
+            --query "[0].name" \
+            --output tsv 2>/dev/null)
+
+        if [[ -z "$blob" ]]; then
+            echo "ERROR: Could not find blob '${version}' in container '${container}'." >&2
+            return 1
+        fi
+        echo "Found blob: ${blob}"
+
+        mkdir -p "${output_dir}"
+        output_file="${output_dir}/${app_name}_${version}.zip"
+        echo "Downloading ${app_name} ${version} -> ${output_file}"
+
+        if command -v azcopy &>/dev/null; then
+            local expiry sas_url
+            expiry=$(date -u -d "+2 hours" +"%Y-%m-%dT%H:%MZ")
+            sas_url=$(az storage blob generate-sas \
+                --account-name "${storage_account}" \
+                --container-name "${container}" \
+                --name "${blob}" \
+                --permissions r \
+                --expiry "${expiry}" \
+                --account-key "${storage_key}" \
+                --full-uri \
+                --output tsv 2>/dev/null)
+            azcopy copy "${sas_url}" "${output_file}"
+        else
+            az storage blob download \
+                --account-name "${storage_account}" \
+                --container-name "${container}" \
+                --name "${blob}" \
+                --file "${output_file}" \
+                --account-key "${storage_key}"
+        fi
+
+        echo "Done: ${output_file}"
+        return 0
     fi
 
     mkdir -p "${output_dir}"
-    local output_file="${output_dir}/${app_name}_${version}.zip"
-    echo "Downloading ${app_name} v${version} -> ${output_file}"
+    output_file="${output_dir}/${app_name}_${version}.zip"
+    echo "Downloading ${app_name} ${version} -> ${output_file}"
 
     # Prefer azcopy if available (faster for large packages), fall back to wget
     if command -v azcopy &>/dev/null; then
