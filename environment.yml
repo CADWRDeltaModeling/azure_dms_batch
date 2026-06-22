@@ -10,7 +10,7 @@ dependencies:
   - pyyaml
   - tqdm
   - pip:
-    - azure-batch 
+    - azure-batch<15.0.0
     - azure-storage-blob
     - azure-mgmt-resource
     - azure-identity
