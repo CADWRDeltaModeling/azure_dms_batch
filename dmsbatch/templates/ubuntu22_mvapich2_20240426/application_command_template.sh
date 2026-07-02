@@ -1,7 +1,7 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
-telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
+CREATED_BY_EMAIL="{created_by}" telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
 telegraf_pid=$!;
 export PATH=/opt/mvapich2-2.3.7-1/bin:$PATH
 export LD_LIBRARY_PATH=/opt/mvapich2-2.3.7-1/lib:$LD_LIBRARY_PATH;
