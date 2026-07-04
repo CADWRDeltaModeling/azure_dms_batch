@@ -52,6 +52,8 @@ run_commands() {{
 {mpi_command}
 }}
 set +e;
+# MV2 tuning env vars are passed via mpi_tuning_opts in the job YAML using mpirun -env flags.
+# They are NOT exported here so that the YAML remains the single source of truth.
 run_commands 2> >(tee -a "$AZ_BATCH_TASK_DIR/stderr_command.txt" >&2) > >(tee -a "$AZ_BATCH_TASK_DIR/stdout_command.txt");
 set -e;
 exit_code=${{PIPESTATUS[0]}}; 

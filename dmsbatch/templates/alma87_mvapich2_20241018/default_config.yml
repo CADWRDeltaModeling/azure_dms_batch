@@ -5,6 +5,13 @@ vm_size: "standard_hb120rs_v2" # use any of the H series from https://learn.micr
 study_copy_flags: "--recursive --preserve-symlinks --exclude-regex='.*outputs.*nc'"
 setup_dirs_copy_flags: "--recursive --preserve-symlinks"
 delete_after_mins: 240 # delete the job after this many minutes
+# HBv2 MVAPICH2 tuning (Standard_HB120rs_v2, AMD EPYC Rome, HDR InfiniBand):
+# MV2_HOMOGENEOUS_CLUSTER: speeds up job startup on uniform VM pools
+# MV2_NDREG_ENTRIES_MAX/MV2_NDREG_ENTRIES: increases IB memory registration cache to prevent evictions
+# MV2_ENABLE_AFFINITY/BINDING: NUMA-aware process pinning for better memory locality
+# MV2_ENABLE_SHARP: in-network SHARP collective acceleration (available on HBv2 HDR InfiniBand)
+mpi_tuning_opts: "-env MV2_HOMOGENEOUS_CLUSTER 1 -env MV2_NDREG_ENTRIES_MAX 131072 -env MV2_NDREG_ENTRIES 32768 -env MV2_ENABLE_AFFINITY 1 -env MV2_CPU_BINDING_POLICY bunch -env MV2_CPU_BINDING_LEVEL core -env MV2_ENABLE_SHARP 1"
+mpi_opts: --bind-to core {mpi_tuning_opts}
 mpi_command: 'printenv; echo "define mpi_command in job config yaml file";'
 task_slots_per_node: 1
 # translates to pkg_resources.resource_filename('dmsbatch', 'templates/<template_name>/a>

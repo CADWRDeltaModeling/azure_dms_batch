@@ -486,3 +486,5 @@ generate_upload_commands() {
 #package_and_upload_schimpy_with_deps schismbatch dwrbdo_schism_rg
 #package_and_upload_bdschism schismbatch dwrbdo_schism_rg
 #package_and_upload_batch_setup "../schism_scripts/" schismbatch dwrbdo_schism_rg
+#package_and_upload_telegraf "telegraf" schismbatchscus dwrbdo_schism_scus_rg
+#package_and_upload_batch_setup "../schism_scripts/" schismbatchscus dwrbdo_schism_scus_rg
