@@ -2,10 +2,13 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
-export SCHISM_STUDY_DIR=$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir};
-CREATED_BY_EMAIL="{created_by}" telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
+CREATED_BY_EMAIL="{created_by}" \
+  BATCH_ACCOUNT_NAME="$(echo $AZ_BATCH_ACCOUNT_URL | sed 's|https://\([^.]*\)\..*|\1|')" \
+  BATCH_REGION="$(echo $AZ_BATCH_ACCOUNT_URL | sed 's|https://[^.]*\.\([^.]*\)\..*|\1|')" \
+  telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
 telegraf_pid=$!;
 module load mpi/mvapich2;
+export SCHISM_STUDY_DIR=$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir};
 source $AZ_BATCH_APP_PACKAGE_schimpy_with_deps/bin/activate;
 source $AZ_BATCH_APP_PACKAGE_schism_with_deps/schism/setup_paths.sh;
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup;
@@ -52,8 +55,6 @@ run_commands() {{
 {mpi_command}
 }}
 set +e;
-# MV2 tuning env vars are passed via mpi_tuning_opts in the job YAML using mpirun -env flags.
-# They are NOT exported here so that the YAML remains the single source of truth.
 run_commands 2> >(tee -a "$AZ_BATCH_TASK_DIR/stderr_command.txt" >&2) > >(tee -a "$AZ_BATCH_TASK_DIR/stdout_command.txt");
 set -e;
 exit_code=${{PIPESTATUS[0]}}; 

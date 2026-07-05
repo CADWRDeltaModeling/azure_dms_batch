@@ -2,10 +2,13 @@
 echo Main task $(pwd);
 source /usr/share/Modules/init/bash;
 printenv;
-export SCHISM_STUDY_DIR=$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir};
-CREATED_BY_EMAIL="{created_by}" telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
+CREATED_BY_EMAIL="{created_by}" \
+  BATCH_ACCOUNT_NAME="$(echo $AZ_BATCH_ACCOUNT_URL | sed 's|https://\([^.]*\)\..*|\1|')" \
+  BATCH_REGION="$(echo $AZ_BATCH_ACCOUNT_URL | sed 's|https://[^.]*\.\([^.]*\)\..*|\1|')" \
+  telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
 telegraf_pid=$!;
 module load mpi/mvapich2;
+export SCHISM_STUDY_DIR=$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir};
 source $AZ_BATCH_APP_PACKAGE_schimpy_with_deps/bin/activate;
 source $AZ_BATCH_APP_PACKAGE_schism_with_deps_v5_11_1_alma8_10hpc_mvapich2/schism/setup_paths.sh;
 export SCHISM_SCRIPTS_HOME=$AZ_BATCH_APP_PACKAGE_batch_setup;

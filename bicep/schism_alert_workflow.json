@@ -1,0 +1,237 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {},
+  "triggers": {
+    "When_alert_fires": {
+      "type": "Request",
+      "kind": "Http",
+      "inputs": {
+        "schema": {}
+      }
+    }
+  },
+  "actions": {
+    "Parse_alert": {
+      "type": "ParseJson",
+      "runAfter": {},
+      "inputs": {
+        "content": "@triggerBody()",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "properties": {
+                "alertContext": {
+                  "type": "object",
+                  "properties": {
+                    "condition": {
+                      "type": "object",
+                      "properties": {
+                        "allOf": {
+                          "type": "array"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Log_alert_received": {
+      "type": "Compose",
+      "runAfter": {
+        "Parse_alert": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "event": "alert_received",
+        "timestamp": "@utcNow()",
+        "rows": "@body('Parse_alert')?['data']?['alertContext']?['condition']?['allOf']?[0]?['searchResults']?['rows']"
+      }
+    },
+    "For_each_stuck_host": {
+      "type": "Foreach",
+      "runAfter": {
+        "Log_alert_received": [
+          "Succeeded"
+        ]
+      },
+      "foreach": "@body('Parse_alert')?['data']?['alertContext']?['condition']?['allOf']?[0]?['searchResults']?['rows']",
+      "actions": {
+        "Log_stuck_host": {
+          "type": "Compose",
+          "runAfter": {},
+          "inputs": {
+            "event": "stuck_host",
+            "poolId": "@items('For_each_stuck_host')?['host']",
+            "stuckAtDays": "@items('For_each_stuck_host')?['StuckAtDays']",
+            "createdBy": "@items('For_each_stuck_host')?['CreatedBy']"
+          }
+        },
+        "Batch_account_known": {
+          "type": "If",
+          "runAfter": {
+            "Log_stuck_host": [
+              "Succeeded"
+            ]
+          },
+          "expression": {
+            "and": [
+              {
+                "not": {
+                  "equals": [
+                    "@items('For_each_stuck_host')?['batchAccount']",
+                    ""
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "equals": [
+                    "@items('For_each_stuck_host')?['batchRegion']",
+                    ""
+                  ]
+                }
+              }
+            ]
+          },
+          "actions": {
+            "Get_active_jobs": {
+              "type": "Http",
+              "runAfter": {},
+              "inputs": {
+                "method": "GET",
+                "uri": "@{concat('https://', items('For_each_stuck_host')?['batchAccount'], '.', items('For_each_stuck_host')?['batchRegion'], '.batch.azure.com/jobs?$filter=state%20eq%20%27active%27&api-version=2024-02-01.19.0')}",
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://batch.core.windows.net/"
+                }
+              }
+            },
+            "Filter_jobs_by_pool": {
+              "type": "Query",
+              "runAfter": {
+                "Get_active_jobs": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "from": "@body('Get_active_jobs')?['value']",
+                "where": "@equals(item()?['poolInfo']?['poolId'], items('For_each_stuck_host')?['host'])"
+              }
+            },
+            "Log_matched_jobs": {
+              "type": "Compose",
+              "runAfter": {
+                "Filter_jobs_by_pool": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "event": "jobs_matched",
+                "poolId": "@items('For_each_stuck_host')?['host']",
+                "matchCount": "@length(body('Filter_jobs_by_pool'))",
+                "matchedJobs": "@body('Filter_jobs_by_pool')"
+              }
+            },
+            "Job_found": {
+              "type": "If",
+              "runAfter": {
+                "Log_matched_jobs": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(body('Filter_jobs_by_pool'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Get_running_tasks": {
+                  "type": "Http",
+                  "runAfter": {},
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@{concat('https://', items('For_each_stuck_host')?['batchAccount'], '.', items('For_each_stuck_host')?['batchRegion'], '.batch.azure.com/jobs/', body('Filter_jobs_by_pool')?[0]?['id'], '/tasks?$filter=state%20eq%20%27running%27&api-version=2024-02-01.19.0')}",
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "https://batch.core.windows.net/"
+                    }
+                  }
+                },
+                "Log_running_tasks": {
+                  "type": "Compose",
+                  "runAfter": {
+                    "Get_running_tasks": [
+                      "Succeeded",
+                      "Failed"
+                    ]
+                  },
+                  "inputs": {
+                    "event": "running_tasks",
+                    "jobId": "@body('Filter_jobs_by_pool')?[0]?['id']",
+                    "poolId": "@items('For_each_stuck_host')?['host']",
+                    "taskCount": "@length(body('Get_running_tasks')?['value'])",
+                    "tasks": "@body('Get_running_tasks')?['value']"
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Log_no_job_found": {
+                    "type": "Compose",
+                    "runAfter": {},
+                    "inputs": {
+                      "event": "no_active_job",
+                      "poolId": "@items('For_each_stuck_host')?['host']",
+                      "message": "No active job found matching this pool ID \u2014 job may have finished or already failed"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "actions": {
+              "Log_missing_batch_tags": {
+                "type": "Compose",
+                "runAfter": {},
+                "inputs": {
+                  "event": "missing_batch_tags",
+                  "poolId": "@items('For_each_stuck_host')?['host']",
+                  "message": "batchAccount or batchRegion tag missing \u2014 job was started before Telegraf tag update. Cannot look up Batch API automatically."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Respond_OK": {
+      "type": "Response",
+      "runAfter": {
+        "For_each_stuck_host": [
+          "Succeeded",
+          "Failed",
+          "Skipped"
+        ]
+      },
+      "inputs": {
+        "statusCode": 200,
+        "body": "Alert received and logged"
+      }
+    }
+  },
+  "outputs": {}
+}
