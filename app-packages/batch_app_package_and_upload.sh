@@ -150,9 +150,9 @@ package_and_upload_schimpy_with_deps(){
     rm -rf /tmp/schimpy_with_deps_${version}
     mkdir -p /tmp/schimpy_with_deps_${version}
     pushd /tmp/schimpy_with_deps_${version}
-    wget https://raw.githubusercontent.com/CADWRDeltaModeling/BayDeltaSCHISM/master/schism_env.linux.yml
+    wget https://raw.githubusercontent.com/CADWRDeltaModeling/BayDeltaSCHISM/master/schism_env.yml
     conda env remove -n schimpy_${version} -y || true
-    conda env create -f schism_env.linux.yml -n schimpy_${version}
+    conda env create -f schism_env.yml -n schimpy_${version}
 
     # Include bdschism as part of schimpy
     source "$(conda info --base)/etc/profile.d/conda.sh"
