@@ -5,6 +5,7 @@ printenv;
 CREATED_BY_EMAIL="{created_by}" \
   BATCH_ACCOUNT_NAME="$(echo $AZ_BATCH_ACCOUNT_URL | sed 's|https://\([^.]*\)\..*|\1|')" \
   BATCH_REGION="$(echo $AZ_BATCH_ACCOUNT_URL | sed 's|https://[^.]*\.\([^.]*\)\..*|\1|')" \
+  SCHISM_STUDY_DIR="$AZ_BATCH_TASK_WORKING_DIR/simulations/{study_dir}" \
   telegraf --config $AZ_BATCH_APP_PACKAGE_telegraf/telegraf.conf > /dev/null 2>&1 &
 telegraf_pid=$!;
 module load mpi/hpcx;
