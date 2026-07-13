@@ -16,7 +16,7 @@ node_type: 'TargetDedicatedNodes' # 'TargetDedicatedNodes' - higher price, 'Targ
 task_slots_per_node: 1
 
 # command to run , assume the study_dir is current directory
-mpi_opts: --bind-to core
+mpi_opts: --bind-to core {mpi_tuning_opts}
 mpi_command: |
   cd sflux; rm -f *.nc; python make_links_full.py; cd ../;
 

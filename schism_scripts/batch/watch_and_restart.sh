@@ -42,6 +42,10 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Reuse shared rndays parser (defines get_rndays_from_param_nml)
+# shellcheck source=get_rndays_from_param_nml.sh
+source "${SCRIPT_DIR}/get_rndays_from_param_nml.sh"
+
 # ── Defaults ──────────────────────────────────────────────────────────────────
 STUDY_DIR=""
 RUN_SCRIPT=""
@@ -256,6 +260,19 @@ while true; do
 
     # ── Stuck decision: sim time alone is the criterion ───────────────────────
     if [[ "$no_progress_count" -ge "$STUCK_POLLS" ]]; then
+
+        # Before restarting, check whether the simulation has simply reached rndays.
+        # At end-of-run SCHISM may be writing final output (100% CPU, no sim_time
+        # advance) which looks identical to a stuck run.  If sim_days >= rndays,
+        # skip the restart and let mpirun exit naturally.
+        rndays=$(get_rndays_from_param_nml "${STUDY_DIR}/param.nml")
+        if [[ "$rndays" =~ ^[0-9]+$ ]]; then
+            sim_days=$(awk -v t="$cur_sim_time" 'BEGIN{print int(t/86400)}')
+            if [[ "$sim_days" -ge "$rndays" ]]; then
+                log "Sim time (${sim_days}d) >= rndays (${rndays}d): end-of-run writes, not stuck. Skipping restart."
+                continue
+            fi
+        fi
 
         log "STUCK: no progress for ${no_progress_count} polls (CPU=${cpu}% at time of detection)"
 

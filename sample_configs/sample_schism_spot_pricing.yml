@@ -16,7 +16,7 @@ node_type: 'TargetLowPriorityNodes' # 'TargetDedicatedNodes' - higher price, 'Ta
 task_slots_per_node: 1
 
 # command to run , assume the study_dir is current directory
-mpi_opts: --bind-to core
+mpi_opts: --bind-to core {mpi_tuning_opts}
 mpi_command: |
   cd sflux; rm -f *.nc; python make_links_full.py; cd ../;
   mpirun -np {num_cores} -f hostfile {mpi_opts} pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes} # SCHISM run command. Uses {num_cores} {mpi_opts} and {num_scribes} from job yml parameters above.

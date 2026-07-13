@@ -50,21 +50,18 @@ run_with_watchdog() {
     bash "$run_script"
     local run_exit=$?
 
-    # Determine final exit code
+    # Determine final exit code.
+    # Always wait for the watchdog regardless of run_exit: if run_schism.sh exits
+    # with 0 while the watchdog is mid-restart (e.g. mpirun finished just as it was
+    # being killed), killing the watchdog immediately would abort the restart.
+    # The watchdog exits on its own once pschism is no longer running.
     local schism_exit
     if kill -0 "$watchdog_pid" 2>/dev/null; then
-        if [ "$run_exit" -eq 0 ]; then
-            echo "run_schism.sh exited cleanly (exit=0), stopping watchdog."
-            kill "$watchdog_pid" 2>/dev/null || true
-            wait "$watchdog_pid" 2>/dev/null || true
-            schism_exit=0
-        else
-            echo "run_schism.sh exited non-zero (exit=$run_exit), watchdog may be restarting — waiting..."
-            wait "$watchdog_pid"
-            schism_exit=$?
-        fi
+        echo "Watchdog still running (run_exit=$run_exit) — waiting for it to confirm completion or finish restart..."
+        wait "$watchdog_pid"
+        schism_exit=$?
     else
-        echo "Watchdog already exited, using run_schism.sh exit code ($run_exit)."
+        echo "Watchdog already exited; using run_schism.sh exit code ($run_exit)."
         schism_exit=$run_exit
     fi
 
