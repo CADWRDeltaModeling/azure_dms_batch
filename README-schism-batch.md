@@ -351,6 +351,94 @@ All uploaded files can be browsed and downloaded using:
 This makes it easy to review exactly what commands were run and troubleshoot any issues that occurred during execution.
 
 
+### Optional: Automatic stuck-run recovery
+
+SCHISM MPI jobs running on spot/low-priority Azure Batch nodes can occasionally become stuck — the `pschism` processes remain alive and consume CPU, but the simulation time in `outputs/mirror.out` stops advancing. This can happen due to MPI deadlocks, network fabric issues, or busy-wait loops.
+
+The watchdog (`watch_and_restart.sh`) monitors `mirror.out` in the background, detects when the simulation has stalled, and automatically:
+
+1. Kills the stuck `mpirun` and all `pschism` processes.
+2. Finds the latest combined hotstart file (`hotstart_it=*.nc`) already on disk and links it as `hotstart.nc`.
+3. Sets `ihot = 2` in `param.nml` (no-op if already 2).
+4. Relaunches the same `mpirun` command.
+
+If the maximum number of restarts is exceeded, or if `mirror.out` never produces output after startup, the watchdog exits with a non-zero code and the task is marked as failed.
+
+#### Enabling the watchdog in your job config
+
+Replace the bare `mpirun` line at the bottom of your `mpi_command` block with the two lines below. Everything else in `mpi_command` (sflux links, `set_mode`, pre-copy of outputs, etc.) stays the same.
+
+**Before:**
+```yaml
+mpi_command: |
+  # ... your setup commands ...
+  mpirun -np {num_cores} -f hostfile {mpi_opts} pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}
+```
+
+**After:**
+```yaml
+mpi_command: |
+  # ... your setup commands (unchanged) ...
+
+  # run the main SCHISM model with auto-restart on stuck detection
+  source $SCHISM_SCRIPTS_HOME/batch/schism_run_lib.sh;
+  run_with_watchdog \
+      "mpirun -np {num_cores} -f hostfile {mpi_opts} pschism_PREC_EVAP_GOTM_TVD-VL {num_scribes}" \
+      --study-dir "$SCHISM_STUDY_DIR" \
+      --poll-interval 300 \
+      --stuck-polls 2 \
+      --max-restarts 5;
+  exit $?
+```
+
+`run_with_watchdog` is a helper function defined in `schism_run_lib.sh` (part of the `batch_setup` application package). The first argument is the full `mpirun` command; all remaining arguments are forwarded to `watch_and_restart.sh`.
+
+#### Works with both cold starts and manual restarts
+
+If your job already starts from a hotstart (`ihot = 2` in `param.nml`), the watchdog handles it correctly — `update_param_nml` only changes `ihot = 1` to `2`; if it is already `2` the step is a no-op.
+
+#### Parameter reference
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `--poll-interval` | `300` | Seconds between simulation-time checks |
+| `--stuck-polls` | `2` | Consecutive no-progress polls before declaring stuck (stuck window = `poll-interval × stuck-polls`) |
+| `--max-restarts` | `5` | Maximum restart attempts; also the limit for consecutive `NO_OUTPUT` polls at startup |
+| `--log-file` | `<study-dir>/watchdog.log` | Path for the watchdog log |
+
+**Tuning tips:**
+- With the defaults, stuck is declared after 2 × 300 s = **10 minutes** of no sim-time progress.
+- If your run writes very large checkpoint files (all hotstart ranks at once), raise `--stuck-polls` to `3` or `4` to avoid triggering a false restart during that I/O pause.
+- The rndays check in `param.nml` prevents false restarts at end-of-run: if the simulation time has reached `rnday`, no restart is issued even if sim time stops advancing.
+
+#### Monitoring the watchdog
+
+The watchdog writes a timestamped log to `watchdog.log` in the study directory. This file is picked up by the background `copy_modified_loop.sh` and uploaded to blob storage automatically, so you can monitor it in real time via Azure Storage Explorer or `azcopy`.
+
+Example log showing a successful detection and restart:
+```
+[2026-07-08 21:57:47] Poll: sim_time=41661810.0  prev=41661810.0  no_progress=1
+[2026-07-08 21:57:49] No progress (2/2), CPU=100% (informational)
+[2026-07-08 21:57:49] STUCK: no progress for 2 polls (CPU=100% at time of detection)
+[2026-07-08 21:57:49] --- Restart 1 / 5 ---
+[2026-07-08 21:57:49] Sending SIGTERM to mpirun...
+[2026-07-08 21:57:59] Killing remaining pschism processes...
+[2026-07-08 21:58:02] Found combined hotstart: outputs/hotstart_it=41661810.nc
+[2026-07-08 21:58:02] Linked hotstart.nc -> outputs/hotstart_it=41661810.nc
+[2026-07-08 21:58:02] param.nml: set ihot = 2
+[2026-07-08 21:58:02] Relaunching SCHISM: bash run_schism.sh &
+```
+
+#### Relationship with Azure-level retries
+
+`max_task_retry_count` in the YAML config controls Azure Batch task-level retries (triggered when a node is preempted or the entire task exits non-zero). The watchdog handles within-task restarts independently — the two mechanisms complement each other:
+
+| Failure mode | Handled by |
+|---|---|
+| Node preempted / VM evicted | `max_task_retry_count` (Azure Batch) |
+| MPI deadlock / stuck sim time | Watchdog (`max_restarts`) |
+
+
 ### Prototyping and Debugging with a Live Node
 
 For a step-by-step interactive debugging workflow — including submitting a "dummy wait" job, creating a remote SSH user, connecting via VS Code, and replaying task scripts — see [README-schism-debug-prototype.md](README-schism-debug-prototype.md).
