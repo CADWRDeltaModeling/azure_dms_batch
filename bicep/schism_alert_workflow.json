@@ -1,7 +1,11 @@
 {
   "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
   "contentVersion": "1.0.0.0",
-  "parameters": {},
+  "parameters": {
+    "senderEmail": {
+      "type": "String"
+    }
+  },
   "triggers": {
     "When_alert_fires": {
       "type": "Request",
@@ -211,6 +215,74 @@
                   "event": "missing_batch_tags",
                   "poolId": "@items('For_each_stuck_host')?['host']",
                   "message": "batchAccount or batchRegion tag missing \u2014 job was started before Telegraf tag update. Cannot look up Batch API automatically."
+                }
+              }
+            }
+          }
+        },
+        "Send_alert_email": {
+          "type": "If",
+          "runAfter": {
+            "Batch_account_known": [
+              "Succeeded",
+              "Failed",
+              "Skipped"
+            ]
+          },
+          "expression": {
+            "and": [
+              {
+                "not": {
+                  "equals": [
+                    "@items('For_each_stuck_host')?['CreatedBy']",
+                    ""
+                  ]
+                }
+              }
+            ]
+          },
+          "actions": {
+            "Send_email_via_graph": {
+              "type": "Http",
+              "runAfter": {},
+              "inputs": {
+                "method": "POST",
+                "uri": "@{concat('https://graph.microsoft.com/v1.0/users/', parameters('senderEmail'), '/sendMail')}",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://graph.microsoft.com"
+                },
+                "body": {
+                  "message": {
+                    "subject": "@{concat('SCHISM job stuck: ', items('For_each_stuck_host')?['host'])}",
+                    "body": {
+                      "contentType": "Text",
+                      "content": "@{concat('Your SCHISM job ', items('For_each_stuck_host')?['host'], ' is stuck at ', items('For_each_stuck_host')?['StuckAtDays'], ' simulation days and has not advanced in the last 30 minutes.\n\nBatch account: ', items('For_each_stuck_host')?['batchAccount'], '\nRegion: ', items('For_each_stuck_host')?['batchRegion'])}"
+                    },
+                    "toRecipients": [
+                      {
+                        "emailAddress": {
+                          "address": "@{items('For_each_stuck_host')?['CreatedBy']}"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "actions": {
+              "Log_no_email": {
+                "type": "Compose",
+                "runAfter": {},
+                "inputs": {
+                  "event": "no_email_address",
+                  "poolId": "@items('For_each_stuck_host')?['host']",
+                  "message": "CreatedBy is empty \u2014 job started before created_by tag was added"
                 }
               }
             }

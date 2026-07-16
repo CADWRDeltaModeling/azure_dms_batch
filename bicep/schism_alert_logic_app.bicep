@@ -7,6 +7,9 @@ param location string = resourceGroup().location
 @description('Azure Batch account name — used only for the role assignment. Run this deployment once per Batch account.')
 param batchAccountName string
 
+@description('Email address of the shared mailbox to send alerts from (e.g. schism-alerts@yourorg.com)')
+param senderEmail string
+
 // ── Logic App ────────────────────────────────────────────────────────────────
 
 resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
@@ -18,7 +21,9 @@ resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
   properties: {
     state: 'Enabled'
     definition: loadJsonContent('schism_alert_workflow.json')
-    parameters: {}
+    parameters: {
+      senderEmail: { value: senderEmail }
+    }
   }
 }
 

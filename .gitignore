@@ -32,6 +32,9 @@ flux.out
 
 # vscode 
 .vscode/
+# Generated deployment artifacts — contain environment-specific IDs
+bicep/it_support_vars.txt
+bicep/*.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
