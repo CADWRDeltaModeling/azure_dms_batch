@@ -27,8 +27,11 @@ RESOURCE_GROUP="dwrbdo_schism_rg"
 LOCATION="eastus"
 
 LOGIC_APP_NAME="schism-stuck-handler"
+TERMINATE_APP_NAME="schism-terminate-handler"
 ACTION_GROUP_NAME="schism-stuck-handler-ag"
+TERMINATE_AG_NAME="schism-terminate-handler-ag"
 ALERT_RULE_NAME="SCHISM-stuck-simulation"
+TERMINATE_ALERT_NAME="SCHISM-stuck-terminate"
 APP_INSIGHTS_NAME="schism-batch-insights"
 
 # Batch accounts to grant access to (space-separated: "accountName:resourceGroup")
@@ -194,6 +197,128 @@ az rest --method PUT \
 
 log "  ✓ Alert rule $ALERT_RULE_NAME created/updated"
 
+# ── Step 4b: Deploy termination Logic App ─────────────────────────────────────
+step "4b/5  Deploying termination Logic App"
+
+az deployment group create \
+  --resource-group "$RESOURCE_GROUP" \
+  --template-file "$SCRIPT_DIR/schism_terminate_logic_app.bicep" \
+  --parameters batchAccountName=schismbatch \
+  --query "properties.provisioningState" \
+  --output tsv
+
+TERMINATE_PRINCIPAL_ID=$(az resource show \
+  --resource-group "$RESOURCE_GROUP" \
+  --resource-type Microsoft.Logic/workflows \
+  --name "$TERMINATE_APP_NAME" \
+  --query "identity.principalId" -o tsv)
+
+log "  Terminate Logic App principal ID: $TERMINATE_PRINCIPAL_ID"
+
+# Grant termination Logic App access to all batch accounts
+for ENTRY in "${BATCH_ACCOUNTS[@]}"; do
+  ACCOUNT="${ENTRY%%:*}"
+  RG="${ENTRY##*:}"
+  SCOPE="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RG/providers/Microsoft.Batch/batchAccounts/$ACCOUNT"
+  EXISTING=$(az role assignment list \
+    --scope "$SCOPE" \
+    --assignee "$TERMINATE_PRINCIPAL_ID" \
+    --query "[?roleDefinitionId contains 'b24988ac'].id | [0]" \
+    -o tsv 2>/dev/null || true)
+  if [[ -n "$EXISTING" ]]; then
+    log "  ✓ Already has Contributor on $ACCOUNT — skipping"
+  else
+    az role assignment create \
+      --assignee "$TERMINATE_PRINCIPAL_ID" \
+      --role "Contributor" \
+      --scope "$SCOPE" \
+      --output none
+    log "  ✓ Granted Contributor on $ACCOUNT"
+  fi
+done
+
+TERMINATE_WEBHOOK=$(az rest \
+  --method POST \
+  --url "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Logic/workflows/$TERMINATE_APP_NAME/triggers/When_alert_fires/listCallbackUrl?api-version=2016-06-01" \
+  --query "value" -o tsv)
+
+TERMINATE_AG_ID="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/microsoft.insights/actionGroups/$TERMINATE_AG_NAME"
+
+az rest --method PUT \
+  --url "https://management.azure.com${TERMINATE_AG_ID}?api-version=2023-01-01" \
+  --body "{
+    \"location\": \"global\",
+    \"properties\": {
+      \"groupShortName\": \"schtermag\",
+      \"enabled\": true,
+      \"webhookReceivers\": [{
+        \"name\": \"TerminateLogicApp\",
+        \"serviceUri\": \"${TERMINATE_WEBHOOK}\",
+        \"useCommonAlertSchema\": true
+      }]
+    }
+  }" --output none
+
+log "  ✓ Termination action group $TERMINATE_AG_NAME created/updated"
+
+# Alert rule: wider KQL window — compares last 30 min against 90+ min ago
+# Only fires if schism_time is identical across a 60-min gap => stuck for ≥90 min
+KQL_TERMINATE=$(cat <<'KQLEOF'
+customMetrics
+| where name == 'schism_time'
+| where timestamp >= ago(3h)
+| extend host         = tostring(parse_json(customDimensions).host)
+| extend created_by   = tostring(parse_json(customDimensions).created_by)
+| extend batchAccount = tostring(parse_json(customDimensions).batch_account)
+| extend batchRegion  = tostring(parse_json(customDimensions).batch_region)
+| summarize
+    CurrentSchismTime  = maxif(value, timestamp >= ago(30m)),
+    BaselineSchismTime = maxif(value, timestamp between (ago(3h) .. ago(90m))),
+    CurrentCount       = countif(timestamp >= ago(30m)),
+    BaselineCount      = countif(timestamp between (ago(3h) .. ago(90m))),
+    CreatedBy          = any(created_by),
+    batchAccount       = any(batchAccount),
+    batchRegion        = any(batchRegion)
+  by host
+| where CurrentCount > 0 and BaselineCount > 0
+| where CurrentSchismTime == BaselineSchismTime
+| extend StuckAtDays = round(CurrentSchismTime / 86400.0, 1)
+| project host, CreatedBy, StuckAtDays, CurrentSchismTime, batchAccount, batchRegion
+KQLEOF
+)
+KQL_TERMINATE_JSON=$(python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" <<< "$KQL_TERMINATE")
+
+az rest --method PUT \
+  --url "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Insights/scheduledQueryRules/$TERMINATE_ALERT_NAME?api-version=2022-08-01-preview" \
+  --body "{
+    \"location\": \"$LOCATION\",
+    \"properties\": {
+      \"description\": \"Terminates SCHISM job after schism_time stagnant for 90+ minutes\",
+      \"severity\": 1,
+      \"enabled\": true,
+      \"scopes\": [\"${APP_INSIGHTS_ID}\"],
+      \"evaluationFrequency\": \"PT30M\",
+      \"windowSize\": \"PT3H\",
+      \"criteria\": {
+        \"allOf\": [{
+          \"query\": ${KQL_TERMINATE_JSON},
+          \"timeAggregation\": \"Count\",
+          \"operator\": \"GreaterThan\",
+          \"threshold\": 0,
+          \"failingPeriods\": {
+            \"numberOfEvaluationPeriods\": 1,
+            \"minFailingPeriodsToAlert\": 1
+          }
+        }]
+      },
+      \"actions\": {
+        \"actionGroups\": [\"${TERMINATE_AG_ID}\"]
+      }
+    }
+  }" --output none
+
+log "  ✓ Termination alert rule $TERMINATE_ALERT_NAME created/updated"
+
 # ── Step 5: Save IT support variables ─────────────────────────────────────────
 step "5/5  Saving IT support variables"
 
@@ -231,10 +356,14 @@ echo
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  Setup complete                                              ║"
 echo "╠══════════════════════════════════════════════════════════════╣"
-echo "║  Logic App      : $LOGIC_APP_NAME"
-echo "║  Principal ID   : $PRINCIPAL_ID"
-echo "║  Action group   : $ACTION_GROUP_NAME"
-echo "║  Alert rule     : $ALERT_RULE_NAME"
+echo "║  NOTIFICATION                                                ║"
+echo "║    Logic App  : $LOGIC_APP_NAME"
+echo "║    Alert rule : $ALERT_RULE_NAME (fires after 1 x 30min stuck)"
+echo "╠══════════════════════════════════════════════════════════════╣"
+echo "║  TERMINATION                                                 ║"
+echo "║    Logic App  : $TERMINATE_APP_NAME"
+echo "║    Alert rule : $TERMINATE_ALERT_NAME (fires after 3 x 30min stuck ~90min)"
+echo "╠══════════════════════════════════════════════════════════════╣"
 echo "║  IT support file: $IT_SUPPORT_FILE"
 echo "╠══════════════════════════════════════════════════════════════╣"
 if [[ "$SENDER_EMAIL" == "skip" ]]; then
@@ -242,7 +371,6 @@ echo "║  EMAIL: NOT configured yet.                                  ║"
 echo "║  1. Get IT to run the command in $IT_SUPPORT_FILE"
 echo "║  2. Re-run:  bash bicep/setup_schism_alert.sh you@org.com   ║"
 else
-echo "║  Sender email   : $SENDER_EMAIL"
-echo "║  EMAIL: Requires Mail.Send permission (see $IT_SUPPORT_FILE)"
+echo "║  Sender email : $SENDER_EMAIL"
 fi
 echo "╚══════════════════════════════════════════════════════════════╝"
