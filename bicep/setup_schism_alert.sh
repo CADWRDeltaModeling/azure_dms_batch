@@ -203,7 +203,7 @@ step "4b/5  Deploying termination Logic App"
 az deployment group create \
   --resource-group "$RESOURCE_GROUP" \
   --template-file "$SCRIPT_DIR/schism_terminate_logic_app.bicep" \
-  --parameters batchAccountName=schismbatch \
+  --parameters batchAccountName=schismbatch senderEmail="$SENDER_EMAIL" \
   --query "properties.provisioningState" \
   --output tsv
 
