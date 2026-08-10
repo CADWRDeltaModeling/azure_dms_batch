@@ -140,27 +140,44 @@ step "4/5  Creating/updating alert rule on $APP_INSIGHTS_NAME"
 
 APP_INSIGHTS_ID="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/microsoft.insights/components/$APP_INSIGHTS_NAME"
 
+# Three ways a job counts as "stuck":
+#   - frozen: still emitting schism_time, but the value hasn't moved (current == previous)
+#   - silent: was emitting schism_time in the previous window, but nothing at all in the
+#             current window (node evicted/crashed/telegraf killed) — without this branch
+#             a dead job's metrics simply vanish and never match the "frozen" condition,
+#             so it would never be flagged as stuck.
+#   - idle_no_telemetry: schism_time has NEVER been seen for this host (bad $SCHISM_STUDY_DIR,
+#             wrong log format, non-SCHISM task, etc.) so frozen/silent can never match either
+#             (both require a prior schism_time sample) — caught instead via idle CPU, the same
+#             signal the standalone "cpu idling" rule uses.
 KQL_QUERY=$(cat <<'KQLEOF'
 customMetrics
-| where name == 'schism_time'
+| where name in ('schism_time', 'cpu_usage_active')
 | where timestamp >= ago(2h)
 | extend host         = tostring(parse_json(customDimensions).host)
 | extend created_by   = tostring(parse_json(customDimensions).created_by)
 | extend batchAccount = tostring(parse_json(customDimensions).batch_account)
 | extend batchRegion  = tostring(parse_json(customDimensions).batch_region)
 | summarize
-    CurrentSchismTime  = maxif(value, timestamp >= ago(30m)),
-    PreviousSchismTime = maxif(value, timestamp < ago(30m)),
-    CurrentCount       = countif(timestamp >= ago(30m)),
-    PreviousCount      = countif(timestamp < ago(30m)),
-    CreatedBy          = any(created_by),
-    batchAccount       = any(batchAccount),
-    batchRegion        = any(batchRegion)
+    CurrentSchismTime   = maxif(value, name == 'schism_time' and timestamp >= ago(30m)),
+    PreviousSchismTime  = maxif(value, name == 'schism_time' and timestamp < ago(30m)),
+    CurrentSchismCount  = countif(name == 'schism_time' and timestamp >= ago(30m)),
+    PreviousSchismCount = countif(name == 'schism_time' and timestamp < ago(30m)),
+    CurrentAvgCpu       = avgif(value, name == 'cpu_usage_active' and timestamp >= ago(30m)),
+    CurrentCpuCount     = countif(name == 'cpu_usage_active' and timestamp >= ago(30m)),
+    FirstCpuSeen        = minif(timestamp, name == 'cpu_usage_active'),
+    CreatedBy           = any(created_by),
+    batchAccount        = any(batchAccount),
+    batchRegion         = any(batchRegion)
   by host
-| where CurrentCount > 0 and PreviousCount > 0
-| where CurrentSchismTime == PreviousSchismTime
-| extend StuckAtDays = round(CurrentSchismTime / 86400.0, 1)
-| project host, CreatedBy, StuckAtDays, CurrentSchismTime, batchAccount, batchRegion
+| extend IsFrozen = CurrentSchismCount > 0 and PreviousSchismCount > 0 and CurrentSchismTime == PreviousSchismTime
+| extend IsSilent = PreviousSchismCount > 0 and CurrentSchismCount == 0
+| extend IsIdleNoTelemetry = PreviousSchismCount == 0 and CurrentSchismCount == 0 and CurrentCpuCount > 0 and CurrentAvgCpu < 5.0 and FirstCpuSeen <= ago(30m)
+| where IsFrozen or IsSilent or IsIdleNoTelemetry
+| extend StuckReason = case(IsFrozen, 'frozen', IsSilent, 'silent', 'idle_no_telemetry')
+| extend ReportedSchismTime = coalesce(CurrentSchismTime, PreviousSchismTime, 0.0)
+| extend StuckAtDays = round(ReportedSchismTime / 86400.0, 1)
+| project host, CreatedBy, StuckAtDays, StuckReason, CurrentSchismTime = ReportedSchismTime, batchAccount, batchRegion
 KQLEOF
 )
 
@@ -262,28 +279,38 @@ az rest --method PUT \
 log "  ✓ Termination action group $TERMINATE_AG_NAME created/updated"
 
 # Alert rule: wider KQL window — compares last 30 min against 90+ min ago
-# Only fires if schism_time is identical across a 60-min gap => stuck for ≥90 min
+# Fires if schism_time is identical across the gap (frozen), has stopped arriving
+# entirely while it was present in the baseline window (silent), or has never arrived at
+# all while the node idles on CPU for the whole 3h window (idle_no_telemetry) => stuck for ≥90 min
 KQL_TERMINATE=$(cat <<'KQLEOF'
 customMetrics
-| where name == 'schism_time'
+| where name in ('schism_time', 'cpu_usage_active')
 | where timestamp >= ago(3h)
 | extend host         = tostring(parse_json(customDimensions).host)
 | extend created_by   = tostring(parse_json(customDimensions).created_by)
 | extend batchAccount = tostring(parse_json(customDimensions).batch_account)
 | extend batchRegion  = tostring(parse_json(customDimensions).batch_region)
 | summarize
-    CurrentSchismTime  = maxif(value, timestamp >= ago(30m)),
-    BaselineSchismTime = maxif(value, timestamp between (ago(3h) .. ago(90m))),
-    CurrentCount       = countif(timestamp >= ago(30m)),
-    BaselineCount      = countif(timestamp between (ago(3h) .. ago(90m))),
-    CreatedBy          = any(created_by),
-    batchAccount       = any(batchAccount),
-    batchRegion        = any(batchRegion)
+    CurrentSchismTime   = maxif(value, name == 'schism_time' and timestamp >= ago(30m)),
+    BaselineSchismTime  = maxif(value, name == 'schism_time' and timestamp between (ago(3h) .. ago(90m))),
+    CurrentSchismCount  = countif(name == 'schism_time' and timestamp >= ago(30m)),
+    BaselineSchismCount = countif(name == 'schism_time' and timestamp between (ago(3h) .. ago(90m))),
+    CurrentAvgCpu       = avgif(value, name == 'cpu_usage_active' and timestamp >= ago(30m)),
+    CurrentCpuCount     = countif(name == 'cpu_usage_active' and timestamp >= ago(30m)),
+    TotalSchismCount    = countif(name == 'schism_time'),
+    FirstCpuSeen        = minif(timestamp, name == 'cpu_usage_active'),
+    CreatedBy           = any(created_by),
+    batchAccount        = any(batchAccount),
+    batchRegion         = any(batchRegion)
   by host
-| where CurrentCount > 0 and BaselineCount > 0
-| where CurrentSchismTime == BaselineSchismTime
-| extend StuckAtDays = round(CurrentSchismTime / 86400.0, 1)
-| project host, CreatedBy, StuckAtDays, CurrentSchismTime, batchAccount, batchRegion
+| extend IsFrozen = CurrentSchismCount > 0 and BaselineSchismCount > 0 and CurrentSchismTime == BaselineSchismTime
+| extend IsSilent = BaselineSchismCount > 0 and CurrentSchismCount == 0
+| extend IsIdleNoTelemetry = TotalSchismCount == 0 and CurrentCpuCount > 0 and CurrentAvgCpu < 5.0 and FirstCpuSeen <= ago(90m)
+| where IsFrozen or IsSilent or IsIdleNoTelemetry
+| extend StuckReason = case(IsFrozen, 'frozen', IsSilent, 'silent', 'idle_no_telemetry')
+| extend ReportedSchismTime = coalesce(CurrentSchismTime, BaselineSchismTime, 0.0)
+| extend StuckAtDays = round(ReportedSchismTime / 86400.0, 1)
+| project host, CreatedBy, StuckAtDays, StuckReason, CurrentSchismTime = ReportedSchismTime, batchAccount, batchRegion
 KQLEOF
 )
 KQL_TERMINATE_JSON=$(python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" <<< "$KQL_TERMINATE")

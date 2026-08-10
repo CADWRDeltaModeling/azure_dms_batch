@@ -1,0 +1,354 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "senderEmail": {
+      "type": "String"
+    }
+  },
+  "triggers": {
+    "When_alert_fires": {
+      "type": "Request",
+      "kind": "Http",
+      "inputs": {
+        "schema": {}
+      }
+    }
+  },
+  "actions": {
+    "Parse_alert": {
+      "type": "ParseJson",
+      "runAfter": {},
+      "inputs": {
+        "content": "@triggerBody()",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "object",
+              "properties": {
+                "alertContext": {
+                  "type": "object",
+                  "properties": {
+                    "condition": {
+                      "type": "object",
+                      "properties": {
+                        "allOf": {
+                          "type": "array"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Log_terminate_trigger": {
+      "type": "Compose",
+      "runAfter": {
+        "Parse_alert": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "event": "terminate_trigger_received",
+        "timestamp": "@utcNow()",
+        "rows": "@body('Parse_alert')?['data']?['alertContext']?['condition']?['allOf']?[0]?['searchResults']?['rows']"
+      }
+    },
+    "For_each_stuck_host": {
+      "type": "Foreach",
+      "runAfter": {
+        "Log_terminate_trigger": [
+          "Succeeded"
+        ]
+      },
+      "foreach": "@body('Parse_alert')?['data']?['alertContext']?['condition']?['allOf']?[0]?['searchResults']?['rows']",
+      "actions": {
+        "Log_stuck_host": {
+          "type": "Compose",
+          "runAfter": {},
+          "inputs": {
+            "event": "termination_candidate",
+            "poolId": "@items('For_each_stuck_host')?['host']",
+            "stuckAtDays": "@items('For_each_stuck_host')?['StuckAtDays']",
+            "stuckReason": "@items('For_each_stuck_host')?['StuckReason']",
+            "createdBy": "@items('For_each_stuck_host')?['CreatedBy']",
+            "batchAccount": "@items('For_each_stuck_host')?['batchAccount']",
+            "batchRegion": "@items('For_each_stuck_host')?['batchRegion']"
+          }
+        },
+        "Batch_account_known": {
+          "type": "If",
+          "runAfter": {
+            "Log_stuck_host": [
+              "Succeeded"
+            ]
+          },
+          "expression": {
+            "and": [
+              {
+                "not": {
+                  "equals": [
+                    "@items('For_each_stuck_host')?['batchAccount']",
+                    ""
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "equals": [
+                    "@items('For_each_stuck_host')?['batchRegion']",
+                    ""
+                  ]
+                }
+              }
+            ]
+          },
+          "actions": {
+            "Get_active_jobs": {
+              "type": "Http",
+              "runAfter": {},
+              "inputs": {
+                "method": "GET",
+                "uri": "@{concat('https://', items('For_each_stuck_host')?['batchAccount'], '.', items('For_each_stuck_host')?['batchRegion'], '.batch.azure.com/jobs?$filter=state%20eq%20%27active%27&api-version=2024-02-01.19.0')}",
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://batch.core.windows.net/"
+                }
+              }
+            },
+            "Filter_jobs_by_pool": {
+              "type": "Query",
+              "runAfter": {
+                "Get_active_jobs": [
+                  "Succeeded"
+                ]
+              },
+              "inputs": {
+                "from": "@body('Get_active_jobs')?['value']",
+                "where": "@equals(item()?['poolInfo']?['poolId'], items('For_each_stuck_host')?['host'])"
+              }
+            },
+            "Job_found": {
+              "type": "If",
+              "runAfter": {
+                "Filter_jobs_by_pool": [
+                  "Succeeded"
+                ]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(body('Filter_jobs_by_pool'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Terminate_job": {
+                  "type": "Http",
+                  "runAfter": {},
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{concat('https://', items('For_each_stuck_host')?['batchAccount'], '.', items('For_each_stuck_host')?['batchRegion'], '.batch.azure.com/jobs/', body('Filter_jobs_by_pool')?[0]?['id'], '/terminate?api-version=2024-02-01.19.0')}",
+                    "body": {
+                      "terminateReason": "@{if(equals(items('For_each_stuck_host')?['StuckReason'], 'idle_no_telemetry'), concat('Auto-terminated: no schism_time metric ever reported and CPU idle for >90 minutes (pool: ', items('For_each_stuck_host')?['host'], ')'), concat('Auto-terminated: schism_time ', items('For_each_stuck_host')?['StuckReason'], ' for >90 minutes at ', items('For_each_stuck_host')?['StuckAtDays'], ' simulation days (pool: ', items('For_each_stuck_host')?['host'], ')'))}"
+                    },
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "https://batch.core.windows.net/"
+                    }
+                  }
+                },
+                "Log_termination_result": {
+                  "type": "Compose",
+                  "runAfter": {
+                    "Terminate_job": [
+                      "Succeeded",
+                      "Failed"
+                    ]
+                  },
+                  "inputs": {
+                    "event": "termination_attempted",
+                    "jobId": "@body('Filter_jobs_by_pool')?[0]?['id']",
+                    "poolId": "@items('For_each_stuck_host')?['host']",
+                    "stuckAtDays": "@items('For_each_stuck_host')?['StuckAtDays']",
+                    "createdBy": "@items('For_each_stuck_host')?['CreatedBy']",
+                    "httpStatus": "@outputs('Terminate_job')?['statusCode']",
+                    "success": "@equals(outputs('Terminate_job')?['statusCode'], 202)"
+                  }
+                },
+                "Send_terminated_email": {
+                  "type": "If",
+                  "runAfter": {
+                    "Log_termination_result": [
+                      "Succeeded"
+                    ]
+                  },
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@items('For_each_stuck_host')?['CreatedBy']",
+                            ""
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Send_email_via_graph": {
+                      "type": "Http",
+                      "runAfter": {},
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@{concat('https://graph.microsoft.com/v1.0/users/', parameters('senderEmail'), '/sendMail')}",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "https://graph.microsoft.com"
+                        },
+                        "body": {
+                          "message": {
+                            "subject": "@{concat('SCHISM job auto-terminated: ', items('For_each_stuck_host')?['host'])}",
+                            "body": {
+                              "contentType": "Text",
+                              "content": "@{if(equals(items('For_each_stuck_host')?['StuckReason'], 'silent'), concat('Your SCHISM job ', items('For_each_stuck_host')?['host'], ' was automatically terminated after its telemetry went silent (last known: ', items('For_each_stuck_host')?['StuckAtDays'], ' simulation days) for over 90 minutes \u2014 the node likely crashed or was evicted.\n\nBatch account: ', items('For_each_stuck_host')?['batchAccount'], '\nRegion: ', items('For_each_stuck_host')?['batchRegion'], '\n\nPlease check the job logs and resubmit if needed.'), if(equals(items('For_each_stuck_host')?['StuckReason'], 'idle_no_telemetry'), concat('Your SCHISM job ', items('For_each_stuck_host')?['host'], ' was automatically terminated \u2014 it never reported a schism_time metric and its CPU sat idle for over 90 minutes, so the run likely never started correctly (check $SCHISM_STUDY_DIR / the Telegraf launch).\n\nBatch account: ', items('For_each_stuck_host')?['batchAccount'], '\nRegion: ', items('For_each_stuck_host')?['batchRegion'], '\n\nPlease check the job logs and resubmit if needed.'), concat('Your SCHISM job ', items('For_each_stuck_host')?['host'], ' was automatically terminated after being stuck at ', items('For_each_stuck_host')?['StuckAtDays'], ' simulation days for over 90 minutes.\n\nBatch account: ', items('For_each_stuck_host')?['batchAccount'], '\nRegion: ', items('For_each_stuck_host')?['batchRegion'], '\n\nPlease check the job logs and resubmit if needed.')))}"
+                            },
+                            "toRecipients": [
+                              {
+                                "emailAddress": {
+                                  "address": "@{items('For_each_stuck_host')?['CreatedBy']}"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Log_no_email": {
+                        "type": "Compose",
+                        "runAfter": {},
+                        "inputs": {
+                          "event": "no_email_address",
+                          "poolId": "@items('For_each_stuck_host')?['host']",
+                          "message": "CreatedBy is empty \u2014 cannot send termination notification"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Log_no_job_found": {
+                    "type": "Compose",
+                    "runAfter": {},
+                    "inputs": {
+                      "event": "no_active_job",
+                      "poolId": "@items('For_each_stuck_host')?['host']",
+                      "message": "No active job found \u2014 already finished or terminated, nothing to do"
+                    }
+                  },
+                  "Send_no_job_found_email": {
+                    "type": "If",
+                    "runAfter": {
+                      "Log_no_job_found": [
+                        "Succeeded"
+                      ]
+                    },
+                    "expression": {
+                      "and": [
+                        {
+                          "not": {
+                            "equals": [
+                              "@items('For_each_stuck_host')?['CreatedBy']",
+                              ""
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "actions": {
+                      "Send_email_via_graph_no_job": {
+                        "type": "Http",
+                        "runAfter": {},
+                        "inputs": {
+                          "method": "POST",
+                          "uri": "@{concat('https://graph.microsoft.com/v1.0/users/', parameters('senderEmail'), '/sendMail')}",
+                          "headers": {
+                            "Content-Type": "application/json"
+                          },
+                          "authentication": {
+                            "type": "ManagedServiceIdentity",
+                            "audience": "https://graph.microsoft.com"
+                          },
+                          "body": {
+                            "message": {
+                              "subject": "@{concat('SCHISM job stuck, no active job to terminate: ', items('For_each_stuck_host')?['host'])}",
+                              "body": {
+                                "contentType": "Text",
+                                "content": "@{concat('Your SCHISM job ', items('For_each_stuck_host')?['host'], ' was flagged as stuck at ', items('For_each_stuck_host')?['StuckAtDays'], ' simulation days, but no active Batch job matching this pool was found by the time this ran \u2014 it likely already finished or was already terminated. No action was taken.\\n\\nBatch account: ', items('For_each_stuck_host')?['batchAccount'], '\\nRegion: ', items('For_each_stuck_host')?['batchRegion'])}"
+                              },
+                              "toRecipients": [
+                                {
+                                  "emailAddress": {
+                                    "address": "@{items('For_each_stuck_host')?['CreatedBy']}"
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "actions": {
+              "Log_missing_batch_tags": {
+                "type": "Compose",
+                "runAfter": {},
+                "inputs": {
+                  "event": "missing_batch_tags",
+                  "poolId": "@items('For_each_stuck_host')?['host']",
+                  "message": "batchAccount or batchRegion tag missing \u2014 cannot terminate automatically"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Respond_OK": {
+      "type": "Response",
+      "runAfter": {
+        "For_each_stuck_host": [
+          "Succeeded",
+          "Failed",
+          "Skipped"
+        ]
+      },
+      "inputs": {
+        "statusCode": 200,
+        "body": "Termination action processed"
+      }
+    }
+  },
+  "outputs": {}
+}

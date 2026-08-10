@@ -282,17 +282,35 @@ Since `test_pool_id` doesn't exist, the workflow safely falls into its
 
 ## Adjusting thresholds
 
-Both alert rules query `schism_time` from `customMetrics` and compare recent values
-against an earlier baseline — if unchanged, the job is "stuck":
+Both alert rules query `schism_time`/`cpu_usage_active` from `customMetrics` and compare
+recent values against an earlier baseline. A host is flagged "stuck" for any of three
+reasons (`StuckReason` column: `frozen`, `silent`, or `idle_no_telemetry`):
+
+- **frozen** — `schism_time` is still arriving, but the value hasn't changed since the
+  baseline window (the classic MPI-deadlock/busy-wait case).
+- **silent** — `schism_time` arrived in the baseline window but nothing at all arrived in
+  the current window (node evicted, crashed, or Telegraf killed). Without this branch a
+  dead job's metrics simply stop and never satisfy the "frozen" comparison, so it would
+  never be flagged — this was the gap that let a node failure go completely unnoticed.
+- **idle_no_telemetry** — `schism_time` has *never* been seen for this host at all (bad
+  `$SCHISM_STUDY_DIR`, wrong log format, a non-SCHISM task, etc.), so neither `frozen` nor
+  `silent` can ever match (both require a prior `schism_time` sample). Caught instead via
+  `cpu_usage_active` sitting below 5% while the host has been reporting telemetry for at
+  least the wait window — the same idle-CPU signal the standalone `cpu idling` rule uses,
+  but scoped to "this host is idling *and* has no SCHISM progress at all to show for it".
+
+Timing:
 
 - **Notification** (`SCHISM-stuck-simulation`): compares last 30 min vs. previous 30 min
-  (2h window) → fires after ~30 min of no progress.
+  (2h window) → fires after ~30 min of no progress or no telemetry.
 - **Termination** (`SCHISM-stuck-terminate`): compares last 30 min vs. 90+ min ago (3h
-  window) → fires after ~90 min of no progress, giving the job more time before
-  destructive action is taken.
+  window) → fires after ~90 min of no progress or no telemetry, giving the job more time
+  before destructive action is taken.
 
 To change these windows, edit the `KQL_QUERY` / `KQL_TERMINATE` heredocs inside
 [setup_schism_alert.sh](../bicep/setup_schism_alert.sh) and re-run the script.
+
+
 
 ## Adding a new Batch account later
 

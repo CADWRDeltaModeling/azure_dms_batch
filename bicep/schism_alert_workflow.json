@@ -75,6 +75,7 @@
             "event": "stuck_host",
             "poolId": "@items('For_each_stuck_host')?['host']",
             "stuckAtDays": "@items('For_each_stuck_host')?['StuckAtDays']",
+            "stuckReason": "@items('For_each_stuck_host')?['StuckReason']",
             "createdBy": "@items('For_each_stuck_host')?['CreatedBy']"
           }
         },
@@ -260,7 +261,7 @@
                     "subject": "@{concat('SCHISM job stuck: ', items('For_each_stuck_host')?['host'])}",
                     "body": {
                       "contentType": "Text",
-                      "content": "@{concat('Your SCHISM job ', items('For_each_stuck_host')?['host'], ' is stuck at ', items('For_each_stuck_host')?['StuckAtDays'], ' simulation days and has not advanced in the last 30 minutes.\n\nBatch account: ', items('For_each_stuck_host')?['batchAccount'], '\nRegion: ', items('For_each_stuck_host')?['batchRegion'])}"
+                      "content": "@{if(equals(items('For_each_stuck_host')?['StuckReason'], 'silent'), concat('Your SCHISM job ', items('For_each_stuck_host')?['host'], ' has stopped reporting telemetry entirely (last known: ', items('For_each_stuck_host')?['StuckAtDays'], ' simulation days) \u2014 no metrics received in over 30 minutes. The node may have crashed or been evicted.\n\nBatch account: ', items('For_each_stuck_host')?['batchAccount'], '\nRegion: ', items('For_each_stuck_host')?['batchRegion']), if(equals(items('For_each_stuck_host')?['StuckReason'], 'idle_no_telemetry'), concat('Your SCHISM job ', items('For_each_stuck_host')?['host'], ' has never reported a schism_time metric and its CPU has been idle for over 30 minutes \u2014 the run may have failed to start, or $SCHISM_STUDY_DIR was not set correctly for Telegraf.\n\nBatch account: ', items('For_each_stuck_host')?['batchAccount'], '\nRegion: ', items('For_each_stuck_host')?['batchRegion']), concat('Your SCHISM job ', items('For_each_stuck_host')?['host'], ' is stuck at ', items('For_each_stuck_host')?['StuckAtDays'], ' simulation days and has not advanced in the last 30 minutes.\n\nBatch account: ', items('For_each_stuck_host')?['batchAccount'], '\nRegion: ', items('For_each_stuck_host')?['batchRegion'])))}"
                     },
                     "toRecipients": [
                       {
