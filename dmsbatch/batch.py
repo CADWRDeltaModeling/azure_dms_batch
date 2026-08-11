@@ -12,7 +12,7 @@ import base64
 import shlex
 
 import azure.batch.models as batchmodels
-from azure.batch.models import BatchErrorException
+from azure.core.exceptions import HttpResponseError
 import dmsbatch.commands
 from dmsbatch.commands import AzureBatch, AzureBlob
 
@@ -471,7 +471,7 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
         client.create_job(
             job_name, pool_name, prep_task, max_task_retry_count=max_task_retry_count
         )
-    except BatchErrorException as e:
+    except HttpResponseError as e:
         if e.error.code == "JobExists":
             print("Job already exists")
         else:
@@ -550,7 +550,7 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
                 storage_account_name, storage_container_name, config_dict["sas"]
             ),
             f"jobs/{job_name}/{task_name}",
-            upload_condition=batchmodels.OutputFileUploadCondition.task_completion,
+            upload_condition=batchmodels.OutputFileUploadCondition.TASK_COMPLETION,
         )
         output_file_specs.append(spec)
         if ostype == "linux":
@@ -568,7 +568,7 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
                         storage_account_name, storage_container_name, config_dict["sas"]
                     ),
                     f"jobs/{job_name}/{task_name}",
-                    upload_condition=batchmodels.OutputFileUploadCondition.task_completion,
+                    upload_condition=batchmodels.OutputFileUploadCondition.TASK_COMPLETION,
                 )
                 output_file_specs.append(spec)
         # Add spec for shell/batch script files
@@ -579,12 +579,12 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
                 storage_account_name, storage_container_name, config_dict["sas"]
             ),
             f"jobs/{job_name}/{task_name}",
-            upload_condition=batchmodels.OutputFileUploadCondition.task_completion,
+            upload_condition=batchmodels.OutputFileUploadCondition.TASK_COMPLETION,
         )
         output_file_specs.append(spec)
         #
         if "container_run_options" in config_dict:
-            task_container_settings = batchmodels.TaskContainerSettings(
+            task_container_settings = batchmodels.BatchTaskContainerSettings(
                 image_name=config_dict["container_image_name"],
                 container_run_options=config_dict["container_run_options"],
             )
@@ -614,7 +614,7 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
                             path=output_file["path"],
                         )
                     ),
-                    upload_options=batchmodels.OutputFileUploadOptions(
+                    upload_options=batchmodels.OutputFileUploadConfiguration(
                         upload_condition=output_file["upload_condition"]
                     ),
                 )
@@ -623,7 +623,7 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
             output_file_specs.extend(output_files)
 
         elevation_level = (
-            batchmodels.ElevationLevel.admin
+            batchmodels.ElevationLevel.ADMIN
             if config_dict.get("run_as_admin", False)
             else None
         )
@@ -654,13 +654,13 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
             try:
                 client.submit_tasks(job_name, tasks, auto_complete=False)
                 tasks = []
-            except BatchErrorException as e:
+            except HttpResponseError as e:
                 print(e)
                 raise e
     # adding auto_complete so that job terminates when all these tasks are completed.
     try:
         client.submit_tasks(job_name, tasks, auto_complete=True)
-    except BatchErrorException as e:
+    except HttpResponseError as e:
         print(e)
         raise e
     logger.info(f"Submitted task {job_name} to pool {pool_name}.")

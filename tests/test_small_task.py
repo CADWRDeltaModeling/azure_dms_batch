@@ -48,8 +48,8 @@ def test_small_task(blob_client: dmsbatch.AzureBlob, batch_client: dmsbatch.Azur
     batch_client.create_pool(pool_name, 1, app_packages=app_packages)
     try:
         batch_client.create_job(job_name, pool_name)
-    except dmsbatch.commands.batchmodels.BatchErrorException as ex:
-        assert ex.message.value.startswith('The specified job already exists')
+    except dmsbatch.commands.ResourceExistsError as ex:
+        assert "already exists" in str(ex)
 
     input_file1 = batch_client.create_input_file_spec(container_name, blob_zip, file_path='.')
     # default expiry in one day with write permissions default

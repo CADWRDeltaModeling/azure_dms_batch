@@ -7,14 +7,12 @@ import logging
 import os
 import shutil
 import sys
-import math
 import time
 
-import azure.batch as batch
-import azure.batch.batch_auth as batchauth
-import azure.batch.models as batchmodels
-from azure.batch import BatchServiceClient
-from azure.core.exceptions import ResourceExistsError
+from azure.batch import BatchClient
+from azure.batch import models as batchmodels
+from azure.core.credentials import AzureNamedKeyCredential
+from azure.core.exceptions import HttpResponseError, ResourceExistsError, ResourceNotFoundError
 from azure.storage import blob
 from azure.storage.blob import (
     BlobSasPermissions,
@@ -162,20 +160,20 @@ class AzureBatch:
         batch_account_url : str
             batch accont url
         """
-        self.credentials = batchauth.SharedKeyCredentials(
+        self.credentials = AzureNamedKeyCredential(
             batch_account_name, batch_account_key
         )
-        self.batch_client = BatchServiceClient(
-            self.credentials, batch_url=batch_account_url
+        self.batch_client = BatchClient(
+            endpoint=batch_account_url, credential=self.credentials
         )
 
-    def create_pool_if_not_exist(self, pool: batchmodels.PoolAddParameter) -> bool:
+    def create_pool_if_not_exist(self, pool: batchmodels.BatchPoolCreateOptions) -> bool:
         """
         Creates the pool if it doesn't exist. Otherwise throws an exception that is caught and returned as a bool
 
         Parameters
         ----------
-        pool : batchmodels.PoolAddParameter
+        pool : batchmodels.BatchPoolCreateOptions
             pool to add
 
         -------
@@ -186,15 +184,12 @@ class AzureBatch:
         """
         try:
             logger.info("Attempting to create pool:", pool.id)
-            self.batch_client.pool.add(pool)
+            self.batch_client.create_pool(pool=pool)
             logger.info("Created pool:", pool.id)
             return True
-        except batchmodels.BatchErrorException as e:
-            if e.error.code != "PoolExists":
-                raise
-            else:
-                logger.info("Pool {!r} already exists".format(pool.id))
-                return False
+        except ResourceExistsError:
+            logger.info("Pool {!r} already exists".format(pool.id))
+            return False
 
     def resize_pool(
         self, pool_id: str, pool_size: int, node_deallocation_option="taskCompletion"
@@ -210,11 +205,11 @@ class AzureBatch:
         node_deallocation_option : str, optional
         by default 'taskCompletion' so that pool nodes are shutdown only after current tasks on it run to completion
         """
-        pool_resize_param = batchmodels.PoolResizeParameter(
+        resize_options = batchmodels.BatchPoolResizeOptions(
             target_dedicated_nodes=pool_size,
             node_deallocation_option=node_deallocation_option,
         )  # scale it down to zero
-        self.batch_client.pool.resize(pool_id, pool_resize_param)
+        self.batch_client.begin_resize_pool(pool_id, resize_options)
 
     def wait_for_pool_nodes(self, pool_id: str):
         """
@@ -235,14 +230,14 @@ class AzureBatch:
             pool_id,
             frozenset(
                 (
-                    batchmodels.ComputeNodeState.start_task_failed,
-                    batchmodels.ComputeNodeState.unusable,
-                    batchmodels.ComputeNodeState.idle,
+                    batchmodels.BatchNodeState.START_TASK_FAILED,
+                    batchmodels.BatchNodeState.UNUSABLE,
+                    batchmodels.BatchNodeState.IDLE,
                 )
             ),
         )
         # ensure all node are idle
-        if any(node.state != batchmodels.ComputeNodeState.idle for node in nodes):
+        if any(node.state != batchmodels.BatchNodeState.IDLE for node in nodes):
             raise RuntimeError("node(s) of pool {} not in idle state".format(pool_id))
 
     def create_pool(
@@ -261,7 +256,7 @@ class AzureBatch:
         start_task_cmd="cmd /c set",
         start_task_admin=False,
         resource_files=None,
-        elevation_level=batchmodels.ElevationLevel.admin,
+        elevation_level=batchmodels.ElevationLevel.ADMIN,
         enable_inter_node_communication=False,
         wait_for_success=True,
     ):
@@ -294,7 +289,7 @@ class AzureBatch:
         resource_files : list of ResourceFile, optional
             input file spec list. See :py:func:create_input_file_spec, by default None
         elevation_level : admin or non_admin, optional
-            admin or non_admin, by default batchmodels.ElevationLevel.admin
+            admin or non_admin, by default batchmodels.ElevationLevel.ADMIN
         enable_inter_node_communication : bool, optional
             if the task needs high bandwidth (Infiniband) connected nodes, by default False
         wait_for_success : bool, optional
@@ -318,7 +313,7 @@ class AzureBatch:
         )
         # applications needed here
         app_references = [
-            batchmodels.ApplicationPackageReference(
+            batchmodels.BatchApplicationPackageReference(
                 application_id=app[0], version=app[1]
             )
             for app in app_packages
@@ -326,13 +321,13 @@ class AzureBatch:
         if start_task_admin:
             user_identity = batchmodels.UserIdentity(
                 auto_user=batchmodels.AutoUserSpecification(
-                    scope=batchmodels.AutoUserScope.pool,
+                    scope=batchmodels.AutoUserScope.POOL,
                     elevation_level=elevation_level,
                 )
             )
         else:
             user_identity = batchmodels.UserIdentity()
-        pool = batchmodels.PoolAddParameter(
+        pool = batchmodels.BatchPoolCreateOptions(
             id=pool_id,
             virtual_machine_configuration=vmconfig,
             vm_size=vm_size,
@@ -344,7 +339,7 @@ class AzureBatch:
             enable_inter_node_communication=enable_inter_node_communication,
             application_package_references=app_references,
             start_task=(
-                batchmodels.StartTask(
+                batchmodels.BatchStartTask(
                     command_line=start_task_cmd,
                     user_identity=user_identity,
                     wait_for_success=wait_for_success,
@@ -373,7 +368,7 @@ class AzureBatch:
         start_task_cmd="cmd /c set",
         start_task_admin=False,
         resource_files=None,
-        elevation_level=batchmodels.ElevationLevel.admin,
+        elevation_level=batchmodels.ElevationLevel.ADMIN,
         enable_inter_node_communication=False,
         wait_for_success=False,
     ):
@@ -416,7 +411,11 @@ class AzureBatch:
         bool
             True if pool exists
         """
-        return self.batch_client.pool.exists(pool_id)
+        try:
+            self.batch_client.get_pool(pool_id)
+            return True
+        except ResourceNotFoundError:
+            return False
 
     def delete_pool(self, pool_id: str):
         """
@@ -430,7 +429,7 @@ class AzureBatch:
         -------
 
         """
-        return self.batch_client.pool.delete(pool_id)
+        return self.batch_client.begin_delete_pool(pool_id)
 
     def wait_for_pool_delete(self, pool_id: str, polling_interval_secs=10):
         """
@@ -450,7 +449,7 @@ class AzureBatch:
         self,
         job_id: str,
         pool_id: str,
-        prep_task: batchmodels.JobPreparationTask = None,
+        prep_task: batchmodels.BatchJobPreparationTask = None,
         max_task_retry_count=0,
     ):
         """
@@ -462,35 +461,35 @@ class AzureBatch:
             name of job
         pool_id : str
             name of pool
-        prep_task : batchmodels.JobPreparationTask, optional
+        prep_task : batchmodels.BatchJobPreparationTask, optional
             a preperation task to be run before any tasks, by default None
         """
         logger.info("Creating job [{}]...".format(job_id))
 
-        job = batch.models.JobAddParameter(
+        job = batchmodels.BatchJobCreateOptions(
             id=job_id,
             job_preparation_task=prep_task,
-            pool_info=batch.models.PoolInformation(pool_id=pool_id),
-            constraints=batch.models.JobConstraints(
+            pool_info=batchmodels.BatchPoolInfo(pool_id=pool_id),
+            constraints=batchmodels.BatchJobConstraints(
                 max_task_retry_count=max_task_retry_count
             ),
         )
 
-        self.batch_client.job.add(job)
+        self.batch_client.create_job(job=job)
 
     def mark_job_termination_on_task_completion(self, job_id: str):
         """
         Mark job for termination on all tasks completion
 
         """
-        self.batch_client.job.patch(
+        self.batch_client.update_job(
             job_id=job_id,
-            job_patch_parameter=batchmodels.JobPatchParameter(
-                on_all_tasks_complete=batchmodels.OnAllTasksComplete.terminate_job
+            job=batchmodels.BatchJobUpdateOptions(
+                on_all_tasks_complete=batchmodels.BatchAllTasksCompleteMode.TERMINATE_JOB
             ),
         )
 
-    def get_job(self, job_id: str) -> batchmodels.CloudJob:
+    def get_job(self, job_id: str) -> batchmodels.BatchJob:
         """
         get job with matching id
 
@@ -501,10 +500,10 @@ class AzureBatch:
 
         Returns
         -------
-        batchmodels.CloudJob
+        batchmodels.BatchJob
 
         """
-        return self.batch_client.job.get(job_id)
+        return self.batch_client.get_job(job_id)
 
     def delete_job(self, job_id: str):
         """
@@ -515,14 +514,14 @@ class AzureBatch:
         job_id : str
             job id
         """
-        self.batch_client.job.delete(job_id)
+        return self.batch_client.begin_delete_job(job_id)
 
     def wait_for_job_under_job_schedule(
         self,
         job_schedule_id: str,
         timeout: datetime.timedelta,
         polling_interval_secs: int = 10,
-    ) -> batchmodels.CloudJob:
+    ) -> batchmodels.BatchJob:
         """
         Waits for a job schedule to run
 
@@ -548,7 +547,7 @@ class AzureBatch:
         time_to_timeout_at = datetime.datetime.now() + timeout
 
         while datetime.datetime.now() < time_to_timeout_at:
-            cloud_job_schedule = self.batch_client.job_schedule.get(
+            cloud_job_schedule = self.batch_client.get_job_schedule(
                 job_schedule_id=job_schedule_id
             )
 
@@ -579,13 +578,13 @@ class AzureBatch:
             how often to poll
         """
         while datetime.datetime.now() < timeout:
-            cloud_job_schedule = self.batch_client.job_schedule.get(
+            cloud_job_schedule = self.batch_client.get_job_schedule(
                 job_schedule_id=job_schedule_id
             )
 
             logger.info("Checking if job schedule is complete...")
             state = cloud_job_schedule.state
-            if state == batchmodels.JobScheduleState.completed:
+            if state == batchmodels.BatchJobScheduleState.COMPLETED:
                 return
             time.sleep(polling_interval_secs)
         return
@@ -631,7 +630,7 @@ class AzureBatch:
         file_pattern: str,
         output_container_sas_url: str,
         blob_path: str = None,
-        upload_condition=batchmodels.OutputFileUploadCondition.task_completion,
+        upload_condition=batchmodels.OutputFileUploadCondition.TASK_COMPLETION,
     ) -> batchmodels.OutputFile:
         """
         create an output file spec that is information for uploading the output of the task matching the file_pattern to be
@@ -658,7 +657,7 @@ class AzureBatch:
                     container_url=output_container_sas_url, path=blob_path
                 )
             ),
-            upload_options=batchmodels.OutputFileUploadOptions(
+            upload_options=batchmodels.OutputFileUploadConfiguration(
                 upload_condition=upload_condition
             ),
         )
@@ -669,8 +668,8 @@ class AzureBatch:
         commands: str,
         resource_files: list = None,
         ostype: str = "windows",
-        elevation_level=batchmodels.ElevationLevel.admin,
-    ) -> batchmodels.JobPreparationTask:
+        elevation_level=batchmodels.ElevationLevel.ADMIN,
+    ) -> batchmodels.BatchJobPreparationTask:
         """
         Creates a task to run on a node before any tasks for a job are run. This creates the the task that is then
         used to create a job with this prep task specified. See :py:func:`create_job`
@@ -688,17 +687,17 @@ class AzureBatch:
 
         Returns
         -------
-        batchmodels.JobPreparationTask
+        batchmodels.BatchJobPreparationTask
         """
         cmdline = self.wrap_commands_in_shell(commands, ostype)
-        prep_task = batchmodels.JobPreparationTask(
+        prep_task = batchmodels.BatchJobPreparationTask(
             id=task_name,
             command_line=cmdline,
             resource_files=resource_files,
             wait_for_success=True,
             user_identity=batchmodels.UserIdentity(
                 auto_user=batchmodels.AutoUserSpecification(
-                    scope=batchmodels.AutoUserScope.pool,
+                    scope=batchmodels.AutoUserScope.POOL,
                     elevation_level=elevation_level,
                 )
             ),
@@ -714,7 +713,7 @@ class AzureBatch:
         shared_dir: str = "AZ_BATCH_NODE_SHARED_DIR",
         ostype: str = "windows",
         container_is_sas_url=False,
-    ) -> batchmodels.JobPreparationTask:
+    ) -> batchmodels.BatchJobPreparationTask:
         """
         A special job prep task for the common use case of copying file from container blob to shared directory on node.
         This is designed to be run as preperation task for a job to have this shared file available to the tasks that will subsequently run
@@ -735,7 +734,7 @@ class AzureBatch:
 
         Returns
         -------
-        batchmodels.JobPreparationTask
+        batchmodels.BatchJobPreparationTask
             the preperation task
         """
         if container_is_sas_url:
@@ -771,7 +770,7 @@ class AzureBatch:
         num_instances: int = 1,
         coordination_cmdline: str = None,
         coordination_files: list = None,
-        container_settings: batchmodels.TaskContainerSettings = None,
+        container_settings: batchmodels.BatchTaskContainerSettings = None,
         depends_on: list = None,
     ):
         """
@@ -807,14 +806,14 @@ class AzureBatch:
 
         Returns
         -------
-        batchmodels.TaskAddParameter
+        batchmodels.BatchTaskCreateOptions
             The task definition
         """
         environment_settings = (
             None
             if env_settings is None
             else [
-                batch.models.EnvironmentSetting(name=key, value=env_settings[key])
+                batchmodels.EnvironmentSetting(name=key, value=env_settings[key])
                 for key in env_settings
             ]
         )
@@ -826,9 +825,9 @@ class AzureBatch:
                 common_resource_files=coordination_files,
             )
         user = batchmodels.AutoUserSpecification(
-            scope=batchmodels.AutoUserScope.pool, elevation_level=elevation_level
+            scope=batchmodels.AutoUserScope.POOL, elevation_level=elevation_level
         )
-        return batchmodels.TaskAddParameter(
+        return batchmodels.BatchTaskCreateOptions(
             id=task_id,
             command_line=command,
             user_identity=batchmodels.UserIdentity(auto_user=user),
@@ -844,36 +843,27 @@ class AzureBatch:
         self, job_id: str, tasks: list, tasks_per_request: int = 100, auto_complete=True
     ):
         """
-        submit tasks as a list.
-        There are limitations on size of request and also timeout. For this reason this task
-        submits tasks upto task_per_request
+        submit tasks as a list. The v15.x SDK's create_tasks() chunks and submits
+        arbitrarily large lists internally, so tasks_per_request is accepted for
+        backward compatibility but no longer used to split requests.
 
         Parameters
         ----------
         job_id : str
             job id
         tasks : list
-            list of batchmodels.TaskAddParameter. See :py:func:`create_task`
+            list of batchmodels.BatchTaskCreateOptions. See :py:func:`create_task`
         tasks_per_request : int, optional
-            tasks per request (grouped requests), by default 100
+            unused, kept for backward compatibility, by default 100
         """
-        for i in range(0, math.ceil(len(tasks) / tasks_per_request)):
-            try:
-                self.batch_client.task.add_collection(
-                    job_id,
-                    list(
-                        tasks[
-                            i * tasks_per_request : i * tasks_per_request
-                            + tasks_per_request
-                        ]
-                    ),
-                )
-            except batch.custom.custom_errors.CreateTasksErrorException as err:
-                self.print_task_exception(err)
-                raise err
-            except batchmodels.BatchErrorException as err:
-                self.print_batch_exception(err)
-                raise err
+        try:
+            self.batch_client.create_tasks(job_id=job_id, task_collection=tasks)
+        except batchmodels.CreateTasksError as err:
+            self.print_task_exception(err)
+            raise err
+        except HttpResponseError as err:
+            self.print_batch_exception(err)
+            raise err
         if auto_complete:
             self.mark_job_termination_on_task_completion(job_id)
 
@@ -895,16 +885,16 @@ class AzureBatch:
         job_id : str
             job id
         tasks : list
-            list of batchmodels.TaskAddParameter. See :py:func:`create_task`
+            list of batchmodels.BatchTaskCreateOptions. See :py:func:`create_task`
         tasks_per_request : int, optional
-            tasks per request (grouped requests), by default 100
+            unused, kept for backward compatibility, by default 100
         timeout : datetime.timedelta,
             how long to wait in minutes, by default 30 minutes
         polling_interval_secs:
             how often to check, by default 10 seconds
         """
         try:
-            self.submit_tasks(self.batch_client, job_id, tasks)
+            self.submit_tasks(job_id, tasks)
             # Pause execution until tasks reach Completed state.
             self.wait_for_tasks_to_complete(
                 job_id, timeout, polling_interval_secs=polling_interval_secs
@@ -912,7 +902,7 @@ class AzureBatch:
             logger.info(
                 "Success! All tasks completed within the timeout period:", timeout
             )
-        except batchmodels.BatchErrorException as err:
+        except HttpResponseError as err:
             self.print_batch_exception(err)
             raise
 
@@ -927,7 +917,7 @@ class AzureBatch:
         task_name : str
             task name
         """
-        self.batch_client.task.delete(job_name, task_name)
+        self.batch_client.delete_task(job_id=job_name, task_id=task_name)
 
     def wait_for_subtasks_to_complete(
         self,
@@ -965,11 +955,11 @@ class AzureBatch:
         )
 
         while datetime.datetime.now() < timeout_expiration:
-            subtasks = self.batch_client.task.list_subtasks(job_id, task_id)
+            subtasks = self.batch_client.list_subtasks(job_id, task_id)
             incomplete_subtasks = [
                 subtask
                 for subtask in subtasks.value
-                if subtask.state != batchmodels.TaskState.completed
+                if subtask.state != batchmodels.BatchSubtaskState.COMPLETED
             ]
             if not incomplete_subtasks:
                 return True
@@ -1007,11 +997,11 @@ class AzureBatch:
         timeout_expiration = datetime.datetime.now() + timeout
 
         while datetime.datetime.now() < timeout_expiration:
-            tasks = self.batch_client.task.list(job_id)
+            tasks = self.batch_client.list_tasks(job_id=job_id)
 
             incomplete_tasks = []
             for task in tasks:
-                if task.state == batchmodels.TaskState.completed:
+                if task.state == batchmodels.BatchTaskState.COMPLETED:
                     # Pause execution until subtasks reach Completed state.
                     incomplete_tasks.append(
                         self.wait_for_subtasks_to_complete(
@@ -1050,7 +1040,7 @@ class AzureBatch:
         Returns
         -------
         list
-            list of compute nodes :py:func:`batchmodels.ComputeNode`
+            list of compute nodes :py:func:`batchmodels.BatchNode`
 
         Raises
         ------
@@ -1065,16 +1055,21 @@ class AzureBatch:
         i = 0
         while True:
             # refresh pool to ensure that there is no resize error
-            pool = self.batch_client.pool.get(pool_id)
+            pool = self.batch_client.get_pool(pool_id)
             if pool.allocation_state == "steady":
-                if pool.resize_errors is not None:
-                    resize_errors = "\n".join([repr(e) for e in pool.resize_errors])
+                resize_errors = (
+                    pool.resize_operation_status.errors
+                    if pool.resize_operation_status
+                    else None
+                )
+                if resize_errors:
+                    resize_errors_str = "\n".join([repr(e) for e in resize_errors])
                     raise RuntimeError(
                         "resize error encountered for pool {}:\n{}".format(
-                            pool.id, resize_errors
+                            pool.id, resize_errors_str
                         )
                     )
-                nodes = list(self.batch_client.compute_node.list(pool.id))
+                nodes = list(self.batch_client.list_nodes(pool_id=pool.id))
                 if len(nodes) >= pool.target_dedicated_nodes and all(
                     node.state in node_state for node in nodes
                 ):
@@ -1109,11 +1104,11 @@ class AzureBatch:
                 message = "Task with id `%s` failed due to client error - %s::%s" % (
                     result.task_id,
                     result.error.code,
-                    result.error.message.value,
+                    result.error.message,
                 )
                 logger.info("Task failure: ", message)
-                for ev in result.error.values[:5]:
-                    logger.info("Error: %s::%s" % (ev.key, ev.value))
+                for detail in getattr(result.error, "details", None) or []:
+                    logger.info("Error: %s::%s" % (detail.code, detail.message))
         logger.info("-------------------------------------------")
 
     def print_batch_exception(self, batch_exception: Exception):
@@ -1127,16 +1122,11 @@ class AzureBatch:
         """
         logger.info("-------------------------------------------")
         logger.info("Exception encountered:")
-        if (
-            batch_exception.error
-            and batch_exception.error.message
-            and batch_exception.error.message.value
-        ):
-            logger.info(batch_exception.error.message.value)
-            if batch_exception.error.values:
-                logger.info()
-                for mesg in batch_exception.error.values:
-                    logger.info("{}:\t{}".format(mesg.key, mesg.value))
+        error = getattr(batch_exception, "error", None)
+        if error and getattr(error, "message", None):
+            logger.info(error.message)
+            for detail in getattr(error, "details", None) or []:
+                logger.info("{}:\t{}".format(detail.code, detail.message))
         logger.info("-------------------------------------------")
 
     def wrap_commands_in_shell(self, commands, ostype: str = "windows") -> str:
@@ -1321,10 +1311,7 @@ class AzureBatch:
         list
             skus available for usage
         """
-        options = batchmodels.AccountListSupportedImagesOptions(filter=filter)
-        images = self.batch_client.account.list_supported_images(
-            account_list_supported_images_options=options
-        )
+        images = self.batch_client.list_supported_images(filter=filter)
         skus_to_use = [
             (
                 image.node_agent_sku_id,
@@ -1364,10 +1351,7 @@ class AzureBatch:
             (node agent sku id to use, vm image ref to use)
         """
         # get verified vm image list and node agent sku ids from service
-        options = batchmodels.AccountListSupportedImagesOptions(filter=filter)
-        images = self.batch_client.account.list_supported_images(
-            account_list_supported_images_options=options
-        )
+        images = self.batch_client.list_supported_images(filter=filter)
         # pick the latest supported sku
         skus_to_use = [
             (image.node_agent_sku_id, image.image_reference)
@@ -1487,7 +1471,9 @@ class AzureBatch:
         str
             The file content
         """
-        stream = self.batch_client.file.get_from_task(job_id, task_id, file_name)
+        stream = self.batch_client.download_task_file(
+            job_id=job_id, task_id=task_id, file_path=file_name
+        )
         return self._read_stream_as_string(stream, encoding)
 
     def read_compute_node_file_as_string(
@@ -1512,8 +1498,8 @@ class AzureBatch:
         str
             The file content.
         """
-        stream = self.batch_client.file.get_from_compute_node(
-            pool_id, node_id, file_name
+        stream = self.batch_client.download_node_file(
+            pool_id=pool_id, node_id=node_id, file_path=file_name
         )
         return self._read_stream_as_string(stream, encoding)
 
