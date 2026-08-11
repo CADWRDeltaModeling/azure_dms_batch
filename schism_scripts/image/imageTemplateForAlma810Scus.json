@@ -1,0 +1,58 @@
+{
+    "type": "Microsoft.VirtualMachineImages",
+    "apiVersion": "2020-02-14",
+    "location": "southcentralus",
+    "dependsOn": [],
+    "tags": {
+        "imagebuilderTemplate": "AzureImageBuilderSIG",
+        "userIdentity": "enabled"
+    },
+    "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+            "/subscriptions/c15db114-26b5-454c-b8f4-8a5eb5f16796/resourcegroups/dwrbdo_schism_scus_rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/schism_image_builder_scus": {}
+        }
+    },
+    "properties": {
+        "buildTimeoutInMinutes": 60,
+        "vmProfile": {
+            "vmSize": "Standard_D2s_v3",
+            "osDiskSizeGB": 480
+        },
+        "source": {
+            "type": "PlatformImage",
+            "publisher": "almalinux",
+            "offer": "almalinux-hpc",
+            "sku": "8_10-hpc-gen2",
+            "version": "8.10.2024101801",
+            "planInfo": {
+                "planName": "8_10-hpc-gen2",
+                "planProduct": "almalinux-hpc",
+                "planPublisher": "almalinux"
+            }
+        },
+        "customize": [
+            {
+                "type": "Shell",
+                "name": "noOpMinimalCapture",
+                "inline": [
+                    "echo 'minimal base image capture - no additional software installed'"
+                ]
+            }
+        ],
+        "distribute": [
+            {
+                "type": "SharedImage",
+                "galleryImageId": "/subscriptions/c15db114-26b5-454c-b8f4-8a5eb5f16796/resourceGroups/dwrbdo_schism_scus_rg/providers/Microsoft.Compute/galleries/dwrmso_schism_scus_images/images/schism_alma810_hpc_gen2",
+                "runOutputName": "schismalma810scus",
+                "artifactTags": {
+                    "source": "azureVmImageBuilder",
+                    "baseosimg": "8_10-hpc-gen2"
+                },
+                "replicationRegions": [
+                    "southcentralus"
+                ]
+            }
+        ]
+    }
+}

@@ -103,8 +103,9 @@ def create_batch_client(config_file: str):
     # Create a Batch service client. We'll now be interacting with the Batch
     return AzureBatch(
         config["_BATCH_ACCOUNT_NAME"],
-        config["_BATCH_ACCOUNT_KEY"],
+        config.get("_BATCH_ACCOUNT_KEY"),
         config["_BATCH_ACCOUNT_URL"],
+        auth_mode=config.get("_AUTH_MODE", "shared_key"),
     )
 
 
@@ -146,7 +147,11 @@ class AzureBatch:
     _STANDARD_ERROR_FILE_NAME = "stderr.txt"
 
     def __init__(
-        self, batch_account_name: str, batch_account_key: str, batch_account_url: str
+        self,
+        batch_account_name: str,
+        batch_account_key: str,
+        batch_account_url: str,
+        auth_mode: str = "shared_key",
     ):
         """
         Initializes the batch account client
@@ -156,13 +161,26 @@ class AzureBatch:
         batch_account_name : str
             batch account name
         batch_account_key : str
-            batch account key
+            batch account key. Ignored when auth_mode='aad' (may be None/empty in that case).
         batch_account_url : str
             batch accont url
+        auth_mode : str, optional
+            'shared_key' (default, for legacy BatchService-mode accounts) or 'aad' (required for
+            accounts whose allowedAuthenticationModes excludes SharedKey, e.g. UserSubscription
+            mode accounts like schismbatchscus2). Uses azure.identity.DefaultAzureCredential.
         """
-        self.credentials = AzureNamedKeyCredential(
-            batch_account_name, batch_account_key
-        )
+        if auth_mode == "aad":
+            from azure.identity import DefaultAzureCredential
+
+            self.credentials = DefaultAzureCredential()
+        elif auth_mode == "shared_key":
+            self.credentials = AzureNamedKeyCredential(
+                batch_account_name, batch_account_key
+            )
+        else:
+            raise ValueError(
+                "unknown auth_mode {!r}, expected 'shared_key' or 'aad'".format(auth_mode)
+            )
         self.batch_client = BatchClient(
             endpoint=batch_account_url, credential=self.credentials
         )
@@ -485,7 +503,7 @@ class AzureBatch:
         self.batch_client.update_job(
             job_id=job_id,
             job=batchmodels.BatchJobUpdateOptions(
-                on_all_tasks_complete=batchmodels.BatchAllTasksCompleteMode.TERMINATE_JOB
+                all_tasks_complete_mode=batchmodels.BatchAllTasksCompleteMode.TERMINATE_JOB
             ),
         )
 
@@ -1057,11 +1075,7 @@ class AzureBatch:
             # refresh pool to ensure that there is no resize error
             pool = self.batch_client.get_pool(pool_id)
             if pool.allocation_state == "steady":
-                resize_errors = (
-                    pool.resize_operation_status.errors
-                    if pool.resize_operation_status
-                    else None
-                )
+                resize_errors = pool.resize_errors
                 if resize_errors:
                     resize_errors_str = "\n".join([repr(e) for e in resize_errors])
                     raise RuntimeError(

@@ -674,8 +674,8 @@ def parse_yaml_file(config_file):
     return data
 
 
-def create_batch_client(name, key, url) -> AzureBatch:
-    return AzureBatch(name, key, url)
+def create_batch_client(name, key, url, auth_mode="shared_key") -> AzureBatch:
+    return AzureBatch(name, key, url, auth_mode=auth_mode)
 
 
 # https://stackoverflow.com/questions/39379331/python-exec-a-code-block-and-eval-the-last-line
@@ -743,7 +743,11 @@ def initialize_config(config_file, pool_name=None):
     config_dict["batch_account_url"] = (
         f'https://{config_dict["batch_account_name"]}.{location}.batch.azure.com'
     )
-    if "BATCH_ACCOUNT_KEY" in os.environ:
+    auth_mode = config_dict.get("auth_mode", "shared_key")
+    if auth_mode == "aad":
+        config_dict["batch_account_key"] = None
+        logger.debug("using AAD auth for batch account (auth_mode=aad) - no key needed")
+    elif "BATCH_ACCOUNT_KEY" in os.environ:
         config_dict["batch_account_key"] = os.environ["BATCH_ACCOUNT_KEY"]
         logger.debug("using batch account key from environment variable")
     else:
@@ -795,6 +799,7 @@ def initialize_config(config_file, pool_name=None):
         config_dict["batch_account_name"],
         config_dict["batch_account_key"],
         config_dict["batch_account_url"],
+        auth_mode=auth_mode,
     )
     # get sas token so that substitution can happen
     sas = get_sas(
