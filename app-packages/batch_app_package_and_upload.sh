@@ -321,14 +321,39 @@ download_batch_app_package() {
             return 1
         fi
 
-        # Container: Batch names it "app-{app_name}-{hash}" with underscores replaced by hyphens
+        # Container: Batch names it "app-{app_name}-{hash}" with underscores replaced by hyphens.
+        # NOTE: an app can have MULTIPLE hash-suffixed containers (e.g. from a past
+        # re-registration) with its version history split across them, so we can't just take
+        # the first match - we must check each candidate container for the target blob.
         local app_name_hyphen
         app_name_hyphen=$(echo "${app_name}" | tr '_' '-')
-        container=$(az storage container list \
+        local candidate_containers
+        candidate_containers=$(az storage container list \
             --account-name "${storage_account}" \
             --account-key "${storage_key}" \
-            --query "[?starts_with(name,'app-${app_name_hyphen}-')].name | [0]" \
+            --query "[?starts_with(name,'app-${app_name_hyphen}-')].name" \
             --output tsv 2>/dev/null)
+
+        if [[ -z "$candidate_containers" ]]; then
+            echo "ERROR: No container matching 'app-${app_name_hyphen}-*' found in '${storage_account}'." >&2
+            return 1
+        fi
+
+        while IFS= read -r candidate; do
+            local found_blob
+            found_blob=$(az storage blob list \
+                --account-name "${storage_account}" \
+                --container-name "${candidate}" \
+                --account-key "${storage_key}" \
+                --prefix "${version}" \
+                --query "[0].name" \
+                --output tsv 2>/dev/null)
+            if [[ -n "$found_blob" ]]; then
+                container="$candidate"
+                blob="$found_blob"
+                break
+            fi
+        done <<< "$candidate_containers"
 
         if [[ -z "$container" ]]; then
             echo "ERROR: No container matching 'app-${app_name_hyphen}-*' found in '${storage_account}'." >&2
@@ -336,17 +361,8 @@ download_batch_app_package() {
         fi
         echo "Found package container: ${container}"
 
-        # Blob name is just the version string (no app prefix, no .zip extension)
-        blob=$(az storage blob list \
-            --account-name "${storage_account}" \
-            --container-name "${container}" \
-            --account-key "${storage_key}" \
-            --prefix "${version}" \
-            --query "[0].name" \
-            --output tsv 2>/dev/null)
-
         if [[ -z "$blob" ]]; then
-            echo "ERROR: Could not find blob '${version}' in container '${container}'." >&2
+            echo "ERROR: Could not find blob '${version}' in any container matching 'app-${app_name_hyphen}-*' (checked: $(echo "$candidate_containers" | tr '\n' ' '))." >&2
             return 1
         fi
         echo "Found blob: ${blob}"
