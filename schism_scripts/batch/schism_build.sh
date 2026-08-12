@@ -41,10 +41,12 @@ NETCDF_FORTRAN_VERSION="${NETCDF_FORTRAN_VERSION:-4.6.2}"
 GOTM_VERSION="${GOTM_VERSION:-v6.0.7}"
 
 # URLs derived from version numbers (override directly if the URL pattern changes)
-# HDF5: GitHub release URL is unreliable; use the HDF Group S3 bucket instead.
-# The S3 path uses underscores (HDF5_1_14_3) while the filename uses dots (hdf5-1.14.3).
+# HDF5: releases >= 1.14.5 are published on GitHub Releases; older releases (e.g. the
+# 1.14.3 default below) remain only on the legacy HDF Group S3 bucket, which 403s for
+# newer versions. Try GitHub first and fall back to S3 automatically (see below).
 HDF5_VERSION_PATH="${HDF5_VERSION//./_}"
-URL_HDF5="${URL_HDF5:-https://hdf-wordpress-1.s3.amazonaws.com/wp-content/uploads/manual/HDF5/HDF5_${HDF5_VERSION_PATH}/src/hdf5-${HDF5_VERSION}.tar.gz}"
+URL_HDF5="${URL_HDF5:-https://github.com/HDFGroup/hdf5/releases/download/hdf5_${HDF5_VERSION}/hdf5-${HDF5_VERSION}.tar.gz}"
+URL_HDF5_FALLBACK="${URL_HDF5_FALLBACK:-https://hdf-wordpress-1.s3.amazonaws.com/wp-content/uploads/manual/HDF5/HDF5_${HDF5_VERSION_PATH}/src/hdf5-${HDF5_VERSION}.tar.gz}"
 URL_NETCDF="${URL_NETCDF:-https://github.com/Unidata/netcdf-c/archive/refs/tags/v${NETCDF_C_VERSION}.tar.gz}"
 URL_NETCDF_FORTRAN="${URL_NETCDF_FORTRAN:-https://github.com/Unidata/netcdf-fortran/archive/refs/tags/v${NETCDF_FORTRAN_VERSION}.tar.gz}"
 
@@ -70,7 +72,8 @@ elif [ "$1" == "intelmpi" ]; then
   rm -rf /opt/intel/oneapi
   cd /tmp
   HPCKIT_INSTALLER="${URL_HPCKIT##*/}"
-  curl -L "${URL_HPCKIT}" -o "${HPCKIT_INSTALLER}" && chmod +x "${HPCKIT_INSTALLER}"
+  curl -fL "${URL_HPCKIT}" -o "${HPCKIT_INSTALLER}"
+  chmod +x "${HPCKIT_INSTALLER}"
   echo "------Available HPC Toolkit components:"
   ./${HPCKIT_INSTALLER} --list-components || true
   ./${HPCKIT_INSTALLER} -a -c --silent --eula accept \
@@ -87,7 +90,7 @@ if [ "$COMPILER" == "intel" ] && [ "$1" != "intelmpi" ]; then
   rm -rf /opt/intel/oneapi
   cd /tmp
   BASEKIT_INSTALLER="${URL_BASEKIT##*/}"
-  curl -L "${URL_BASEKIT}" -o "${BASEKIT_INSTALLER}"
+  curl -fL "${URL_BASEKIT}" -o "${BASEKIT_INSTALLER}"
   chmod +x "${BASEKIT_INSTALLER}"
   echo "------Available Base Toolkit components:"
   ./${BASEKIT_INSTALLER} --list-components || true
@@ -150,7 +153,8 @@ dnf install -y --nogpgcheck azure-cli
 # Install HDF5
 cd /tmp
 TAR_HDF5=${URL_HDF5##*/}
-curl -L ${URL_HDF5} -o ${TAR_HDF5}
+# -f: fail (nonzero exit) on HTTP errors instead of silently saving the error page as the tarball
+curl -fL ${URL_HDF5} -o ${TAR_HDF5} || curl -fL ${URL_HDF5_FALLBACK} -o ${TAR_HDF5}
 if [[ -d "${TAR_HDF5%.tar.gz}" ]]; then
   rm -rf ${TAR_HDF5%.tar.gz}
 fi
@@ -167,7 +171,7 @@ cd /tmp
 # GitHub archives extract as <repo>-<version> (no 'v' prefix), not the tag name
 DIR_NETCDF="netcdf-c-${NETCDF_C_VERSION}"
 TAR_NETCDF="${DIR_NETCDF}.tar.gz"
-curl -L ${URL_NETCDF} -o ${TAR_NETCDF}
+curl -fL ${URL_NETCDF} -o ${TAR_NETCDF}
 if [[ -d "${DIR_NETCDF}" ]]; then
   rm -rf ${DIR_NETCDF}
 fi
@@ -179,7 +183,7 @@ cd /tmp
 # GitHub archives extract as <repo>-<version> (no 'v' prefix), not the tag name
 DIR_NETCDF_FORTRAN="netcdf-fortran-${NETCDF_FORTRAN_VERSION}"
 TAR_NETCDF_FORTRAN="${DIR_NETCDF_FORTRAN}.tar.gz"
-curl -L ${URL_NETCDF_FORTRAN} -o ${TAR_NETCDF_FORTRAN}
+curl -fL ${URL_NETCDF_FORTRAN} -o ${TAR_NETCDF_FORTRAN}
 if [[ -d "${DIR_NETCDF_FORTRAN}" ]]; then
   rm -rf ${DIR_NETCDF_FORTRAN}
 fi
@@ -210,7 +214,7 @@ cd schism
 URL_GOTM="https://github.com/gotm-model/code/archive/refs/tags/${GOTM_VERSION}.tar.gz"
 TAR_GOTM=${URL_GOTM##*/}
 GOTM_NAME=${TAR_GOTM%.tar.gz}
-curl -L ${URL_GOTM} -o ${TAR_GOTM}
+curl -fL ${URL_GOTM} -o ${TAR_GOTM}
 tar -xf ${TAR_GOTM}
 mv code-${GOTM_VERSION#v} gotm
 
