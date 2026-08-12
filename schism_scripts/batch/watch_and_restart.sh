@@ -36,6 +36,14 @@
 #   --max-restarts  N   Max restart attempts before abort  (default: 5)
 #   --log-file      F   Log file path
 #                       (default: <study-dir>/watchdog.log)
+#
+# Environment (advanced, e.g. for local/mock testing):
+#   WATCHDOG_PSCHISM_PATTERN   pgrep/pkill -f pattern for the sim process
+#                              (default: pschism)
+#   WATCHDOG_MPIRUN_PATTERN    pgrep/pkill -f pattern for the launcher
+#                              (default: mpirun)
+#   Scope these to a unique string (e.g. a temp study dir path) to guarantee
+#   a local test never matches/kills a real production run on a shared host.
 ################################################################################
 
 set -uo pipefail
@@ -45,6 +53,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Reuse shared rndays parser (defines get_rndays_from_param_nml)
 # shellcheck source=get_rndays_from_param_nml.sh
 source "${SCRIPT_DIR}/get_rndays_from_param_nml.sh"
+
+# Process-match patterns for pgrep/pkill. Overridable so local/mock testing
+# (e.g. tests/test_watchdog_local.sh) can scope them to a unique string and
+# never match/kill real production pschism or mpirun processes on a shared
+# machine. Defaults preserve production behaviour.
+PSCHISM_PATTERN="${WATCHDOG_PSCHISM_PATTERN:-pschism}"
+MPIRUN_PATTERN="${WATCHDOG_MPIRUN_PATTERN:-mpirun}"
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
 STUDY_DIR=""
@@ -127,22 +142,22 @@ get_cpu_usage() {
 # ── is_pschism_running ────────────────────────────────────────────────────────
 # Returns 0 (true) if any pschism* process exists.
 is_pschism_running() {
-    pgrep -f 'pschism' > /dev/null 2>&1
+    pgrep -f "$PSCHISM_PATTERN" > /dev/null 2>&1
 }
 
 # ── kill_mpirun ───────────────────────────────────────────────────────────────
 kill_mpirun() {
     log "Sending SIGTERM to mpirun..."
-    pkill -TERM -f 'mpirun' 2>/dev/null || true
+    pkill -TERM -f "$MPIRUN_PATTERN" 2>/dev/null || true
     sleep 10
-    if pgrep -f 'mpirun' > /dev/null 2>&1; then
+    if pgrep -f "$MPIRUN_PATTERN" > /dev/null 2>&1; then
         log "mpirun still alive — sending SIGKILL..."
-        pkill -KILL -f 'mpirun' 2>/dev/null || true
+        pkill -KILL -f "$MPIRUN_PATTERN" 2>/dev/null || true
         sleep 3
     fi
-    if pgrep -f 'pschism' > /dev/null 2>&1; then
+    if pgrep -f "$PSCHISM_PATTERN" > /dev/null 2>&1; then
         log "Killing remaining pschism processes..."
-        pkill -KILL -f 'pschism' 2>/dev/null || true
+        pkill -KILL -f "$PSCHISM_PATTERN" 2>/dev/null || true
         sleep 3
     fi
     log "MPI processes killed."
