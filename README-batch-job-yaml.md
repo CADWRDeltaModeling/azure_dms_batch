@@ -179,3 +179,4 @@ If your job fails:
 For more detailed information, refer to:
 - [Azure DMS Batch README](README.md)
 - [SCHISM-specific configuration](README-schism-batch.md)
+- [Custom Images Guide](README-batch-custom-images.md) - using Azure Compute Gallery custom images and User Subscription accounts

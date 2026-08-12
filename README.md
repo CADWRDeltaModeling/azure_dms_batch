@@ -41,6 +41,7 @@ dmsbatch submit-job --file my_config.yml
 
 * [**Job YAML Configuration Guide**](README-batch-job-yaml.md) - How to write job configuration YAML files
 * [**Template System Documentation**](README-batch-yaml-template.md) - Deep dive into how the template system works
+* [**Custom Images Guide**](README-batch-custom-images.md) - Using Azure Compute Gallery custom images with User Subscription Batch accounts
 
 # Azure Batch runs for Models 
 
