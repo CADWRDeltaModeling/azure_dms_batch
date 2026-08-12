@@ -190,6 +190,7 @@ See the [slightly more involved example notebook for running dsm2 hydro with inp
 - [**Template System Documentation**](README-batch-yaml-template.md) - Details on how the template system works
 - [**Script Templates Documentation**](README-script-templates.md) - In-depth information on script templates
 - [**SCHISM-specific Configuration**](README-schism-batch.md) - For SCHISM model workloads
+- [**SCHISM Compiling and Benchmarking**](README-schism-compile-benchmark.md) - Building SCHISM from source on Azure Batch and MPI tuning benchmarks
 - [**Architecture Documentation**](README-architecture.md) - Implementation details for developers
 
 ## Azure Documentation
