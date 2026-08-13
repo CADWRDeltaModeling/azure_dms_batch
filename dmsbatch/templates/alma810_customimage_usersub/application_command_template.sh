@@ -42,8 +42,10 @@ echo "Running background copy_modified_loop.sh with pid $pid";
 # Extract host list from AZ_BATCH_HOST_LIST
 IFS=',' read -r -a host_list <<< "$AZ_BATCH_HOST_LIST"
 
-# Create hostfile
+# Create hostfile (truncate first - a task retry reuses this working directory, and a stale
+# hostfile from a prior attempt would otherwise get appended to, duplicating every host)
 hostfile="hostfile"
+: > "$hostfile"
 for host in "${{host_list[@]}}"; do
     echo "$host" >> "$hostfile"
 done
