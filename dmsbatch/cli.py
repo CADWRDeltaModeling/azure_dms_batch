@@ -3,6 +3,7 @@ from dmsbatch import __version__
 from dmsbatch import commands
 from dmsbatch import batch
 from dmsbatch import mount_blob
+from dmsbatch import copy_container
 
 import click
 import sys
@@ -225,6 +226,7 @@ main.add_command(create_pool, name="create-pool")
 main.add_command(restart_stuck_pool, name="restart-stuck-pool")
 main.add_command(mount_blob.mount_blob, name="mount-blob")
 main.add_command(mount_blob.unmount_all_blobs)
+main.add_command(copy_container.copy_container_path_cmd, name="copy-container-path")
 
 
 if __name__ == "__main__":
