@@ -12,9 +12,20 @@ The build logic itself lives in [schism_scripts/batch/schism_build.sh](schism_sc
 
 ### 1. One-time setup: build identity
 
-Run [app-packages/setup_build_identity.sh](app-packages/setup_build_identity.sh) once per Batch account. It creates a user-assigned managed identity with rights to register application packages, so the compute node can register the compiled package itself via `az login --identity` during the build — no SAS token or personal credentials needed for that step. Paste the resulting identity resource ID into `build_schism_alma810`'s `pool.bicep` (`buildIdentityResourceId` parameter).
+Run [app-packages/setup_build_identity.sh](app-packages/setup_build_identity.sh) once per Batch account. It creates a user-assigned managed identity with rights to register application packages, so the compute node can register the compiled package itself via `az login --identity` during the build — no SAS token or personal credentials needed for that step. Paste the resulting identity resource ID into the build template's `pool.bicep` (`buildIdentityResourceId` parameter) and into your job YAML (`build_identity_resource_id`).
+
+The script's defaults target the original account/resource group/location it was written for; override via environment variables to target any other account/resource group, e.g. a UserSubscription/custom-image account such as `my_batch` (used by the [build_schism_alma810_customimage_usersub](dmsbatch/templates/build_schism_alma810_customimage_usersub) template):
+
+```bash
+RESOURCE_GROUP=my_rg BATCH_ACCOUNT_NAME=my_batch \
+  LOCATION=my_location IDENTITY_NAME=my-build-identity \
+  bash app-packages/setup_build_identity.sh
+```
+
+This is a one-time step per Batch account — skip it if the identity already exists (check with `az identity show --name <IDENTITY_NAME> --resource-group <RESOURCE_GROUP>`).
 
 ### 2. Write a build job YAML
+
 
 Base it on [sample_configs/build_schism_alma810_mvapich2.yml](sample_configs/build_schism_alma810_mvapich2.yml). Key fields:
 
