@@ -36,6 +36,15 @@ if [[ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]]; then
     # following Azure HPC's configure_local_nvme_disks.sh approach.
     # Falls back to the existing setup_disks() for SCSI/managed disk VMs.
     setup_disks_auto() {
+        # Re-run guard: if NFS_MOUNT_POINT is already a live mountpoint (e.g. this is a task
+        # retry re-running coordination setup on a node already set up by a prior attempt),
+        # skip disk setup entirely - re-formatting a mounted device corrupts it and breaks NFS.
+        if mountpoint -q "$NFS_MOUNT_POINT" 2>/dev/null; then
+            echo "$NFS_MOUNT_POINT is already mounted, skipping disk setup (idempotent re-run)"
+            ln -sfn $NFS_SCRATCH /scratch
+            return
+        fi
+
         # Case 1: /mnt/resource is already mounted (Azure Batch pre-configured NVMe RAID,
         # as on HBv5 where all 8 NVMe disks are pre-assembled into md127 at /mnt/resource).
         # Just create the NFS directory structure on top of it — no disk setup needed.
@@ -45,11 +54,11 @@ if [[ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]]; then
             mkdir -p $NFS_MOUNT_POINT
             mkdir -p $NFS_APPS $NFS_DATA $NFS_HOME $NFS_SCRATCH
             chmod 777 $NFS_APPS $NFS_DATA $NFS_HOME $NFS_SCRATCH
-            ln -s $NFS_SCRATCH /scratch
-            echo "$NFS_APPS    *(rw,no_root_squash)" >> /etc/exports
-            echo "$NFS_DATA    *(rw,no_root_squash)" >> /etc/exports
-            echo "$NFS_HOME    *(rw,no_root_squash)" >> /etc/exports
-            echo "$NFS_SCRATCH    *(rw,no_root_squash)" >> /etc/exports
+            ln -sfn $NFS_SCRATCH /scratch
+            add_export_once "$NFS_APPS    *(rw,no_root_squash)"
+            add_export_once "$NFS_DATA    *(rw,no_root_squash)"
+            add_export_once "$NFS_HOME    *(rw,no_root_squash)"
+            add_export_once "$NFS_SCRATCH    *(rw,no_root_squash)"
             exportfs
             exportfs -a
             exportfs
@@ -76,13 +85,18 @@ if [[ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]]; then
 
         mkdir -p $NFS_MOUNT_POINT
 
+        # purge any stale fstab entry for this mountpoint left over from a prior job on a
+        # reused pool node - otherwise `mount` (by mountpoint) can match a stale/old UUID
+        # instead of the filesystem just formatted below, producing a "bad superblock" error.
+        sed -i "\#[[:space:]]${NFS_MOUNT_POINT}[[:space:]]#d" /etc/fstab
+
         if [[ $nvme_count -eq 1 ]]; then
             echo "Single free NVMe device ${free_nvme[0]}, formatting directly as xfs"
             mkfs.xfs -f "${free_nvme[0]}"
             local uuid
             uuid=$(blkid -s UUID -o value "${free_nvme[0]}")
             echo "UUID=$uuid $NFS_MOUNT_POINT xfs rw,noatime,attr2,inode64,nobarrier,nofail 0 2" >> /etc/fstab
-            mount $NFS_MOUNT_POINT
+            mount -t xfs "${free_nvme[0]}" "$NFS_MOUNT_POINT"
         else
             echo "Multiple free NVMe devices (${free_nvme[*]}), creating RAID-0 /dev/md10"
             mdadm --create /dev/md10 --level 0 --raid-devices $nvme_count "${free_nvme[@]}"
@@ -92,17 +106,17 @@ if [[ $AZ_BATCH_IS_CURRENT_NODE_MASTER == "true" ]]; then
             local uuid
             uuid=$(blkid -s UUID -o value /dev/md10)
             echo "UUID=$uuid $NFS_MOUNT_POINT xfs rw,noatime,attr2,inode64,nobarrier,nofail 0 2" >> /etc/fstab
-            mount $NFS_MOUNT_POINT
+            mount -t xfs /dev/md10 "$NFS_MOUNT_POINT"
         fi
 
         mkdir -p $NFS_APPS $NFS_DATA $NFS_HOME $NFS_SCRATCH
         chmod 777 $NFS_APPS $NFS_DATA $NFS_HOME $NFS_SCRATCH
-        ln -s $NFS_SCRATCH /scratch
+        ln -sfn $NFS_SCRATCH /scratch
 
-        echo "$NFS_APPS    *(rw,no_root_squash)" >> /etc/exports
-        echo "$NFS_DATA    *(rw,no_root_squash)" >> /etc/exports
-        echo "$NFS_HOME    *(rw,no_root_squash)" >> /etc/exports
-        echo "$NFS_SCRATCH    *(rw,no_root_squash)" >> /etc/exports
+        add_export_once "$NFS_APPS    *(rw,no_root_squash)"
+        add_export_once "$NFS_DATA    *(rw,no_root_squash)"
+        add_export_once "$NFS_HOME    *(rw,no_root_squash)"
+        add_export_once "$NFS_SCRATCH    *(rw,no_root_squash)"
 
         exportfs
         exportfs -a

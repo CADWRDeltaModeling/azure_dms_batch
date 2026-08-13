@@ -38,6 +38,10 @@ PREFIX_NETCDF_FORTRAN="${PREFIX_NETCDF_FORTRAN:-/opt/netcdf-fortran}"
 HDF5_VERSION="${HDF5_VERSION:-1.14.3}"
 NETCDF_C_VERSION="${NETCDF_C_VERSION:-4.10.0}"
 NETCDF_FORTRAN_VERSION="${NETCDF_FORTRAN_VERSION:-4.6.2}"
+# No longer used to fetch GOTM (see the "git submodule update" call below) - SCHISM
+# pins its own compatible GOTM commit as a submodule, so this version can't be
+# overridden independently. Kept only so existing job configs that set gotm_version
+# don't break.
 GOTM_VERSION="${GOTM_VERSION:-v6.0.7}"
 
 # URLs derived from version numbers (override directly if the URL pattern changes)
@@ -51,7 +55,7 @@ URL_NETCDF="${URL_NETCDF:-https://github.com/Unidata/netcdf-c/archive/refs/tags/
 URL_NETCDF_FORTRAN="${URL_NETCDF_FORTRAN:-https://github.com/Unidata/netcdf-fortran/archive/refs/tags/v${NETCDF_FORTRAN_VERSION}.tar.gz}"
 
 # CMake flags applied to all pschism builds
-CMAKE_BASE_FLAGS="-DCMAKE_BUILD_TYPE=Release -DBLD_STANDALONE=ON -DTVD_LIM=VL -DPREC_EVAP=ON -DUSE_GOTM=ON -DGOTM_BASE=../gotm"
+CMAKE_BASE_FLAGS="-DCMAKE_BUILD_TYPE=Release -DBLD_STANDALONE=ON -DTVD_LIM=VL -DPREC_EVAP=ON -DUSE_GOTM=ON -DGOTM_BASE=../src/GOTM5.2/code"
 # ============================================================
 
 # Activate MVAPICH2 if argument to this script is mvapich2 else if openmpi activate openmpi
@@ -72,7 +76,7 @@ elif [ "$1" == "intelmpi" ]; then
   rm -rf /opt/intel/oneapi
   cd /tmp
   HPCKIT_INSTALLER="${URL_HPCKIT##*/}"
-  curl -fL "${URL_HPCKIT}" -o "${HPCKIT_INSTALLER}"
+  curl -fL --retry 5 --retry-delay 5 "${URL_HPCKIT}" -o "${HPCKIT_INSTALLER}"
   chmod +x "${HPCKIT_INSTALLER}"
   echo "------Available HPC Toolkit components:"
   ./${HPCKIT_INSTALLER} --list-components || true
@@ -90,7 +94,7 @@ if [ "$COMPILER" == "intel" ] && [ "$1" != "intelmpi" ]; then
   rm -rf /opt/intel/oneapi
   cd /tmp
   BASEKIT_INSTALLER="${URL_BASEKIT##*/}"
-  curl -fL "${URL_BASEKIT}" -o "${BASEKIT_INSTALLER}"
+  curl -fL --retry 5 --retry-delay 5 "${URL_BASEKIT}" -o "${BASEKIT_INSTALLER}"
   chmod +x "${BASEKIT_INSTALLER}"
   echo "------Available Base Toolkit components:"
   ./${BASEKIT_INSTALLER} --list-components || true
@@ -154,7 +158,8 @@ dnf install -y --nogpgcheck azure-cli
 cd /tmp
 TAR_HDF5=${URL_HDF5##*/}
 # -f: fail (nonzero exit) on HTTP errors instead of silently saving the error page as the tarball
-curl -fL ${URL_HDF5} -o ${TAR_HDF5} || curl -fL ${URL_HDF5_FALLBACK} -o ${TAR_HDF5}
+# --retry: retry transient errors (5xx, timeouts) - GitHub/S3 downloads occasionally 503
+curl -fL --retry 5 --retry-delay 5 ${URL_HDF5} -o ${TAR_HDF5} || curl -fL --retry 5 --retry-delay 5 ${URL_HDF5_FALLBACK} -o ${TAR_HDF5}
 if [[ -d "${TAR_HDF5%.tar.gz}" ]]; then
   rm -rf ${TAR_HDF5%.tar.gz}
 fi
@@ -171,7 +176,7 @@ cd /tmp
 # GitHub archives extract as <repo>-<version> (no 'v' prefix), not the tag name
 DIR_NETCDF="netcdf-c-${NETCDF_C_VERSION}"
 TAR_NETCDF="${DIR_NETCDF}.tar.gz"
-curl -fL ${URL_NETCDF} -o ${TAR_NETCDF}
+curl -fL --retry 5 --retry-delay 5 ${URL_NETCDF} -o ${TAR_NETCDF}
 if [[ -d "${DIR_NETCDF}" ]]; then
   rm -rf ${DIR_NETCDF}
 fi
@@ -183,7 +188,7 @@ cd /tmp
 # GitHub archives extract as <repo>-<version> (no 'v' prefix), not the tag name
 DIR_NETCDF_FORTRAN="netcdf-fortran-${NETCDF_FORTRAN_VERSION}"
 TAR_NETCDF_FORTRAN="${DIR_NETCDF_FORTRAN}.tar.gz"
-curl -fL ${URL_NETCDF_FORTRAN} -o ${TAR_NETCDF_FORTRAN}
+curl -fL --retry 5 --retry-delay 5 ${URL_NETCDF_FORTRAN} -o ${TAR_NETCDF_FORTRAN}
 if [[ -d "${DIR_NETCDF_FORTRAN}" ]]; then
   rm -rf ${DIR_NETCDF_FORTRAN}
 fi
@@ -211,12 +216,12 @@ fi
 git clone -b $SCHISM_VERSION https://github.com/schism-dev/schism.git
 cd schism
 
-URL_GOTM="https://github.com/gotm-model/code/archive/refs/tags/${GOTM_VERSION}.tar.gz"
-TAR_GOTM=${URL_GOTM##*/}
-GOTM_NAME=${TAR_GOTM%.tar.gz}
-curl -fL ${URL_GOTM} -o ${TAR_GOTM}
-tar -xf ${TAR_GOTM}
-mv code-${GOTM_VERSION#v} gotm
+# GOTM: SCHISM's own cmake (src/CMakeLists.txt) expects the pre-restructuring GOTM
+# layout (src/gotm/gotm.F90), which only exists at the exact legacy commit SCHISM pins
+# as its own git submodule at src/GOTM5.2/code - NOT the current gotm-model/code tags
+# (e.g. v6.0.7 has a completely different, incompatible directory layout). Initialize
+# SCHISM's pinned submodule instead of fetching GOTM ourselves.
+git submodule update --init --recursive -- src/GOTM5.2/code
 
 # Fix the code to use ifx
 sed -i 's/message(FATAL_ERROR "Preprocessor flag/message(STATUS "Preprocessor flag/g' src/CMakeLists.txt

@@ -6,6 +6,13 @@ NFS_DATA=$NFS_MOUNT_POINT/data
 NFS_HOME=$NFS_MOUNT_POINT/home
 NFS_SCRATCH=/mnt/resource/scratch
 
+# append a line to /etc/exports only if it isn't already there (safe to call on task retries/re-runs)
+add_export_once()
+{
+    local line="$1"
+    grep -qxF "$line" /etc/exports 2>/dev/null || echo "$line" >> /etc/exports
+}
+
 
 read_os()
 {
@@ -170,10 +177,10 @@ setup_disks()
 
     ln -s $NFS_SCRATCH /scratch
 
-    echo "$NFS_APPS    *(rw,no_root_squash)" >> /etc/exports
-    echo "$NFS_DATA    *(rw,no_root_squash)" >> /etc/exports
-    echo "$NFS_HOME    *(rw,no_root_squash)" >> /etc/exports
-    echo "$NFS_SCRATCH    *(rw,no_root_squash)" >> /etc/exports
+    add_export_once "$NFS_APPS    *(rw,no_root_squash)"
+    add_export_once "$NFS_DATA    *(rw,no_root_squash)"
+    add_export_once "$NFS_HOME    *(rw,no_root_squash)"
+    add_export_once "$NFS_SCRATCH    *(rw,no_root_squash)"
 
     exportfs
     exportfs -a
