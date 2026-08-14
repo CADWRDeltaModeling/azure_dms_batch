@@ -40,8 +40,14 @@ customMetrics            │  schism-batch-insights  │
 Both Logic Apps use a **system-assigned managed identity** — no credentials are stored
 anywhere. The identity is granted:
 - **Contributor** on each Azure Batch account (to query/terminate jobs)
+- **Monitoring Reader** on Application Insights (to retrieve linked alert query results)
 - **Mail.Send** (Microsoft Graph application permission) on a shared mailbox (to send
   notification emails)
+
+Azure Monitor common-alert webhooks do not reliably inline log-search rows. For fired
+alerts, the workflows use `linkToFilteredSearchResultsAPI` to retrieve the matching rows
+with their managed identities. Resolved alerts contain no rows and are acknowledged
+without running notification or termination actions.
 
 ## Files in this repository
 
@@ -50,18 +56,14 @@ anywhere. The identity is granted:
 | [bicep/schism_alert_logic_app.bicep](../bicep/schism_alert_logic_app.bicep) | Deploys the notification Logic App (`schism-stuck-handler`) + its role assignment |
 | [bicep/schism_alert_workflow.json](../bicep/schism_alert_workflow.json) | Workflow definition for the notification Logic App |
 | [bicep/schism_terminate_logic_app.bicep](../bicep/schism_terminate_logic_app.bicep) | Deploys the termination Logic App (`schism-terminate-handler`) + its role assignment |
-| `bicep/schism_terminate_workflow.json` | Workflow definition for the termination Logic App (generated locally, not committed — see below) |
+| [bicep/schism_terminate_workflow.json](../bicep/schism_terminate_workflow.json) | Workflow definition for the termination Logic App |
 | [bicep/setup_schism_alert.sh](../bicep/setup_schism_alert.sh) | End-to-end orchestration script — deploys both Logic Apps, wires up action groups and alert rules |
 | [app-packages/telegraf/telegraf.conf](../app-packages/telegraf/telegraf.conf) | Telegraf config that tags each metric with `host`, `created_by`, `batch_account`, `batch_region` |
 | `dmsbatch/templates/*/application_command_template.sh` | Batch task scripts — set the env vars Telegraf uses for tagging |
 
-> **Note:** `bicep/schism_terminate_workflow.json` and `bicep/schism_alert_logic_app.json`
-> (the compiled ARM template) are excluded from git via `.gitignore` because they are
-> either generated artifacts or contain deployment-specific values. If you clone this repo
-> fresh, `schism_terminate_workflow.json` must exist for the Bicep `loadJsonContent()` call
-> to work — check with your team for the current copy, or recreate it following the
-> structure of `schism_alert_workflow.json` with a `Terminate_job` HTTP POST action instead
-> of the email/notify actions.
+> **Note:** The `*_workflow.json` files are source definitions loaded by Bicep through
+> `loadJsonContent()`. The `*_logic_app.json` files are generated ARM templates; regenerate
+> them with `az bicep build` after changing a workflow or its Bicep wrapper.
 
 ## Prerequisites
 
@@ -163,11 +165,13 @@ Passing `skip` deploys everything **except** working email — a placeholder sen
 is used so the Logic Apps deploy successfully. The script will:
 
 1. Deploy `schism-stuck-handler` (Bicep)
-2. Grant its managed identity **Contributor** on every Batch account listed
+2. Grant its managed identity **Monitoring Reader** on Application Insights and
+  **Contributor** on every Batch account listed
 3. Create/update the `schism-stuck-handler-ag` action group with the Logic App webhook
 4. Create/update the `SCHISM-stuck-simulation` alert rule (fires after ~30 min stuck)
 5. Deploy `schism-terminate-handler` (Bicep)
-6. Grant its managed identity **Contributor** on every Batch account
+6. Grant its managed identity **Monitoring Reader** on Application Insights and
+  **Contributor** on every Batch account
 7. Create/update the `schism-terminate-handler-ag` action group
 8. Create/update the `SCHISM-stuck-terminate` alert rule (fires after ~90 min stuck)
 9. Write `bicep/it_support_vars.txt` with the values IT needs for the next step
@@ -269,6 +273,11 @@ and confirm every step succeeded (green checkmarks), including `Send_email_via_g
 Since `test_pool_id` doesn't exist, the workflow safely falls into its
 "no active job found" branch — nothing gets terminated.
 
+For common-schema alerts, also confirm `Get_linked_alert_rows`,
+`Select_linked_alert_rows`, and `Set_linked_alert_rows` succeeded. Do not rely only on the
+outer run status: an independent Response action can make the run appear successful even
+when a nested action failed.
+
 ## Verifying in the Azure Portal
 
 | Component | Where to look |
@@ -276,6 +285,7 @@ Since `test_pool_id` doesn't exist, the workflow safely falls into its
 | Logic App + managed identity | Resource group → Logic App → **Identity** tab (Status = On) |
 | Logic App run history | Resource group → Logic App → **Run history** |
 | Role assignments | Batch account → **Access control (IAM)** → Role assignments (filter Type = "All" — managed identities may show as a raw GUID instead of a name) |
+| Alert query permission | Application Insights → **Access control (IAM)** → Role assignments → Monitoring Reader |
 | Action group webhook | Monitor → Alerts → Action groups → select group → webhook receiver |
 | Alert rule | Monitor → Alerts → Alert rules → select rule → check scope, KQL condition, and linked action group |
 | Mail.Send permission | Entra ID → Enterprise applications → search Logic App name → **Permissions** tab → Application permissions |

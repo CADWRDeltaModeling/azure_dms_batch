@@ -38,6 +38,7 @@ APP_INSIGHTS_NAME="schism-batch-insights"
 BATCH_ACCOUNTS=(
   "schismbatch:dwrbdo_schism_rg"
   "schismbatchscus:dwrbdo_schism_scus_rg"
+  "schismbatchscus2:dwrbdo_schism_scus_rg"
 )
 
 SENDER_EMAIL="${1:-skip}"
@@ -200,6 +201,11 @@ az rest --method PUT \
           \"timeAggregation\": \"Count\",
           \"operator\": \"GreaterThan\",
           \"threshold\": 0,
+          "dimensions": [{
+            "name": "host",
+            "operator": "Include",
+            "values": ["*"]
+          }],
           \"failingPeriods\": {
             \"numberOfEvaluationPeriods\": 1,
             \"minFailingPeriodsToAlert\": 1
@@ -332,6 +338,11 @@ az rest --method PUT \
           \"timeAggregation\": \"Count\",
           \"operator\": \"GreaterThan\",
           \"threshold\": 0,
+          "dimensions": [{
+            "name": "host",
+            "operator": "Include",
+            "values": ["*"]
+          }],
           \"failingPeriods\": {
             \"numberOfEvaluationPeriods\": 1,
             \"minFailingPeriodsToAlert\": 1

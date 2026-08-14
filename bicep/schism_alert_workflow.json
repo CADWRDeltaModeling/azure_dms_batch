@@ -46,17 +46,107 @@
         }
       }
     },
-    "Log_alert_received": {
-      "type": "Compose",
+    "Initialize_alert_rows": {
+      "type": "InitializeVariable",
       "runAfter": {
         "Parse_alert": [
           "Succeeded"
         ]
       },
       "inputs": {
+        "variables": [
+          {
+            "name": "alertRows",
+            "type": "array",
+            "value": "@coalesce(body('Parse_alert')?['data']?['alertContext']?['condition']?['allOf']?[0]?['searchResults']?['rows'], json('[]'))"
+          }
+        ]
+      }
+    },
+    "Fetch_linked_alert_rows": {
+      "type": "If",
+      "runAfter": {
+        "Initialize_alert_rows": [
+          "Succeeded"
+        ]
+      },
+      "expression": {
+        "and": [
+          {
+            "equals": [
+              "@body('Parse_alert')?['data']?['essentials']?['monitorCondition']",
+              "Fired"
+            ]
+          },
+          {
+            "equals": [
+              "@empty(variables('alertRows'))",
+              true
+            ]
+          }
+        ]
+      },
+      "actions": {
+        "Get_linked_alert_rows": {
+          "type": "Http",
+          "runAfter": {},
+          "inputs": {
+            "method": "GET",
+            "uri": "@{body('Parse_alert')?['data']?['alertContext']?['condition']?['allOf']?[0]?['linkToFilteredSearchResultsAPI']}",
+            "authentication": {
+              "type": "ManagedServiceIdentity",
+              "audience": "https://api.applicationinsights.io"
+            }
+          }
+        },
+        "Select_linked_alert_rows": {
+          "type": "Select",
+          "runAfter": {
+            "Get_linked_alert_rows": [
+              "Succeeded"
+            ]
+          },
+          "inputs": {
+            "from": "@coalesce(body('Get_linked_alert_rows')?['tables']?[0]?['rows'], json('[]'))",
+            "select": {
+              "host": "@item()?[0]",
+              "CreatedBy": "@item()?[1]",
+              "StuckAtDays": "@item()?[2]",
+              "StuckReason": "@item()?[3]",
+              "CurrentSchismTime": "@item()?[4]",
+              "batchAccount": "@item()?[5]",
+              "batchRegion": "@item()?[6]"
+            }
+          }
+        },
+        "Set_linked_alert_rows": {
+          "type": "SetVariable",
+          "runAfter": {
+            "Select_linked_alert_rows": [
+              "Succeeded"
+            ]
+          },
+          "inputs": {
+            "name": "alertRows",
+            "value": "@body('Select_linked_alert_rows')"
+          }
+        }
+      },
+      "else": {
+        "actions": {}
+      }
+    },
+    "Log_alert_received": {
+      "type": "Compose",
+      "runAfter": {
+        "Fetch_linked_alert_rows": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
         "event": "alert_received",
         "timestamp": "@utcNow()",
-        "rows": "@body('Parse_alert')?['data']?['alertContext']?['condition']?['allOf']?[0]?['searchResults']?['rows']"
+        "rows": "@variables('alertRows')"
       }
     },
     "For_each_stuck_host": {
@@ -66,7 +156,7 @@
           "Succeeded"
         ]
       },
-      "foreach": "@body('Parse_alert')?['data']?['alertContext']?['condition']?['allOf']?[0]?['searchResults']?['rows']",
+      "foreach": "@variables('alertRows')",
       "actions": {
         "Log_stuck_host": {
           "type": "Compose",
@@ -89,20 +179,16 @@
           "expression": {
             "and": [
               {
-                "not": {
-                  "equals": [
-                    "@items('For_each_stuck_host')?['batchAccount']",
-                    ""
-                  ]
-                }
+                "equals": [
+                  "@empty(items('For_each_stuck_host')?['batchAccount'])",
+                  false
+                ]
               },
               {
-                "not": {
-                  "equals": [
-                    "@items('For_each_stuck_host')?['batchRegion']",
-                    ""
-                  ]
-                }
+                "equals": [
+                  "@empty(items('For_each_stuck_host')?['batchRegion'])",
+                  false
+                ]
               }
             ]
           },
@@ -233,12 +319,10 @@
           "expression": {
             "and": [
               {
-                "not": {
-                  "equals": [
-                    "@items('For_each_stuck_host')?['CreatedBy']",
-                    ""
-                  ]
-                }
+                "equals": [
+                  "@empty(items('For_each_stuck_host')?['CreatedBy'])",
+                  false
+                ]
               }
             ]
           },
@@ -295,14 +379,38 @@
       "type": "Response",
       "runAfter": {
         "For_each_stuck_host": [
-          "Succeeded",
-          "Failed",
-          "Skipped"
+          "Succeeded"
         ]
       },
       "inputs": {
         "statusCode": 200,
         "body": "Alert received and logged"
+      }
+    },
+    "Respond_fetch_failed": {
+      "type": "Response",
+      "runAfter": {
+        "Fetch_linked_alert_rows": [
+          "Failed",
+          "TimedOut"
+        ]
+      },
+      "inputs": {
+        "statusCode": 500,
+        "body": "Unable to retrieve alert query results"
+      }
+    },
+    "Respond_processing_failed": {
+      "type": "Response",
+      "runAfter": {
+        "For_each_stuck_host": [
+          "Failed",
+          "TimedOut"
+        ]
+      },
+      "inputs": {
+        "statusCode": 500,
+        "body": "Alert processing failed"
       }
     }
   },

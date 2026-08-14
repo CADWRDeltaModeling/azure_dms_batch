@@ -10,6 +10,9 @@ param batchAccountName string
 @description('Email address of the shared mailbox to send alerts from (e.g. schism-alerts@yourorg.com)')
 param senderEmail string
 
+@description('Application Insights component queried for alert result rows')
+param appInsightsName string = 'schism-batch-insights'
+
 // ── Logic App ────────────────────────────────────────────────────────────────
 
 resource logicApp 'Microsoft.Logic/workflows@2019-05-01' = {
@@ -46,6 +49,23 @@ resource batchRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01
       'b24988ac-6180-42a0-ab88-20f7382dd24c'
     )
     principalId:   logicApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource appInsights 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: appInsightsName
+}
+
+resource monitoringReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(appInsights.id, logicAppName, 'Monitoring Reader')
+  scope: appInsights
+  properties: {
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      '43d0d8ad-25c7-4714-9337-8ba259a9fe05'
+    )
+    principalId: logicApp.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
