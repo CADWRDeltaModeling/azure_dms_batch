@@ -58,6 +58,9 @@ URL_NETCDF_FORTRAN="${URL_NETCDF_FORTRAN:-https://github.com/Unidata/netcdf-fort
 CMAKE_BASE_FLAGS="-DCMAKE_BUILD_TYPE=Release -DBLD_STANDALONE=ON -DTVD_LIM=VL -DPREC_EVAP=ON -DUSE_GOTM=ON -DGOTM_BASE=../src/GOTM5.2/code"
 # ============================================================
 
+# Update certificates
+dnf update -y ca-certificates
+
 # Activate MVAPICH2 if argument to this script is mvapich2 else if openmpi activate openmpi
 if [ "$1" == "mvapich2" ]; then
   module load mpi/mvapich2
@@ -81,7 +84,7 @@ elif [ "$1" == "intelmpi" ]; then
   echo "------Available HPC Toolkit components:"
   ./${HPCKIT_INSTALLER} --list-components || true
   ./${HPCKIT_INSTALLER} -a -c --silent --eula accept \
-    --components="intel.oneapi.lin.fortran-compiler:intel.oneapi.lin.dpcpp-cpp-compiler:intel.oneapi.lin.mpi.devel"
+    --components="intel.oneapi.lin.ifort-compiler:intel.oneapi.lin.dpcpp-cpp-compiler:intel.oneapi.lin.mpi.devel"
   source /opt/intel/oneapi/setvars.sh
 else
   echo "Please provide either mvapich2, openmpi, hpcx, intelmpi, or mvapich2-ndr-patch as an argument"
@@ -99,7 +102,7 @@ if [ "$COMPILER" == "intel" ] && [ "$1" != "intelmpi" ]; then
   echo "------Available Base Toolkit components:"
   ./${BASEKIT_INSTALLER} --list-components || true
   ./${BASEKIT_INSTALLER} -a -c --silent --eula accept \
-    --components="intel.oneapi.lin.fortran-compiler:intel.oneapi.lin.dpcpp-cpp-compiler"
+    --components="intel.oneapi.lin.ifort-compiler:intel.oneapi.lin.dpcpp-cpp-compiler"
   source /opt/intel/oneapi/setvars.sh
 fi
 
@@ -260,11 +263,12 @@ if [ -f CMakeCache.txt ]; then
   rm CMakeCache.txt
 fi
 
-cmake -DCMAKE_Fortran_FLAGS_INIT="$INFO_FLAGS" $CMAKE_BASE_FLAGS -DUSE_SED=ON -DUSE_WWM=ON ../src
-make -j $(nproc) pschism
-if [ -f CMakeCache.txt ]; then
-  rm CMakeCache.txt
-fi
+# Comment out WWM. It does not get compiled right with Intel.
+# cmake -DCMAKE_Fortran_FLAGS_INIT="$INFO_FLAGS" $CMAKE_BASE_FLAGS -DUSE_SED=ON -DUSE_WWM=ON ../src
+# make -j $(nproc) pschism
+# if [ -f CMakeCache.txt ]; then
+#   rm CMakeCache.txt
+# fi
 
 cmake -DCMAKE_Fortran_FLAGS_INIT="$INFO_FLAGS" $CMAKE_BASE_FLAGS -DUSE_ANALYSIS=ON ../src
 make -j $(nproc) pschism
