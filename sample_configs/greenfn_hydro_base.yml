@@ -1,0 +1,79 @@
+# Green's-function pipeline: HYDRO base run (single task, runs ONCE).
+#
+# Produces the shared HYDRO tidefile that every subsequent GTM node/knot pulse run
+# reuses unchanged -- see da_climatology/.github/AZURE_BATCH_PLAN.md ("Confirmed
+# first: HYDRO runs once, GTM runs once per (node, knot)"). This job's tidefile output
+# is uploaded to a fixed blob path that greenfn_gtm_nodeknot_smalltest.yml's job-prep
+# task downloads from.
+#
+# Blob layout this job reads from / writes to (single storage container):
+#   greenfn_study/common_input/...                      (shared, uploaded once, read-only)
+#   greenfn_study/timeseries/...                        (shared, uploaded once, read-only)
+#   greenfn_study/studies/historical_sanity_test/...    (hydro.inp/config.inp/gtm.inp -- the
+#                                                         validated 2022-window template study,
+#                                                         uploaded once)
+#   greenfn_study/tidefile/hist_fc_mss.h5                <- THIS JOB WRITES THIS
+#
+# The "studies/" nesting level must be preserved exactly as shown -- config.inp's
+# DSM2INPUTDIR/TSINPUTDIR are unmodified relative paths ("../../common_input",
+# "../../timeseries"), which only resolve correctly two directory levels below
+# common_input/timeseries's parent (this mirrors sample_container_echo.yml's own
+# working dsm2_studies_v82/{common_input,timeseries,studies/historical} layout).
+#
+# Before submitting, upload the local study once (from da_climatology, with the
+# az cli/azcopy SAS-token pattern in the azure_dms_batch skill):
+#   azcopy cp ".../dsm2_studies_sample/common_input"                    ".../greenfn_study/common_input?<sas>"          --recursive=true
+#   azcopy cp ".../dsm2_studies_sample/timeseries"                      ".../greenfn_study/timeseries?<sas>"            --recursive=true
+#   azcopy cp ".../dsm2_studies_sample/studies/historical_sanity_test"  ".../greenfn_study/studies/historical_sanity_test?<sas>" --recursive=true
+#
+# TODO (fill in before submitting -- your Azure identity, out of this agent's scope):
+resource_group: TODO_resource_group
+location: TODO_location
+batch_account_name: TODO_batch_account_name
+storage_account_name: TODO_storage_account_name
+storage_container_name: TODO_storage_container_name
+
+job_name: greenfn_hydro_base
+
+# TODO: size for one HYDRO run over the validated ~4-month/2022 window (local run took
+# a few minutes on a normal workstation -- a small VM is likely sufficient; tune once
+# the real production window/grid size is fixed).
+vm_size: standard_ds2_v2
+num_hosts: 1
+task_slots_per_node: 1
+
+study_dir: greenfn_study/studies/historical_sanity_test
+
+resource_files:
+  - file_path: "."
+    blob_prefix: "{study_dir}"
+  - file_path: "."
+    blob_prefix: "greenfn_study/common_input"
+  - file_path: "."
+    blob_prefix: "greenfn_study/timeseries"
+
+command: |
+  cd {study_dir}
+  # TEMPDIR in this template study's config.inp is a Windows path (C:/temp) left over
+  # from local Windows validation -- override to a Linux path before running.
+  sed -i 's+C:/temp+/tmp+' config.inp
+  hydro hydro.inp
+
+output_files:
+  # the tidefile every GTM task's job-prep step will fetch
+  - file_pattern: "output/*.h5"
+    path: "greenfn_study/tidefile"
+    upload_condition: "tasksuccess"
+  # everything else, kept for audit/debugging
+  - file_pattern: "output/*"
+    path: "{study_dir}/output"
+    upload_condition: "taskcompletion"
+  - file_pattern: "*.inp"
+    path: "{study_dir}/echo"
+    upload_condition: "taskcompletion"
+
+# TODO: template_name -- using dvsm_container as a known-working starting point
+# (sample_container_echo.yml already demonstrates `hydro hydro.inp` running under it).
+# Swap this for your own Linux hydro/gtm application-package template once ready; the
+# binaries are invoked here simply as `hydro`/`gtm` (no .exe), assumed on PATH.
+template_name: "dvsm_container"

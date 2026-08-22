@@ -1,0 +1,121 @@
+# Green's-function pipeline: massively-parallel GTM node/knot pulse runs.
+#
+# One task per (node, knot) run -- no inter-task communication (see
+# azure_dms_batch/.github/skills/azure-dms-batch-parallel-jobs/SKILL.md). Reuses the
+# ONE shared HYDRO tidefile produced by greenfn_hydro_base.yml; only `gtm` runs here,
+# never `hydro` -- see da_climatology/.github/AZURE_BATCH_PLAN.md.
+#
+# Blob layout this job reads from / writes to (same container as greenfn_hydro_base.yml):
+#   greenfn_study/common_input/...                 (shared, read once per NODE via job-prep task)
+#   greenfn_study/timeseries/...                   (shared, read once per NODE via job-prep task)
+#   greenfn_study/tidefile/hist_fc_mss.h5           (written by greenfn_hydro_base.yml)
+#   greenfn_study/scripts/extract_one_run.py        (shared, read once per NODE via job-prep task)
+#   greenfn_study/runs/node{N}_knot{YYYYMMDD}/...   (per-TASK small input dir, one per run)
+#   greenfn_study/outputs/node{N}_knot{YYYYMMDD}/   (per-TASK output, written by this job)
+#
+# Before submitting:
+#  1. Build + stage the per-run input directories locally (no gtm.exe invocation):
+#       from greenfunction_gen.azure_batch_gen import stage_runs_for_azure
+#       staged = stage_runs_for_azure(run_table, common_input_dir, template_study_dir,
+#                                      staging_root, run_start, run_end)
+#     then upload each staged['run_dir'] with dest_prefix="greenfn_study/runs" (the
+#     PARENT path -- azcopy appends the run dir's own name, landing at
+#     greenfn_study/runs/node{N}_knot{YYYYMMDD}/...):
+#       from greenfunction_gen.azure_batch_gen import azcopy_upload_cmd
+#       azcopy_upload_cmd(run_dir, storage_account_name, storage_container_name,
+#                          sas_token, dest_prefix="greenfn_study/runs")
+#  2. Upload greenfunction_gen/extract_one_run.py once to greenfn_study/scripts/.
+#  3. The task_ids: block below is the concrete, already-validated smalltest run table
+#     (3 nodes x 2 knots, all 6 runs previously succeeded locally with real gtm.exe --
+#     see GREENFUNCTION_GEN_PLAN.md step 3b). To regenerate for a different run table:
+#       from greenfunction_gen.azure_batch_gen import generate_task_ids_snippet
+#       print(generate_task_ids_snippet(run_table))
+#     and paste the output in place of the `tasks = [...]` block below.
+#
+# TODO (fill in before submitting -- your Azure identity, out of this agent's scope):
+resource_group: TODO_resource_group
+location: TODO_location
+batch_account_name: TODO_batch_account_name
+storage_account_name: TODO_storage_account_name
+storage_container_name: TODO_storage_container_name
+
+job_name: greenfn_gtm_nodeknot_smalltest
+
+# TODO: tune once real node/knot counts are decided (see AZURE_BATCH_PLAN.md's open
+# decisions) -- each GTM run here is small/short (~4-month window, single constituent),
+# so packing several tasks per node via task_slots_per_node is likely worthwhile.
+vm_size: standard_ds5_v2
+num_hosts: 1
+task_slots_per_node: 4
+
+# --- job-level prep task: runs ONCE PER NODE, stages the large shared artifacts ---
+job_start_command_resource_files:
+  - file_path: "."
+    blob_prefix: "greenfn_study/common_input"
+  - file_path: "."
+    blob_prefix: "greenfn_study/timeseries"
+  - file_path: "."
+    blob_prefix: "greenfn_study/tidefile/hist_fc_mss.h5"
+  - file_path: "."
+    blob_prefix: "greenfn_study/scripts/extract_one_run.py"
+job_start_command_template: |
+  mkdir -p $AZ_BATCH_NODE_SHARED_DIR/tidefile $AZ_BATCH_NODE_SHARED_DIR/scripts
+  mv greenfn_study/common_input $AZ_BATCH_NODE_SHARED_DIR/common_input
+  mv greenfn_study/timeseries $AZ_BATCH_NODE_SHARED_DIR/timeseries
+  mv greenfn_study/tidefile/hist_fc_mss.h5 $AZ_BATCH_NODE_SHARED_DIR/tidefile/hist_fc_mss.h5
+  mv greenfn_study/scripts/extract_one_run.py $AZ_BATCH_NODE_SHARED_DIR/scripts/extract_one_run.py
+
+# --- per-task binding: task_id = [node, knot_yyyymmdd, run_id] ---
+node: "{task_id[0]}"
+knot: "{task_id[1]}"
+run_id: "{task_id[2]}"
+task_name: "greenfn_node{node}_knot{knot}"
+
+resource_files:
+  - file_path: "."
+    blob_prefix: "greenfn_study/runs/node{node}_knot{knot}/"
+
+command: |
+  cd greenfn_study/runs/node{node}_knot{knot}
+  sed -i 's+__AZ_COMMON_INPUT__+'"$AZ_BATCH_NODE_SHARED_DIR"'/common_input+g' config.inp
+  sed -i 's+__AZ_TIMESERIES__+'"$AZ_BATCH_NODE_SHARED_DIR"'/timeseries+g' config.inp
+  sed -i 's+__AZ_TIDEFILE__+'"$AZ_BATCH_NODE_SHARED_DIR"'/tidefile+g' config.inp
+  gtm gtm.inp
+  # TODO: replace with a proper greenfn_pyenv app_pkg once built (avoids a pip install
+  # per task) -- see AZURE_BATCH_PLAN.md's open decisions.
+  pip install --quiet pandas pyarrow pyhecdss
+  python $AZ_BATCH_NODE_SHARED_DIR/scripts/extract_one_run.py \
+    --output-dss output/hist_fc_mss_gtm.dss --node {node} --knot {knot} \
+    --out response_slice.parquet.gzip
+
+environment_variables:
+  NODE: "{node}"
+  KNOT: "{knot}"
+
+output_files:
+  # full raw GTM output, kept for audit/debugging
+  - file_pattern: "output/*.dss"
+    path: "greenfn_study/outputs/node{node}_knot{knot}/output"
+    upload_condition: "taskcompletion"
+  # this run's response-matrix slice -- feeds the (deferred) final collation job
+  - file_pattern: "response_slice.parquet.gzip"
+    path: "greenfn_study/outputs/node{node}_knot{knot}"
+    upload_condition: "tasksuccess"
+
+task_ids: |
+  tasks = [
+      [1, '20220115', 1],
+      [1, '20220215', 2],
+      [10, '20220115', 3],
+      [10, '20220215', 4],
+      [100, '20220115', 5],
+      [100, '20220215', 6],
+  ]
+  tasks  # last line must be the list of tasks
+
+# TODO: template_name -- using dvsm_container as a known-working starting point
+# (sample_container_echo.yml already demonstrates `hydro hydro.inp` running under it,
+# `gtm` follows the same convention). Swap for your own Linux hydro/gtm
+# application-package template once ready; binaries are invoked here simply as
+# `gtm` (no .exe), assumed on PATH.
+template_name: "dvsm_container"
