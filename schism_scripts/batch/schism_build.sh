@@ -216,7 +216,7 @@ export PATH=${PREFIX_NETCDF_FORTRAN}/bin:${PREFIX_NETCDF}/bin:${PREFIX_HDF5}/bin
 if [[ -d "schism" ]]; then
   rm -rf schism
 fi
-git clone -b $SCHISM_VERSION https://github.com/schism-dev/schism.git
+git clone -b $SCHISM_VERSION --depth 1 https://github.com/cadwrdeltamodeling/schism.git
 cd schism
 
 # GOTM: SCHISM's own cmake (src/CMakeLists.txt) expects the pre-restructuring GOTM
