@@ -455,7 +455,14 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
         else:
             job_resource_files = None
         if ostype == "linux":
-            job_cmd = commands_to_string(job_cmd.split("\n")).split(";")
+            # Write the job prep script to disk (base64-encoded) and execute it, the
+            # same robust approach used for application_command.sh. The previous
+            # naive "flatten to one line with semicolons" approach breaks on '#'
+            # comments (everything after the first '#' gets swallowed as a comment
+            # since there are no real newlines left) and on embedded quotes.
+            job_cmd = build_linux_script_execution_commands(
+                job_cmd, "job_start_command.sh"
+            )
         else:
             job_cmd = commands_to_string(job_cmd.split("\n"), ostype="windows").split(
                 " & "
