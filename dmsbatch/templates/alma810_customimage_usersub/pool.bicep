@@ -12,9 +12,10 @@ param taskSlotsPerNode int = 1 // number of tasks per node to be changed with vm
 // (that marketplace sku/version combo is rejected outright by Batch's ARM image allow-list, so it
 // must be consumed as a gallery "custom image" instead - which in turn requires this pool's Batch
 // account to be in poolAllocationMode=UserSubscription, since the source carries a Marketplace plan).
-// NOTE: fill in the exact version once the AIB build (imageForAlma810HBv2Scus) finishes - placeholder below.
+// version 1.0.1 adds Intel oneAPI fortran/shared runtime 2024.2, baked in by the
+// imageForAlma810HBv2ScusIntelRuntime AIB template (version 1.0.0 was a no-op base capture).
 param imageReference object = {
-  id: '/subscriptions/c15db114-26b5-454c-b8f4-8a5eb5f16796/resourceGroups/dwrbdo_schism_scus_rg/providers/Microsoft.Compute/galleries/dwrmso_schism_scus_images/images/schism_alma810_hpc_gen2/versions/1.0.0'
+  id: '/subscriptions/c15db114-26b5-454c-b8f4-8a5eb5f16796/resourceGroups/dwrbdo_schism_scus_rg/providers/Microsoft.Compute/galleries/dwrmso_schism_scus_images/images/schism_alma810_hpc_gen2/versions/1.0.1'
 }
 param nodeAgentSKUId string = 'batch.node.el 8'
 param startTaskScript string =  'printenv'

@@ -12,8 +12,10 @@ param buildIdentityResourceId string
 // because Batch's ARM image allow-list rejects this marketplace sku/version directly, and the
 // plan-carrying source additionally requires this pool's Batch account to be in
 // poolAllocationMode=UserSubscription.
+// version 1.0.1 adds Intel oneAPI fortran/shared runtime 2024.2 (schism_build.sh reinstalls its
+// own full oneAPI toolkit here regardless, but this keeps both pools on the same image version).
 param imageReference object = {
-  id: '/subscriptions/c15db114-26b5-454c-b8f4-8a5eb5f16796/resourceGroups/dwrbdo_schism_scus_rg/providers/Microsoft.Compute/galleries/dwrmso_schism_scus_images/images/schism_alma810_hpc_gen2/versions/1.0.0'
+  id: '/subscriptions/c15db114-26b5-454c-b8f4-8a5eb5f16796/resourceGroups/dwrbdo_schism_scus_rg/providers/Microsoft.Compute/galleries/dwrmso_schism_scus_images/images/schism_alma810_hpc_gen2/versions/1.0.1'
 }
 param nodeAgentSKUId string = 'batch.node.el 8'
 param startTaskScript string = 'printenv && $AZ_BATCH_APP_PACKAGE_batch_setup/batch/pool_setup_alma8_hpcx.sh'
