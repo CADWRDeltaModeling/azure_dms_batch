@@ -34,9 +34,24 @@
         "customize": [
             {
                 "type": "Shell",
-                "name": "noOpMinimalCapture",
+                "name": "updateCaCertificates",
                 "inline": [
-                    "echo 'minimal base image capture - no additional software installed'"
+                    "dnf update -y ca-certificates"
+                ]
+            },
+            {
+                "type": "Shell",
+                "name": "addIntelOneapiRepo",
+                "inline": [
+                    "tee /etc/yum.repos.d/oneAPI.repo <<'EOF'\n[oneAPI]\nname=Intel(R) oneAPI repository\nbaseurl=https://yum.repos.intel.com/oneapi\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB\nEOF"
+                ]
+            },
+            {
+                "type": "Shell",
+                "name": "installIntelOneapiFortranRuntime2024_2",
+                "inline": [
+                    "yum install -y intel-oneapi-compiler-fortran-runtime-2024.2 intel-oneapi-compiler-shared-runtime-2024.2",
+                    "rpm -q intel-oneapi-compiler-fortran-runtime-2024.2 intel-oneapi-compiler-shared-runtime-2024.2"
                 ]
             }
         ],
