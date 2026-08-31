@@ -202,6 +202,41 @@ package_and_upload_suxarray_with_deps(){
     popd
 }
 
+package_and_upload_da_climatology(){
+    batch_name=$1
+    resource_group_name=$2
+    app_name="da_climatology"
+    # todays date in 2024.06.11 format
+    today=$(date +"%Y.%m.%d")
+    version=${today}
+    rm -rf /tmp/da_climatology_${version}
+    mkdir -p /tmp/da_climatology_${version}
+    pushd /tmp/da_climatology_${version}
+    conda env remove -n da_climatology_${version} -y || true
+    # libgomp is listed explicitly: the "_openmp_mutex[build=*_gnu]" pulled in by
+    # scikit-learn does NOT itself bundle libgomp.so.1 in recent conda-forge builds
+    conda create -n da_climatology_${version} -y -c conda-forge -c cadwr-dms "python<=3.13" libgomp pydsm pyhecdss vtools3 scikit-learn scipy matplotlib geopandas shapely holoviews pandas numpy
+    source "$(conda info --base)/etc/profile.d/conda.sh"
+    conda activate da_climatology_${version}
+    # Use the env's fully-qualified python (not bare "pip"/"python") since bash's
+    # command hash cache from an earlier "module load" in the same shell can keep
+    # resolving those names to a stale, unrelated interpreter even after activation
+    "$(conda info --base)/envs/da_climatology_${version}/bin/python" -m pip install --no-deps group-lasso
+    conda deactivate
+
+    conda activate pack
+    conda pack -n da_climatology_${version} -o da_climatology.tar.gz
+    zip -r da_climatology_${version}.zip da_climatology.tar.gz
+    conda deactivate
+    conda env remove -n da_climatology_${version} -y
+    package_file="da_climatology_${version}.zip"
+
+    #module load azure_cli
+    az batch application package create --application-name "${app_name}" --name ${batch_name} --package-file "${package_file}" -g ${resource_group_name} --version-name "${version}"
+    az batch application set --application-name "${app_name}" --default-version "${version}" --name ${batch_name} --resource-group ${resource_group_name}
+    popd
+}
+
 package_and_upload_pydelmod(){
     batch_name=$1
     resource_group_name=$2
@@ -498,6 +533,7 @@ generate_upload_commands() {
 #az batch application package create --application-name mvapich2 --name schismbatch --package-file mvapich2-2.3.7-1-ndr-patch.zip -g dwrbdo_schism_rg --version-name "2.3.7-1-ndr-patch"
 #az batch application package create --application-name schism_with_deps --name schismbatch --package-file schism_with_deps_v5.11.1_alma8.7hpc_mvapich2_ndr_patch.zip -g dwrbdo_schism_rg --version-name "5.11.1_alma8.7hpc_mvapich2_ndr_patch"
 #package_and_upload_pydelmod dwrmodelingbatchaccount azure_model_batch
+#package_and_upload_da_climatology dwrmodelingbatchaccount azure_model_batch
 #package_and_upload_suxarray_with_deps schismbatch dwrbdo_schism_rg
 #package_and_upload_schimpy_with_deps schismbatch dwrbdo_schism_rg
 #package_and_upload_bdschism schismbatch dwrbdo_schism_rg

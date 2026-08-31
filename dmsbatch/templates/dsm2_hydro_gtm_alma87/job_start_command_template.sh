@@ -50,6 +50,35 @@ else
     echo "WARNING: da_climatology app package not found; add it to app_pkgs in your job config"
 fi
 
+# azcopy: install once per node into the shared dir instead of every task
+# re-fetching it. There's no Linux azcopy Application Package registered in this
+# batch account (only azcopy_windows_amd64_*), so it's fetched from Microsoft here.
+AZCOPY_SHARED_DIR="$AZ_BATCH_NODE_SHARED_DIR/azcopy_bin"
+if [ ! -x "$AZCOPY_SHARED_DIR/azcopy" ]; then
+    echo "Installing azcopy into $AZCOPY_SHARED_DIR (once per node)..."
+    mkdir -p "$AZCOPY_SHARED_DIR"
+    # this minimal container has no CA certificate bundle, so any https:// TLS
+    # handshake fails cert verification (curl and python urllib both hit
+    # "unable to get local issuer certificate") -- -k is safe here since we're
+    # only fetching Microsoft's own public azcopy binary, not secrets/user data
+    if ! curl -fsSL -k https://aka.ms/downloadazcopy-v10-linux -o /tmp/azcopy.tar.gz; then
+        echo "ERROR: curl failed to download azcopy"
+        exit 1
+    fi
+    if [ ! -s /tmp/azcopy.tar.gz ]; then
+        echo "ERROR: /tmp/azcopy.tar.gz is empty or missing after download"
+        exit 1
+    fi
+    tar -xzf /tmp/azcopy.tar.gz -C /tmp
+    AZCOPY_EXTRACTED=$(find /tmp -maxdepth 1 -type d -name 'azcopy_linux*' | head -1)
+    cp "$AZCOPY_EXTRACTED/azcopy" "$AZCOPY_SHARED_DIR/azcopy"
+    chmod +x "$AZCOPY_SHARED_DIR/azcopy"
+    rm -rf /tmp/azcopy.tar.gz "$AZCOPY_EXTRACTED"
+    echo "azcopy installed: $("$AZCOPY_SHARED_DIR/azcopy" --version)"
+else
+    echo "azcopy already installed at $AZCOPY_SHARED_DIR/azcopy; skipping"
+fi
+
 cd "$AZ_BATCH_TASK_WORKING_DIR"
 # GTM node/knot runs all read the same common_input/timeseries/zero_ec_run study and
 # tidefile -- job_start_command_resource_files pulls them into this prep task's own

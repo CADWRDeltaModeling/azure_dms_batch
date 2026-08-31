@@ -1,0 +1,161 @@
+resource_group: azure_model_batch
+location: westus2
+job_name: gtm_greensfn_collate_south_delta_nodes
+batch_account_name: dwrmodelingbatchaccount
+storage_account_name: dwrmodelingstore
+storage_container_name: da-climatology
+# lightweight single-task post-processing job -- no DSM2 run, just downloading
+# small CSVs and doing pandas aggregation.
+vm_size: Standard_D64s_v3
+num_hosts: 1
+num_cores: 2
+task_slots_per_node: 1
+container_image_name: 'almalinux:8.7'
+
+# must match the sweep job's output_dir (gtm_greensfn_south_delta_nodes.yml) --
+# this is where envelope_metrics_gtm_<node>_<pulse_start_date>.csv files were
+# uploaded to, one per (node, pulse) run.
+output_dir: "south_delta_nodes"
+
+# --- per-task resource files: the collation script (+ the rest of the shared
+# da_climatology_scripts/ prefix, harmless if unused by this job).
+resource_files:
+  - file_path: "."
+    blob_prefix: "da_climatology_scripts"
+  - file_path: "."
+    blob_prefix: "dsm2_studies/common_input/channel_std_delta_grid.inp"
+  - file_path: "."
+    blob_prefix: "dsm2_studies/common_input/gate_std_delta_grid.inp"
+
+output_files:
+  - file_pattern: 'collated/*.csv'
+    path: 'greenfn_runs/{output_dir}/collated'
+    upload_condition: 'taskcompletion'
+  - file_pattern: 'collated/plots/*.png'
+    path: 'greenfn_runs/{output_dir}/collated/plots'
+    upload_condition: 'taskcompletion'
+  - file_pattern: 'collated/plots/*.csv'
+    path: 'greenfn_runs/{output_dir}/collated/plots'
+    upload_condition: 'taskcompletion'
+  - file_pattern: 'collated/plots/month_*/*.png'
+    path: 'greenfn_runs/{output_dir}/collated/plots'
+    upload_condition: 'taskcompletion'
+  - file_pattern: 'collated/plots/month_*/*.csv'
+    path: 'greenfn_runs/{output_dir}/collated/plots'
+    upload_condition: 'taskcompletion'
+
+task_name: 'collate_envelope_metrics_{output_dir}'
+
+command: |
+  echo "=========================================="
+  echo "Collating envelope metrics: greenfn_runs/{output_dir}"
+  echo "=========================================="
+  echo "Start Time: $(date)"
+
+  source "$AZ_BATCH_APP_PACKAGE_da_climatology/env/bin/activate_da_climatology.sh"
+
+  # azcopy is installed once per node by job_start_command_template.sh into
+  # $AZ_BATCH_NODE_SHARED_DIR/azcopy_bin -- no per-task fetch needed.
+  AZCOPY_BIN="$AZ_BATCH_NODE_SHARED_DIR/azcopy_bin/azcopy"
+  if [ ! -x "$AZCOPY_BIN" ]; then
+    echo "ERROR: azcopy not found at $AZCOPY_BIN (job_start_command_template.sh should have installed it)"
+    exit 1
+  fi
+
+  # $HOME isn't writable by the non-root task user; azcopy needs somewhere writable
+  # for its log/job-plan files -- use the task working directory, not /tmp
+  mkdir -p azcopy_meta
+  export AZCOPY_LOG_LOCATION="$AZ_BATCH_TASK_WORKING_DIR/azcopy_meta"
+  export AZCOPY_JOB_PLAN_LOCATION="$AZ_BATCH_TASK_WORKING_DIR/azcopy_meta"
+
+  mkdir -p downloaded_metrics collated
+
+  echo "Downloading all envelope_metrics_gtm_*.csv under greenfn_runs/{output_dir}..."
+  if ! "$AZCOPY_BIN" copy "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/greenfn_runs/{output_dir}/?{sas}" "downloaded_metrics" --recursive=true --include-pattern="envelope_metrics_gtm_*.csv"; then
+    echo "ERROR: azcopy download of envelope metrics failed"
+    exit 1
+  fi
+
+  n_files=$(find downloaded_metrics -name "envelope_metrics_gtm_*.csv" | wc -l)
+  echo "Downloaded $n_files envelope metrics files"
+
+  echo "Collating..."
+  if ! python da_climatology_scripts/postprocessing/collate_envelope_metrics.py \
+      --input-dir downloaded_metrics \
+      --collated-out-path collated/envelope_metrics_all.csv \
+      --node-stats-out-path collated/node_response_stats.csv; then
+    echo "ERROR: collate_envelope_metrics.py failed"
+    exit 1
+  fi
+
+  echo "Visualizing per-node response stats (longest duration + spatial distribution)..."
+  if ! python da_climatology_scripts/postprocessing/visualize_node_response_stats.py \
+      --node-stats-csv collated/node_response_stats.csv \
+      --nodes-csv da_climatology_scripts/climatology/south_delta_nodes_selected.csv \
+      --out-dir collated/plots \
+      --top-n 20; then
+    echo "ERROR: visualize_node_response_stats.py failed"
+    exit 1
+  fi
+
+  echo "Visualizing response distribution by node location and pulse time..."
+  if ! python da_climatology_scripts/postprocessing/visualize_envelope_distribution.py \
+      --envelope-metrics-csv collated/envelope_metrics_all.csv \
+      --out-dir collated/plots \
+      --reduced-out-path collated/node_pulse_reduced.csv \
+      --top-n 20; then
+    echo "ERROR: visualize_envelope_distribution.py failed"
+    exit 1
+  fi
+
+  echo "Computing resolution atlas (spatial identifiability maps, RECONCILE_PLAN.md section 5.5)..."
+  if ! python -u da_climatology_scripts/postprocessing/resolution_atlas.py \
+      --envelope-metrics-csv collated/envelope_metrics_all.csv \
+      --nodes-csv da_climatology_scripts/climatology/south_delta_nodes_selected.csv \
+      --out-dir collated/plots \
+      --rcond 0.01 \
+      --n-modes 4 \
+      --group-by month \
+      --channel-inp dsm2_studies/common_input/channel_std_delta_grid.inp \
+      --gate-inp dsm2_studies/common_input/gate_std_delta_grid.inp; then
+    echo "ERROR: resolution_atlas.py failed"
+    exit 1
+  fi
+
+  echo "Finding the most extreme (node, pulse, station) outlier runs..."
+  if ! python da_climatology_scripts/postprocessing/find_outlier_runs.py \
+      --envelope-metrics-csv collated/envelope_metrics_all.csv \
+      --out-path collated/outlier_runs.csv \
+      --top-n 10; then
+    echo "ERROR: find_outlier_runs.py failed"
+    exit 1
+  fi
+
+  echo "Drilling down into outlier runs (downloading their response parquets + plotting full curves)..."
+  mkdir -p outlier_parquets
+  if ! PYTHONPATH="$AZ_BATCH_TASK_WORKING_DIR/da_climatology_scripts/postprocessing" python da_climatology_scripts/postprocessing/drilldown_outliers.py \
+      --outlier-manifest-csv collated/outlier_runs.csv \
+      --plots-out-dir collated/plots \
+      --parquet-dir outlier_parquets \
+      --azcopy-bin "$AZCOPY_BIN" \
+      --storage-account {storage_account_name} \
+      --container {storage_container_name} \
+      --sas '{sas}' \
+      --greenfn-output-dir {output_dir}; then
+    echo "ERROR: drilldown_outliers.py failed"
+    exit 1
+  fi
+
+  echo "=========================================="
+  echo "Collation complete"
+  echo "=========================================="
+
+task_ids: |
+  tasks = [[0]]
+  tasks
+
+app_pkgs:
+  - name: dsm2_hydro_gtm
+  - name: da_climatology
+
+template_name: "dsm2_hydro_gtm_alma87"

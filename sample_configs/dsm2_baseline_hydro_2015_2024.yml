@@ -1,0 +1,97 @@
+resource_group: azure_model_batch
+location: westus2
+job_name: dsm2_baseline_hydro_2015_2024
+batch_account_name: dwrmodelingbatchaccount
+storage_account_name: dwrmodelingstore
+storage_container_name: da-climatology
+# hardware
+# Standard_DS2_v2 only has 14GB local disk -- not enough for the ~13GB+ tidefile
+# plus study/timeseries inputs (job failed with DiskFull). DS13_v2 has 112GB.
+vm_size: standard_ds13_v2
+num_hosts: 1
+num_cores: 8
+task_slots_per_node: 1
+container_image_name: 'almalinux:8.7'
+
+study_dir: dsm2_studies/studies/historical
+
+resource_files:
+  - file_path: "."
+    blob_prefix: "{study_dir}"
+  - file_path: "."
+    blob_prefix: "dsm2_studies/common_input"
+  - file_path: "."
+    blob_prefix: "dsm2_studies/timeseries"
+
+# Full-window baseline HYDRO run (2015-2024), validated first with the 2021 single-year
+# run in dsm2_baseline_hydro_2021.yml. This tidefile is the shared input every GTM
+# node/knot sub-window run will read from.
+command: |
+  cd {study_dir}
+  echo "=========================================="
+  echo "DSM2 Baseline Hydro Run - 2015-2024"
+  echo "=========================================="
+  echo "Start Time: $(date)"
+  echo "Working Dir: $(pwd)"
+
+  # output/ is gitignored and wasn't uploaded -- config.inp's DSM2OUTPUTDIR expects it
+  mkdir -p output
+
+  # config.inp's temp_dir is a leftover Windows path; needs a Linux path in the container
+  sed -i 's+c:/temp+/tmp+' config.inp
+
+  # DSM2 hydro/gtm app package: extracted on the node by the job start task
+  export DSM2_DIR=$(find "$AZ_BATCH_APP_PACKAGE_dsm2_hydro_gtm" -maxdepth 1 -type d -name 'DSM2-*' 2>/dev/null | head -1)
+  export PATH="$DSM2_DIR/bin:$PATH"
+  export LD_LIBRARY_PATH="$DSM2_DIR/lib64:$LD_LIBRARY_PATH"
+
+  # Narrow the run window to 2015-2024 by patching config.inp's own ENVVAR block
+  # directly (see dsm2_baseline_hydro_2021.yml for why a second override.inp file on
+  # the command line does NOT work -- DSM2 does not merge it with hydro.inp/config.inp).
+  sed -i "s/^DSM2MODIFIER *.*/DSM2MODIFIER             hist_2015_2024/" config.inp
+  sed -i "s/^START_DATE *.*/START_DATE               01JAN2015/" config.inp
+  sed -i "s/^END_DATE *.*/END_DATE                 31DEC2024/" config.inp
+  echo "Patched config.inp ENVVAR lines:"
+  grep -E "^(DSM2MODIFIER|START_DATE|END_DATE) " config.inp
+
+  echo "Running: hydro hydro.inp"
+  hydro hydro.inp
+
+  echo "Contents of output/:"
+  ls -la output/
+
+  # Azure Batch's built-in output_files upload is unreliable for multi-GB files (the
+  # full 10-year tidefile is ~13GB) -- it fails with a generic FileUploadMiscError.
+  # Upload directly with azcopy instead.
+  echo "Fetching azcopy (linux) for direct upload..."
+  curl -sL https://aka.ms/downloadazcopy-v10-linux -o /tmp/azcopy.tar.gz
+  tar -xzf /tmp/azcopy.tar.gz -C /tmp
+  AZCOPY_BIN=$(find /tmp -maxdepth 1 -type d -name 'azcopy_linux*')/azcopy
+
+  # $HOME (/home/_azbatch) isn't writable by the non-root task user; azcopy needs
+  # somewhere writable for its log/job-plan files
+  mkdir -p /tmp/azcopy_meta
+  export AZCOPY_LOG_LOCATION=/tmp/azcopy_meta
+  export AZCOPY_JOB_PLAN_LOCATION=/tmp/azcopy_meta
+
+  echo "Uploading output/ to {study_dir}/output ..."
+  echo "Uploading output/ to dsm2_studies/runs/hist_2015_2024/output ..."
+  if ! "$AZCOPY_BIN" copy "output" "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/dsm2_studies/runs/hist_2015_2024?{sas}" --recursive=true; then
+    echo "ERROR: azcopy upload of output/ failed"
+    exit 1
+  fi
+
+  echo "Uploading tidefile to dsm2_studies/tidefile/2015_2024 ..."
+  if ! "$AZCOPY_BIN" copy "output/hist_2015_2024.h5" "https://{storage_account_name}.blob.core.windows.net/{storage_container_name}/dsm2_studies/tidefile/2015_2024/hist_2015_2024.h5?{sas}"; then
+    echo "ERROR: azcopy upload of tidefile failed"
+    exit 1
+  fi
+
+  echo "=========================================="
+  echo "Baseline Hydro Run Complete"
+  echo "=========================================="
+
+app_pkgs:
+  - name: dsm2_hydro_gtm
+
+template_name: "dsm2_hydro_gtm_alma87"

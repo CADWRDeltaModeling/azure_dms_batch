@@ -1,0 +1,138 @@
+resource_group: azure_model_batch
+location: westus2
+job_name: gtm_greensfn_south_delta_nodes
+batch_account_name: dwrmodelingbatchaccount
+storage_account_name: dwrmodelingstore
+storage_container_name: da-climatology
+# hardware: same VM as the baseline hydro run / node172 test.
+vm_size: Standard_D64s_v3
+num_hosts: 1
+num_cores: 64
+task_slots_per_node: 64
+container_image_name: 'almalinux:8.7'
+
+# label for this batch of runs -- determines where output_files lands under greenfn_runs/
+output_dir: "south_delta_nodes"
+
+# --- job-level prep (runs once per node): stage common_input/timeseries/zero_ec_run
+# study + the 2015-2024 tidefile into $AZ_BATCH_NODE_SHARED_DIR.
+job_start_command_resource_files:
+  - file_path: "."
+    blob_prefix: "dsm2_studies/common_input"
+  - file_path: "."
+    blob_prefix: "dsm2_studies/timeseries"
+  - file_path: "."
+    blob_prefix: "dsm2_studies/studies/zero_ec_run"
+  - file_path: "."
+    blob_prefix: "dsm2_studies/tidefile/2015_2024/hist_2015_2024.h5"
+
+# --- per-task resource files: the hat-pulse generation script + reference data.
+# (no per-run CSV needed -- node/pulse_start_date are generated in task_ids below
+# and passed directly as task parameters, same pattern as sample_dsm2_ptm.yml)
+resource_files:
+  - file_path: "."
+    blob_prefix: "da_climatology_scripts"
+
+output_files:
+  - file_pattern: 'output/*.dss'
+    path: 'greenfn_runs/{output_dir}/gtm_{node}_{pulse_start_date}/output'
+    upload_condition: 'taskcompletion'
+  - file_pattern: 'output/*.parquet'
+    path: 'greenfn_runs/{output_dir}/gtm_{node}_{pulse_start_date}/output'
+    upload_condition: 'taskcompletion'
+  - file_pattern: 'output/*.csv'
+    path: 'greenfn_runs/{output_dir}/gtm_{node}_{pulse_start_date}/output'
+    upload_condition: 'taskcompletion'
+  - file_pattern: 'gtm.out'
+    path: 'greenfn_runs/{output_dir}/gtm_{node}_{pulse_start_date}/output'
+    upload_condition: 'taskcompletion'
+
+node: '{task_id[0]}'
+pulse_start_date: '{task_id[1]}'
+task_name: 'gtm_node{node}_south_delta_{pulse_start_date}'
+
+command: |
+  echo "=========================================="
+  echo "GTM hat-pulse Green's-function run: node={node} pulse_start={pulse_start_date}"
+  echo "=========================================="
+  echo "Start Time: $(date)"
+
+  export DSM2_DIR=$(find "$AZ_BATCH_APP_PACKAGE_dsm2_hydro_gtm" -maxdepth 1 -type d -name 'DSM2-*' 2>/dev/null | head -1)
+  export PATH="$DSM2_DIR/bin:$PATH"
+  export LD_LIBRARY_PATH="$DSM2_DIR/lib64:$LD_LIBRARY_PATH"
+  source "$AZ_BATCH_APP_PACKAGE_da_climatology/env/bin/activate_da_climatology.sh"
+
+  SHARED_DSM2_STUDIES="$AZ_BATCH_NODE_SHARED_DIR/dsm2_studies"
+  echo "Shared study dir: $SHARED_DSM2_STUDIES"
+
+  echo "Generating hat-pulse run inputs for node={node} pulse_start={pulse_start_date}..."
+  if ! PYTHONPATH="$AZ_BATCH_TASK_WORKING_DIR/da_climatology_scripts" python da_climatology_scripts/climatology/create_gtm_hat_run_azure.py \
+      --node {node} \
+      --pulse-start-date {pulse_start_date} \
+      --nodes-csv da_climatology_scripts/climatology/south_delta_nodes_selected_40.csv \
+      --zero-ec-dir "$SHARED_DSM2_STUDIES/studies/zero_ec_run" \
+      --workdir . \
+      --hat-width-days 4 \
+      --run-duration-days 120 \
+      --hydrotidefile "$SHARED_DSM2_STUDIES/tidefile/2015_2024/hist_2015_2024.h5"; then
+    echo "ERROR: create_gtm_hat_run_azure.py failed"
+    exit 1
+  fi
+
+  echo "Running: gtm gtm.inp"
+  set -o pipefail
+  if ! gtm gtm.inp 2>&1 | tee gtm.out; then
+    echo "ERROR: gtm run failed, tail of gtm.out:"
+    tail -n 100 gtm.out
+    exit 1
+  fi
+  set +o pipefail
+
+  echo "Contents of output/:"
+  ls -la output/
+
+  echo "Extracting per-run response matrix..."
+  if ! PYTHONPATH="$AZ_BATCH_TASK_WORKING_DIR/da_climatology_scripts" python da_climatology_scripts/climatology/extract_run_response.py \
+      --output-dir output \
+      --out-path output/response_gtm_{node}_{pulse_start_date}.parquet; then
+    echo "ERROR: extract_run_response.py failed"
+    exit 1
+  fi
+
+  echo "Computing envelope metrics (peak + response duration per station)..."
+  if ! python da_climatology_scripts/postprocessing/plot_run_response.py \
+      --parquet-path output/response_gtm_{node}_{pulse_start_date}.parquet \
+      --metrics-out-path output/envelope_metrics_gtm_{node}_{pulse_start_date}.csv; then
+    echo "ERROR: plot_run_response.py (metrics) failed"
+    exit 1
+  fi
+
+  echo "=========================================="
+  echo "GTM hat-pulse run node={node} pulse_start={pulse_start_date} complete"
+  echo "=========================================="
+
+# node list read directly from south_delta_nodes_selected.csv (every node id in the
+# file, not just the "selected"-flagged subset used elsewhere for named groupings
+# like pdc/tp/sc/mr/northboundary) x shifted pulse-start dates. task_ids runs
+# locally at submission time -- keep the CSV read simple/local, no external I/O
+# beyond this file.
+task_ids: |
+  import csv
+  import datetime
+  with open('/scratch/psandhu/da_climatology/climatology/south_delta_nodes_selected.csv') as f:
+      nodes = [row['id'] for row in csv.DictReader(f)]
+  base_date = datetime.date(2021, 1, 1)
+  shift_days = 2
+  num_pulses = 366
+  tasks = []
+  for node in nodes:
+      for i in range(num_pulses):
+          pulse_date = base_date + datetime.timedelta(days=shift_days * i)
+          tasks.append([node, pulse_date.strftime("%d%b%Y").upper()])
+  tasks
+
+app_pkgs:
+  - name: dsm2_hydro_gtm
+  - name: da_climatology
+
+template_name: "dsm2_hydro_gtm_alma87"
