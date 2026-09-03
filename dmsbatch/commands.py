@@ -875,13 +875,30 @@ class AzureBatch:
             unused, kept for backward compatibility, by default 100
         """
         try:
-            self.batch_client.create_tasks(job_id=job_id, task_collection=tasks)
+            result = self.batch_client.create_tasks(job_id=job_id, task_collection=tasks)
         except batchmodels.CreateTasksError as err:
             self.print_task_exception(err)
             raise err
         except HttpResponseError as err:
             self.print_batch_exception(err)
             raise err
+        # create_tasks() only raises CreateTasksError for failures in its own
+        # client-side chunking/retry loop. A request that the service accepts (200
+        # response) but rejects individual tasks from (e.g. commandLine too large)
+        # comes back here as per-task entries with an "error" key and does NOT raise --
+        # previously this was never checked, so such failures were completely silent:
+        # "Submitted task ... to pool ..." would print even though zero tasks actually
+        # existed in the job afterward.
+        failed = [entry for entry in result.get("value", []) if entry.get("error")]
+        if failed:
+            details = "\n".join(
+                f"  task {entry.get('taskId')}: {entry.get('error')}" for entry in failed
+            )
+            raise RuntimeError(
+                f"{len(failed)} of {len(tasks)} task(s) failed to be created in job "
+                f"{job_id!r} (job/pool were still created, so no exception would "
+                f"otherwise surface this):\n{details}"
+            )
         if auto_complete:
             self.mark_job_termination_on_task_completion(job_id)
 
