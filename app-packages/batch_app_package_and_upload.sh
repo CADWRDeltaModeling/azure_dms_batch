@@ -237,6 +237,60 @@ package_and_upload_da_climatology(){
     popd
 }
 
+upload_da_climatology_scripts(){
+    # Uploads da_climatology's plain-Python script directories (climatology/,
+    # postprocessing/, utils/) to the "da_climatology_scripts" blob_prefix used by
+    # the resource_files entry in sample_configs/gtm_greensfn_*.yml -- NOT the
+    # conda-packed environment (see package_and_upload_da_climatology above for
+    # that). Re-run this after any change to those directories; the job configs
+    # download from blob at task start, not from this repo checkout.
+    #
+    # Usage: upload_da_climatology_scripts <local_da_climatology_repo_path> <storage_account_name> <resource_group_name> [container_name] [blob_prefix]
+    local_repo_path=$1
+    storage_account_name=$2
+    resource_group_name=$3
+    container_name=${4:-da-climatology}
+    blob_prefix=${5:-da_climatology_scripts}
+
+    if [[ -z "$local_repo_path" || -z "$storage_account_name" || -z "$resource_group_name" ]]; then
+        echo "Usage: upload_da_climatology_scripts <local_da_climatology_repo_path> <storage_account_name> <resource_group_name> [container_name] [blob_prefix]" >&2
+        return 1
+    fi
+
+    account_key=$(az storage account keys list --account-name "$storage_account_name" --resource-group "$resource_group_name" --query "[0].value" -o tsv --only-show-errors)
+    if [[ -z "$account_key" ]]; then
+        echo "ERROR: could not retrieve storage account key for ${storage_account_name}" >&2
+        return 1
+    fi
+    # short-lived SAS: this is a one-shot upload, not something to keep around
+    expiry=$(date -u -d "+2 hours" +%Y-%m-%dT%H:%MZ 2>/dev/null || date -u -v "+2H" +%Y-%m-%dT%H:%MZ)
+    sas=$(az storage container generate-sas --account-name "$storage_account_name" --account-key "$account_key" --name "$container_name" --permissions acdlrw --expiry "$expiry" --auth-mode key --only-show-errors -o tsv)
+    if [[ -z "$sas" ]]; then
+        echo "ERROR: could not generate a SAS token" >&2
+        return 1
+    fi
+    container_url="https://${storage_account_name}.blob.core.windows.net/${container_name}"
+
+    # NOTE the trailing "/*" on the source: azcopy nests the source directory's own
+    # name under the destination by default (a plain "climatology" source copied to
+    # a "da_climatology_scripts/climatology" destination lands at
+    # ".../climatology/climatology/..."), so the wildcard is required to copy the
+    # directory's *contents* directly under the matching destination folder name --
+    # verified empirically against this same container before writing this function.
+    # NOTE --exclude-regex (not --exclude-pattern): --exclude-pattern matched nothing
+    # here on a real run (postprocessing/__pycache__/*.pyc etc. still got uploaded),
+    # --exclude-regex matches anywhere in the relative path regardless of nesting depth.
+    for dir in climatology postprocessing utils; do
+        echo "Uploading ${local_repo_path}/${dir}/* -> ${blob_prefix}/${dir}/ ..."
+        if ! azcopy cp "${local_repo_path}/${dir}/*" "${container_url}/${blob_prefix}/${dir}?${sas}" --recursive=true --exclude-regex=".*__pycache__.*"; then
+            echo "ERROR: azcopy upload of ${dir}/ failed" >&2
+            return 1
+        fi
+    done
+    echo "Done. blob_prefix \"${blob_prefix}\" updated -- next submission of any"
+    echo "sample_configs/gtm_greensfn_*.yml job will pick up these changes."
+}
+
 package_and_upload_pydelmod(){
     batch_name=$1
     resource_group_name=$2
@@ -534,6 +588,7 @@ generate_upload_commands() {
 #az batch application package create --application-name schism_with_deps --name schismbatch --package-file schism_with_deps_v5.11.1_alma8.7hpc_mvapich2_ndr_patch.zip -g dwrbdo_schism_rg --version-name "5.11.1_alma8.7hpc_mvapich2_ndr_patch"
 #package_and_upload_pydelmod dwrmodelingbatchaccount azure_model_batch
 #package_and_upload_da_climatology dwrmodelingbatchaccount azure_model_batch
+#upload_da_climatology_scripts "../../da_climatology" dwrmodelingstore azure_model_batch
 #package_and_upload_suxarray_with_deps schismbatch dwrbdo_schism_rg
 #package_and_upload_schimpy_with_deps schismbatch dwrbdo_schism_rg
 #package_and_upload_bdschism schismbatch dwrbdo_schism_rg

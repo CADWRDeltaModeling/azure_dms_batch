@@ -175,6 +175,32 @@ mpi_command: 'mpiexec -n 480 ./my_app'  # MPI execution command
 
 mpi_command indicates that the pool should be setup with inter-node communication enabled. This triggers the creation of a pool with nodes, where one node is the head node and the rest are compute nodes. The coordinatation command will be executed on all nodes in the pool and the mpi_command will be executed on the head node. The MPI command should be a valid command that can be run on the head node.
 
+## Gotchas
+
+- **`resource_files`/`job_start_command_resource_files` `file_path` does not strip
+  `blob_prefix`.** Each matching blob is downloaded to `<file_path>/<full blob name>`,
+  where "full blob name" includes every folder segment of `blob_prefix`, not just the
+  part after it. So `file_path: "."` with `blob_prefix: "code"` downloads to
+  `./code/scripts/...`, **not** `./scripts/...`. If your `command:` then does
+  `python3 scripts/train_kfold.py`, it will fail with `No such file or directory`
+  even though the resource files downloaded successfully -- the file is really at
+  `./code/scripts/train_kfold.py`.
+  Fix it the same way `dsm2_baseline_hydro_2021.yml` does (`blob_prefix:
+  "{study_dir}"` + `cd {study_dir}` as the first line of `command:`): either `cd`
+  into the `blob_prefix` folder at the top of `command:`/
+  `job_start_command_template:`, or reference the full nested path
+  (`<file_path>/<blob_prefix>/...`) everywhere you use it, including in
+  `output_files.file_pattern`.
+
+- **`job_start_command_template:` runs without `set -e`.** It's written to a file and
+  executed as plain `/bin/bash script.sh` -- a mid-script failure (e.g. one `pip3
+  install` of several packages erroring) doesn't stop the script; it just prints to
+  stderr and falls through to whatever the last line is. If that's an unconditional
+  `echo "Done"`, the job prep task exits 0 and Batch treats `wait_for_success` as
+  satisfied, even though a package never got installed. The main task then fails
+  later with a confusing `ModuleNotFoundError` and the prep task shows no error at
+  all. Add `set -e` / `set -o pipefail` as the first lines of your own
+  `job_start_command_template:` to make real failures surface immediately.
 
 ## Troubleshooting
 

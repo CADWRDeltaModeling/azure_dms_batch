@@ -1,0 +1,72 @@
+resource_group: azure_model_batch
+location: westus2
+job_name: gtm_greensfn_build_library_south_delta_nodes
+batch_account_name: dwrmodelingbatchaccount
+storage_account_name: dwrmodelingstore
+storage_container_name: da-climatology
+# I/O + pandas bound (download the sweep's per-node response parquets, no DSM2
+# run), same VM as the sweep/collation jobs so the pool/template stays shared.
+vm_size: Standard_D64s_v3
+num_hosts: 1
+num_cores: 64
+task_slots_per_node: 64
+container_image_name: 'almalinux:8.7'
+
+# must match the completed sweep job's output_dir (gtm_greensfn_south_delta_nodes.yml)
+# AND the collation job's output_dir (gtm_greensfn_collate_south_delta_nodes.yml) --
+# this step reads both the sweep's response_gtm_<node>_<pulse>.parquet files and the
+# collation's collated/node_response_stats.csv.
+output_dir: "south_delta_nodes"
+
+# --- per-task resource files: the build script + station_locations_south_delta.csv
+# (the static H_y operational-station mask) -- both ship under da_climatology_scripts.
+resource_files:
+  - file_path: "."
+    blob_prefix: "da_climatology_scripts"
+
+output_files:
+  # covers both green_library_node<N>.npz (the scipy.sparse matrix) and
+  # green_library_node<N>_meta.npz (labels/n_valid_lag sidecar)
+  - file_pattern: 'green_library/*.npz'
+    path: 'greenfn_runs/{output_dir}/green_library'
+    upload_condition: 'taskcompletion'
+  # manifest + per-node log upload regardless of success/failure -- the point of
+  # this job's diagnostics: a failed/suspicious node must be explainable from
+  # the uploaded artifacts alone, without re-running anything.
+  - file_pattern: 'green_library/*.json'
+    path: 'greenfn_runs/{output_dir}/green_library'
+    upload_condition: 'taskcompletion'
+  - file_pattern: 'green_library/*.log'
+    path: 'greenfn_runs/{output_dir}/green_library'
+    upload_condition: 'taskcompletion'
+
+# Passed through as real environment variables -- see run_build_green_library.sh.
+# Same rationale as the collation job: keeps the task commandLine tiny and avoids
+# the ~32KB Azure Batch commandLine limit regardless of script size.
+environment_variables:
+  STORAGE_ACCOUNT_NAME: "{storage_account_name}"
+  STORAGE_CONTAINER_NAME: "{storage_container_name}"
+  OUTPUT_DIR: "{output_dir}"
+  SAS: "{sas}"
+  NODE: "{node}"
+
+node: '{task_id[0]}'
+task_name: 'build_green_library_node{node}'
+
+command: |
+  bash da_climatology_scripts/postprocessing/run_build_green_library.sh
+
+# One task per node -- same node list the sweep job used
+# (south_delta_nodes_selected.csv), independently retriable per node without
+# resubmitting the whole set (see azure-dms-batch-parallel-jobs skill).
+task_ids: |
+  import csv
+  with open('/scratch/psandhu/da_climatology/climatology/south_delta_nodes_selected.csv') as f:
+      nodes = [row['id'] for row in csv.DictReader(f)]
+  tasks = [[node] for node in nodes]
+  tasks
+
+app_pkgs:
+  - name: da_climatology
+
+template_name: "dsm2_hydro_gtm_alma87"

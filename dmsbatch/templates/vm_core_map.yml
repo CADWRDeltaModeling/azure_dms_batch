@@ -1,5 +1,6 @@
 standard_d16as_v6: 16
 standard_d16s_v3: 16
+standard_d4as_v5: 4
 standard_d4as_v6: 4
 standard_d8as_v6: 8
 standard_ds2_v2: 2
@@ -13,3 +14,5 @@ standard_hb368rs_v5: 368
 standard_hc44rs: 44
 standard_l80as_v3: 80
 standard_l80s_v3: 80
+standard_nc24ads_a100_v4: 24
+standard_nc4as_t4_v3: 4

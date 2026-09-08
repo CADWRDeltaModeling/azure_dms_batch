@@ -72,7 +72,7 @@ command: |
       --nodes-csv da_climatology_scripts/climatology/south_delta_nodes_selected_40.csv \
       --zero-ec-dir "$SHARED_DSM2_STUDIES/studies/zero_ec_run" \
       --workdir . \
-      --hat-width-days 4 \
+      --hat-width-days 8 \
       --run-duration-days 120 \
       --hydrotidefile "$SHARED_DSM2_STUDIES/tidefile/2015_2024/hist_2015_2024.h5"; then
     echo "ERROR: create_gtm_hat_run_azure.py failed"
@@ -122,8 +122,12 @@ task_ids: |
   with open('/scratch/psandhu/da_climatology/climatology/south_delta_nodes_selected.csv') as f:
       nodes = [row['id'] for row in csv.DictReader(f)]
   base_date = datetime.date(2021, 1, 1)
-  shift_days = 2
-  num_pulses = 366
+  # hat-width-days=8 (4-day ramp up + 4-day ramp down) -> shift_days matches the
+  # 4-day half-width, same "spaced by half the hat width" tiling convention as
+  # before (previously width=4/half=2/shift=2). num_pulses=183 keeps the same
+  # ~2-year sweep window: (183-1)*4=728 days, vs. the previous (366-1)*2=730 days.
+  shift_days = 4
+  num_pulses = 183
   tasks = []
   for node in nodes:
       for i in range(num_pulses):
