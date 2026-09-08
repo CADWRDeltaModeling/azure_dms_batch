@@ -9,10 +9,10 @@ param taskSlotsPerNode int = 1 // number of tasks per node to be changed with vm
 param imageReference object = {
   publisher: 'microsoft-dsvm'
   offer: 'ubuntu-hpc'
-  sku: '2204'
+  sku: '2404'
   version: 'latest'
 }
-param nodeAgentSKUId string = 'batch.node.ubuntu 22.04'
+param nodeAgentSKUId string = 'batch.node.ubuntu 24.04'
 param startTaskScript string =  'printenv'
 param formula string = '$TargetDedicatedNodes = 0'
 // use existing batch account
