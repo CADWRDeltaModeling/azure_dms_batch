@@ -2,6 +2,7 @@ import os
 import subprocess
 import shutil
 import re
+import string
 
 import datetime
 import tempfile
@@ -115,12 +116,31 @@ def create_substitutions_for_keywords(dict, **kwargs):
     return dict
 
 
-class _PartialFormatDict(dict):
-    """A dict subclass that returns the original {key} placeholder for missing keys,
-    enabling partial str.format_map() substitution without raising KeyError."""
+class _PartialFormatter(string.Formatter):
+    """A string.Formatter that leaves an unresolvable {field} placeholder
+    verbatim instead of raising, so multi-pass substitution can retry it once
+    the referenced key becomes available.
 
-    def __missing__(self, key):
-        return "{" + key + "}"
+    A plain ``dict.__missing__`` fallback (the previous approach) only works
+    for simple ``{key}`` fields: for indexed/attribute fields like
+    ``{task_id[0]}``, str.format first resolves ``task_id`` via the mapping,
+    THEN applies ``[0]`` to whatever was returned. If the mapping's
+    __missing__ returns the fallback string ``"{task_id}"``, indexing it with
+    ``[0]`` silently yields just ``"{"`` -- a corrupted, unrecoverable
+    placeholder -- instead of leaving ``{task_id[0]}`` intact for a later
+    pass. Overriding get_field() catches the failure before any such
+    indexing/attribute access is applied, so the *entire* original field
+    expression is preserved.
+    """
+
+    def get_field(self, field_name, args, kwargs):
+        try:
+            return super().get_field(field_name, args, kwargs)
+        except (KeyError, IndexError, AttributeError, TypeError):
+            return "{" + field_name + "}", field_name
+
+
+_partial_formatter = _PartialFormatter()
 
 
 def recursive_format(value, current_data):
@@ -137,8 +157,10 @@ def recursive_format(value, current_data):
     if isinstance(value, str):
         try:
             # Partial substitution: keys present in current_data are replaced;
-            # missing keys are left as {key} rather than aborting the whole string.
-            return value.format_map(_PartialFormatDict(current_data))
+            # missing/unresolvable fields (including indexed/attribute ones
+            # like {task_id[0]}) are left verbatim rather than aborting or
+            # silently corrupting the string.
+            return _partial_formatter.vformat(value, (), current_data)
         except (ValueError, KeyError) as e:
             logger.warning(
                 f"Failed to format ... error: {e} for value '{value}'"

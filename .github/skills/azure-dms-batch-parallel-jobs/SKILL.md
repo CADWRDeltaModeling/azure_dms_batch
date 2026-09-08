@@ -52,9 +52,15 @@ other string field in the YAML can reference `task_id` by index**:
 `command`, `resource_files[].blob_prefix`, `output_files[].path`, `task_name`).
 
 Substitution order matters: `create_substituted_dict()` / `substitute_values()` does
-several passes of `str.format_map()` over the whole config dict so forward references
-resolve, but if you introduce a brand-new derived field, make sure it's derivable from
-`task_id[i]` plus already-defined config keys.
+several passes of `str.format_map()`-equivalent substitution (a `_PartialFormatter`
+subclass of `string.Formatter`, `dmsbatch/batch.py`) over the whole config dict so
+forward references resolve, but if you introduce a brand-new derived field, make
+sure it's derivable from `task_id[i]` plus already-defined config keys. Any literal
+`{`/`}` characters in a string value (e.g. bash function-definition braces
+`foo() { ... }` embedded directly in `command:`) are indistinguishable from format
+fields to this mechanism -- prefer putting multi-line bash logic with braces in a
+standalone `.sh` file uploaded via `resource_files` and just `bash scripts/foo.sh
+args...` from `command:` instead (also sidesteps YAML/Batch command-length limits).
 
 ## Command wiring: `command:` vs `application_command_template`
 
@@ -109,6 +115,17 @@ not `dvsm_container`'s container pattern.
   directory before `command` runs. `blob_prefix` can be a single blob or a folder
   prefix (all matching blobs are pulled) and may reference `{task_id[i]}`-derived fields
   for a per-task input file.
+  **`file_path` is NOT a rename/strip of `blob_prefix`** -- each blob is downloaded to
+  `<file_path>/<full blob name>`, with the full blob name (including every
+  `blob_prefix` folder segment) preserved underneath. `file_path: "."` +
+  `blob_prefix: "code"` therefore lands at `./code/scripts/...`, not
+  `./scripts/...` -- forgetting this is a common cause of `No such file or
+  directory` in `command:` (e.g. `python3 scripts/train_kfold.py` failing because
+  the file is actually at `code/scripts/train_kfold.py`). Confirmed by
+  `dsm2_baseline_hydro_2021.yml`, which downloads `blob_prefix: "{study_dir}"` with
+  `file_path: "."` and then does `cd {study_dir}` in `command:` -- fix it the same
+  way: either `cd` into the `blob_prefix` folder at the top of `command:`, or
+  reference the full `<file_path>/<blob_prefix>/...` path everywhere.
 - `output_files: [{file_pattern, path, upload_condition}]` -- uploaded from the task's
   working directory to `{storage_container_name}/{path}` (using a SAS URL built with
   `get_sas()`) after the task finishes. `upload_condition` is one of
@@ -203,3 +220,27 @@ shell dialect).
 - `job_start_command_template`/prep task runs once **per node**, not once per job -- if
   the pool autoscales to N nodes, the shared setup happens N times (once per node), not
   N times per task.
+- **`file_path` + `blob_prefix` nests, it doesn't rename** -- see the `resource_files`
+  section above. Any config using `file_path: "."` with a multi-segment `blob_prefix`
+  (e.g. `"code"`, `"data/training"`) must account for that prefix still being part of
+  the downloaded path inside `command:`/`job_start_command_template:` (via `cd` or by
+  including the prefix in every path reference). This bit `sample_configs/
+  neuralhyd_ca_train.yml` and `neuralhyd_ca_train_vm.yml` in practice: the task failed
+  with `python3: can't open file '.../scripts/train_kfold.py'` because the code was
+  actually at `.../code/scripts/train_kfold.py`.
+- **`job_start_command_template` runs without `set -e`, and its own default_config's
+  wrapper doesn't add one either** -- `build_linux_script_execution_commands()`
+  (`dmsbatch/batch.py`) writes your `job_start_command_template:` text to a file
+  verbatim and executes it as plain `/bin/bash script.sh`, no `set -e`/`pipefail`
+  injected. A failing command mid-script (e.g. one `pip3 install` of several packages
+  erroring, or a `cp` that silently no-ops) does **not** stop the script -- it prints
+  to stderr and execution continues to whatever the last line is. If that last line is
+  an unconditional `echo "... Done"`, the prep task's exit code is 0 and Batch reports
+  `wait_for_success` as satisfied even though an earlier step failed and, e.g., a
+  package never actually got installed. Symptom: the main task later fails with
+  `ModuleNotFoundError` for a package the job-start step was clearly supposed to
+  install, yet the job prep task shows no failure anywhere. **Always add
+  `set -e` / `set -o pipefail` as the first lines of your own
+  `job_start_command_template:` block** if you want real failures to surface (and
+  consider ending the script with a `pip3 list | grep ...` sanity check instead of a
+  bare `echo`).
