@@ -42,7 +42,7 @@ NETCDF_FORTRAN_VERSION="${NETCDF_FORTRAN_VERSION:-4.6.2}"
 # pins its own compatible GOTM commit as a submodule, so this version can't be
 # overridden independently. Kept only so existing job configs that set gotm_version
 # don't break.
-GOTM_VERSION="${GOTM_VERSION:-v6.0.7}"
+GOTM_VERSION="${GOTM_VERSION:-v5.3}"
 
 # URLs derived from version numbers (override directly if the URL pattern changes)
 # HDF5: releases >= 1.14.5 are published on GitHub Releases; older releases (e.g. the
@@ -55,7 +55,7 @@ URL_NETCDF="${URL_NETCDF:-https://github.com/Unidata/netcdf-c/archive/refs/tags/
 URL_NETCDF_FORTRAN="${URL_NETCDF_FORTRAN:-https://github.com/Unidata/netcdf-fortran/archive/refs/tags/v${NETCDF_FORTRAN_VERSION}.tar.gz}"
 
 # CMake flags applied to all pschism builds
-CMAKE_BASE_FLAGS="-DCMAKE_BUILD_TYPE=Release -DBLD_STANDALONE=ON -DTVD_LIM=VL -DPREC_EVAP=ON -DUSE_GOTM=ON -DGOTM_BASE=../src/GOTM5.2/code"
+CMAKE_BASE_FLAGS="-DCMAKE_BUILD_TYPE=Release -DBLD_STANDALONE=ON -DTVD_LIM=VL -DPREC_EVAP=ON -DUSE_GOTM=ON -DGOTM_BASE=../../gotm"
 # ============================================================
 
 # Update certificates
@@ -209,6 +209,12 @@ export LDFLAGS="-L${PREFIX_NETCDF_FORTRAN}/lib -L${PREFIX_NETCDF}/lib -L${PREFIX
 export LIBS="-lnetcdff -lnetcdf -lhdf5"
 export PATH=${PREFIX_NETCDF_FORTRAN}/bin:${PREFIX_NETCDF}/bin:${PREFIX_HDF5}/bin:$PATH
 
+# Clone GOTM
+if [[ -d "gotm" ]]; then
+  rm -rf gotm
+fi
+git clone -b $GOTM_VERSION --depth 1 https://github.com/gotm-model/code.git gotm
+
 # URL_SCHISM="https://github.com/schism-dev/schism/archive/refs/tags/v5.11.1.tar.gz"
 # TAR_SCHISM=${URL_SCHISM##*/}
 # curl -L ${URL_SCHISM} -o ${TAR_SCHISM}
@@ -218,13 +224,6 @@ if [[ -d "schism" ]]; then
 fi
 git clone -b $SCHISM_VERSION https://github.com/schism-dev/schism.git
 cd schism
-
-# GOTM: SCHISM's own cmake (src/CMakeLists.txt) expects the pre-restructuring GOTM
-# layout (src/gotm/gotm.F90), which only exists at the exact legacy commit SCHISM pins
-# as its own git submodule at src/GOTM5.2/code - NOT the current gotm-model/code tags
-# (e.g. v6.0.7 has a completely different, incompatible directory layout). Initialize
-# SCHISM's pinned submodule instead of fetching GOTM ourselves.
-git submodule update --init --recursive -- src/GOTM5.2/code
 
 # Fix the code to use ifx
 sed -i 's/message(FATAL_ERROR "Preprocessor flag/message(STATUS "Preprocessor flag/g' src/CMakeLists.txt
