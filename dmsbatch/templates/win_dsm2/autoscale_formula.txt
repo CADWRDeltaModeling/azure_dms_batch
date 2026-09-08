@@ -4,15 +4,23 @@ maxNumberofVMs = 50;
 taskSlotsPerNode={task_slots_per_node};
 timesince = time() - time("{startTime}");
 timelimit = TimeInterval_Minute * 5;
-// Get pending tasks for the past 5 minutes. Batch doesn't check quicker than 5 minutes anyways
-$samples = $PendingTasks.GetSamplePercent(TimeInterval_Second * 1);
+// Get pending tasks for the past minute. Batch doesn't check quicker than 5 minutes anyways
+$samples = $PendingTasks.GetSamplePercent(TimeInterval_Minute);
 // If you have fewer than 70 percent data points, use the last sample point,
 // otherwise use the maximum of last sample point and the history average.
-$tasks = $samples < 70 ? max(0,$PendingTasks.GetSample(1)) : max( $PendingTasks.GetSample(1), avg($PendingTasks.GetSample(TimeInterval_Second * 1)));
+$tasks = $samples < 70 ? max(0,$PendingTasks.GetSample(1)) : max( $PendingTasks.GetSample(1), avg($PendingTasks.GetSample(TimeInterval_Minute)));
 $overflow = $tasks - {num_hosts}*{task_slots_per_node};
 // For tasks, set targetVMs to {num_hosts} initially and then expand out if necessary. If all done goto 0 nodes.
 $numberNodes = min(maxNumberofVMs, $overflow/taskSlotsPerNode+0.999);
-$TargetLowPriorityNodes = $tasks > 0 ? $numberNodes: 0;
+// $tasks is unreliable during warmup (no samples exist yet the moment the pool is
+// created, before the job's tasks are even submitted), so give low-priority a
+// floor of at least 1 node -- otherwise spot-only pools (num_hosts=0) sit at 0
+// nodes for a full extra evaluation cycle before scaling. But take max(...) with
+// $numberNodes too: as soon as real pending-task samples exist (usually within
+// the same or next evaluation, well before the 5-minute warmup ends, since tasks
+// are submitted right after pool creation), scale straight to the real target
+// instead of sitting at the floor of 1 for the rest of the warmup window.
+$TargetLowPriorityNodes = (timesince > timelimit ? ($tasks > 0 ? $numberNodes: 0) : min(maxNumberofVMs, max({num_hosts}, 1, $numberNodes)));
 $TargetDedicatedNodes = (timesince > timelimit ? ($tasks > 0 ? {num_hosts}: 0): {num_hosts});
 // Set node deallocation mode - let running tasks finish before removing a node
 $NodeDeallocationOption = taskcompletion;
