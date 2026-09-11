@@ -1,4 +1,4 @@
-maxNumberofVMs = 50;
+maxNumberofVMs = 20;
 // Set the number of task slots per node times two to allow atleast three passes of tasks for a node.
 // tasks are typically short and there is no point in asking for too many hosts and resusing a running host is preferable.
 taskSlotsPerNode={task_slots_per_node};
@@ -12,7 +12,12 @@ $tasks = $samples < 70 ? max(0,$PendingTasks.GetSample(1)) : max( $PendingTasks.
 $overflow = $tasks - {num_hosts}*{task_slots_per_node};
 // For tasks, set targetVMs to {num_hosts} initially and then expand out if necessary. If all done goto 0 nodes.
 $numberNodes = min(maxNumberofVMs, $overflow/taskSlotsPerNode+0.999);
-$TargetLowPriorityNodes = $tasks > 0 ? $numberNodes: 0;
-$TargetDedicatedNodes = (timesince > timelimit ? ($tasks > 0 ? {num_hosts}: 0): {num_hosts});
+$TargetDedicatedNodes = 0;
+$TargetLowPriorityNodes = 0;
+${nodeType} = timesince > timelimit ? ($tasks > 0 ? $numberNodes: 0): {num_hosts};
+preemptedSamples = $PreemptedNodeCount.GetSamplePercent(180 * TimeInterval_Second);
+preemptedCount = preemptedSamples >= 70 ? avg($PreemptedNodeCount.GetSample(180 * TimeInterval_Second)) : 0;
+$TargetDedicatedNodes = preemptedCount > 0 ? min(maxNumberofVMs, preemptedCount) : $TargetDedicatedNodes;
+$TargetLowPriorityNodes = preemptedCount > 0 ? max(0, maxNumberofVMs - $TargetDedicatedNodes) : $TargetLowPriorityNodes;
 // Set node deallocation mode - let running tasks finish before removing a node
 $NodeDeallocationOption = taskcompletion;
