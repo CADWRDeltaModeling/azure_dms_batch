@@ -67,13 +67,17 @@ do
     # MAJOR ASSUMPTION: current directory is the study directory
     # FIXME: $dest_dir is not used in the azcopy command as $src_dir is enough information to construct the destination path
     # DOCUMENTED WAY: construct a semi-colon separated list of files as an environment variable and use --include-path option to azcopy
-    azcopy_filelist=$(find . -type f -mmin "-${modified_minutes}" -print0 | tr '\0' ';')
-    station_filelist=$(find ./outputs -maxdepth 1 -type f \( -name "staout*" -o -name "flux.out" \))
-    # copy stations to tmp dir, then azcopy them.
+    azcopy_filelist=$(find . -type f -mmin "-${modified_minutes}" -print0 | tr '\0' ';' | sed 's/;$//')
+    # Snapshot station files to a tmp dir so azcopy reads a stable copy while SCHISM appends.
+    rm -rf ./tmp_station_copy
     mkdir -p ./tmp_station_copy
-    cp ${station_filelist} ./tmp_station_copy/
-    tmp_sta_list=$(find ./tmp_station_copy -type f -printf '%f\0' | tr '\0' ';')
-    azcopy cp "./tmp_sta_list/*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}/outputs?${SAS}" --include-path ${tmp_sta_list} --preserve-symlinks || true;
+    find ./outputs/ -maxdepth 1 -type f \( -name "staout*" -o -name "flux.out" \) \
+      -exec cp {} ./tmp_station_copy/ \;
+    tmp_sta_list=$(find ./tmp_station_copy -type f -printf '%f\0' | tr '\0' ';' | sed 's/;$//')
+    if [ -n "${tmp_sta_list}" ]; then
+      azcopy cp "./tmp_station_copy/*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}/outputs?${SAS}" --include-path "${tmp_sta_list}" --preserve-symlinks || true;
+    fi
+    rm -rf ./tmp_station_copy
 
     if [ $finish -eq 1 ]; then
       echo "Received SIGUSR1... exiting after this copy!"
@@ -84,7 +88,7 @@ do
       echo "No files to copy... skipping this time."
     else
       # There will be failures as some of the files are being written to while copy is occurring which causes azcopy to return non-zero exit code
-      azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --include-path ${azcopy_filelist} --preserve-symlinks || true;
+      azcopy cp "./*" "https://${storage_account}.blob.core.windows.net/${container}/${src_dir}?${SAS}" --include-path "${azcopy_filelist}" --preserve-symlinks || true;
     fi
     if [ $exit_after_copy -eq 1 ]; then
       echo "Exiting after last copy after receiving signal!"
