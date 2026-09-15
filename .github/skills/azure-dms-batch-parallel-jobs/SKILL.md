@@ -68,9 +68,8 @@ You almost never write a full task script yourself. You write a `command:` block
 shell/batch lines) in your job YAML; the **template's**
 `application_command_template.sh`/`.bat` wraps it (captures stdout/stderr to files that
 get uploaded, sets `set -e`/`ERRORLEVEL` handling, runs `{app_pkgs_script}` first). Look
-at `dmsbatch/templates/<template_name>/application_command_template.sh` before writing a
-new template -- reuse an existing one (e.g. `dvsm_container`) rather than inventing a new
-wrapper unless your OS/toolchain genuinely needs a different envelope.
+at the selected template's wrapper before writing a new one. Packaged templates live under
+`dmsbatch/templates/<template_name>`; project-owned templates set `template_dir` in the job YAML.
 
 `job_start_command_template` (and, less commonly, `application_command_template`) can
 also be overridden **inline, as a literal multi-line command string directly in your job
@@ -162,7 +161,7 @@ in `dmsbatch/commands.py`, both wrap `az cli` and require `az login` to the righ
 subscription -- or set the `BATCH_ACCOUNT_KEY`/`STORAGE_ACCOUNT_KEY` env vars to skip
 the `az cli` round-trip).
 
-## `templates/<template_name>/` anatomy
+## Template directory anatomy
 
 Every template directory needs:
 
@@ -174,6 +173,14 @@ Every template directory needs:
 | `job_start_command_template.sh`/`.bat` | The job-level prep-task script -- one-time setup shared by every task in the job. |
 | `pool.bicep` + `pool.parameters.json` | Defines the VM pool: image, `applicationPackages`, `interNodeCommunication` (`Disabled` for this pattern), autoscale formula, start task. |
 | `autoscale_formula.txt` | Pool autoscale formula (`$TargetDedicatedNodes = ...`). |
+
+Reusable templates can live in `dmsbatch/templates/<template_name>`. Project-specific templates
+should live with that project and set a YAML-relative path, for example:
+
+```yaml
+template_name: project_gpu
+template_dir: ../templates/project_gpu
+```
 
 To add a new massively-parallel job type (e.g. Linux DSM2/GTM via `app_pkgs`): copy the
 closest existing template (`win_dsm2` for the `app_pkgs` pattern translated to bash, or
@@ -189,8 +196,9 @@ shell dialect).
 2. If there's a large shared artifact common to every task (e.g. a tidefile), upload it
    too, and reference it via `job_start_command_resource_files` +
    `job_start_command_template` so it's staged once per node, not once per task.
-3. Pick or write a `template_name` (`app_pkgs` if binaries come from an Azure Batch
-   Application Package, `container_image_name` if from a Docker image).
+3. Pick a packaged `template_name`, or set both `template_name` and `template_dir` for a
+  project-owned template (`app_pkgs` if binaries come from an Azure Batch Application Package,
+  `container_image_name` if from a Docker image).
 4. Write `task_ids` as a small Python snippet whose last line is the list of per-task
    tuples -- one tuple per independent run, containing every value that varies task to
    task (IDs, dates, node numbers, ...).
@@ -224,10 +232,7 @@ shell dialect).
   section above. Any config using `file_path: "."` with a multi-segment `blob_prefix`
   (e.g. `"code"`, `"data/training"`) must account for that prefix still being part of
   the downloaded path inside `command:`/`job_start_command_template:` (via `cd` or by
-  including the prefix in every path reference). This bit `sample_configs/
-  neuralhyd_ca_train.yml` and `neuralhyd_ca_train_vm.yml` in practice: the task failed
-  with `python3: can't open file '.../scripts/train_kfold.py'` because the code was
-  actually at `.../code/scripts/train_kfold.py`.
+  including the prefix in every path reference).
 - **`job_start_command_template` runs without `set -e`, and its own default_config's
   wrapper doesn't add one either** -- `build_linux_script_execution_commands()`
   (`dmsbatch/batch.py`) writes your `job_start_command_template:` text to a file

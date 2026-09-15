@@ -106,7 +106,17 @@ container_run_options: '--rm'
 
 ## Template System
 
-The framework uses a template system where common configurations are stored in the `dmsbatch/templates/<template_name>/` directory. Each template includes:
+The framework supports both bundled templates and project-owned templates. With only
+`template_name`, resources load from `dmsbatch/templates/<template_name>/`. Add `template_dir`
+to load the same template structure from the filesystem instead:
+
+```yaml
+template_name: project_gpu
+template_dir: ../templates/project_gpu
+```
+
+A relative `template_dir` is anchored to the job YAML, so the command works from any current
+working directory. External resources are validated before pool creation. Each template includes:
 
 - `default_config.yml`: Default values for the template
 - `application_command_template.sh` or `.bat`: Command template for running the application

@@ -77,7 +77,9 @@ Implementation details:
 
 The template system is implemented through several components:
 
-1. **Template Directory Structure:** Templates are stored in `dmsbatch/templates/<template_name>/` with standardized files.
+1. **Template Sources:** Templates use a standardized directory structure. Bundled templates are
+  loaded from `dmsbatch/templates/<template_name>/`; project-owned templates set `template_dir`,
+  which is resolved relative to the submitting YAML file.
 
 2. **Configuration Merging:** Values from command-line, user YAML, default_config.yaml, and pool.parameters.json are merged with a defined priority.
 
@@ -85,4 +87,6 @@ The template system is implemented through several components:
 
 4. **Script Generation:** Templates are processed to generate the final scripts executed on Batch nodes.
 
-For implementation details, see the [substitute_values](dmsbatch/batch.py) function which handles recursive formatting of strings within the configuration.
+For implementation details, see [template_resources.py](dmsbatch/template_resources.py) for
+resource resolution and [substitute_values](dmsbatch/batch.py) for recursive configuration
+formatting.

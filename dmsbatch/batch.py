@@ -16,6 +16,7 @@ import azure.batch.models as batchmodels
 from azure.core.exceptions import HttpResponseError
 import dmsbatch.commands
 from dmsbatch.commands import AzureBatch, AzureBlob
+from dmsbatch.template_resources import TemplateResources
 
 #
 import tqdm
@@ -38,12 +39,14 @@ def setup_logging(log_level=logging.INFO):
     dmsbatch.commands.logger.addHandler(handler)
 
 
-def load_command_from_resourcepath(fname):
+def load_command_from_resourcepath(fname, template_resources=None):
+    if template_resources is not None:
+        return template_resources.load_command(fname)
     try:
         package = files(__name__.split(".")[0])
         resource = package.joinpath(fname.replace(__name__.split(".")[0] + "/", ""))
         return resource.read_text(encoding="utf-8")
-    except (FileNotFoundError, AttributeError) as e:
+    except (FileNotFoundError, AttributeError):
         return fname  # assume the fname is the command itself
 
 
@@ -63,9 +66,8 @@ def modify_json_file(json_file, modified_file, **kwargs):
 
 
 def build_autoscaling_formula(config_dict):
-    package = files(__name__.split(".")[0])
-    resource = package.joinpath(config_dict["autoscale_formula"])
-    formula = resource.read_text(encoding="utf-8")
+    template_resources = TemplateResources.from_config(config_dict)
+    formula = template_resources.read_text(config_dict["autoscale_formula"])
     config_dict = config_dict.copy()
     if "startTime" not in config_dict:
         config_dict["startTime"] = (
@@ -235,12 +237,10 @@ def create_pool(config_dict):
     pool_bicep_resource = config_dict["pool_bicep_resource"]
     pool_parameters_resource = config_dict["pool_parameters_resource"]
 
-    package = files(__name__.split(".")[0])
-    bicep_resource = package.joinpath(pool_bicep_resource)
-    parameters_resource = package.joinpath(pool_parameters_resource)
+    template_resources = TemplateResources.from_config(config_dict)
 
-    with as_file(bicep_resource) as bicep_file, as_file(
-        parameters_resource
+    with template_resources.as_path(pool_bicep_resource) as bicep_file, (
+        template_resources.as_path(pool_parameters_resource)
     ) as parameters_file:
         bicep_file = str(bicep_file)
         parameters_file = str(parameters_file)
@@ -459,8 +459,12 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
     job_name = f"{pre_pool_name}_job_{dtstr}"
     try:
         local_config_dict = create_substituted_dict(config_dict, pool_name=pool_name)
+        template_resources = TemplateResources.from_config(local_config_dict)
         job_start_command_template = local_config_dict["job_start_command_template"]
-        job_cmd = load_command_from_resourcepath(fname=job_start_command_template)
+        job_cmd = load_command_from_resourcepath(
+            fname=job_start_command_template,
+            template_resources=template_resources,
+        )
         job_cmd = job_cmd.format(**local_config_dict)
         logger.debug("Job Start command: {}".format(job_cmd))
         if "job_start_command_resource_files" in local_config_dict:
@@ -524,7 +528,10 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
         # assign the variables below to the values in the config file
         num_hosts = config_dict["num_hosts"]
         application_command_template = config_dict["application_command_template"]
-        app_cmd = load_command_from_resourcepath(fname=application_command_template)
+        app_cmd = load_command_from_resourcepath(
+            fname=application_command_template,
+            template_resources=template_resources,
+        )
         format_dict = dict(config_dict)
         if isinstance(format_dict.get("setup_dirs"), list):
             format_dict["setup_dirs"] = " ".join(format_dict["setup_dirs"])
@@ -554,7 +561,8 @@ def submit_task(client: AzureBatch, pool_name, config_dict, pool_exists=False):
         if "mpi_command" in config_dict:
             coordination_command_template = config_dict["coordination_command_template"]
             coordination_cmd = load_command_from_resourcepath(
-                fname=coordination_command_template
+                fname=coordination_command_template,
+                template_resources=template_resources,
             )
             coordination_cmd = coordination_cmd.format(**config_dict)
 
@@ -751,13 +759,13 @@ def initialize_config(config_file, pool_name=None):
                 "Required key {} not found in config file: {}".format(key, config_file)
             )
     # load defaults from default_config.yml and update undefined ones
-    package = files(__name__.split(".")[0])
-    default_config_resource = package.joinpath(
-        f'templates/{config_dict["template_name"]}/default_config.yml'
-    )
-    with as_file(default_config_resource) as default_config_file:
+    template_resources = TemplateResources.from_config(config_dict, config_file)
+    if template_resources.template_dir:
+        config_dict["template_dir"] = str(template_resources.template_dir)
+    with template_resources.as_path("default_config.yml") as default_config_file:
         default_config_dict = parse_yaml_file(str(default_config_file))
     update_if_not_defined(config_dict, **default_config_dict)
+    template_resources.validate_config(config_dict)
     # default study_dir to current working dir if not specified
     if "study_dir" not in config_dict:
         config_dict["study_dir"] = "."

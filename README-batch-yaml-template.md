@@ -75,18 +75,33 @@ sequenceDiagram
 
 ## Template Directory Structure
 
-Each template resides in a directory under `dmsbatch/templates` with the following structure:
+Templates can be packaged under `dmsbatch/templates` or owned by the project that submits the
+job. Both forms use the same directory structure:
 
 ```
-dmsbatch/templates/<template_name>/
+<template_dir>/
 ├── application_command_template.sh     # Main application execution script
 ├── autoscale_formula.txt               # Formula for pool auto-scaling (optional)
 ├── coordination_command_template.sh    # For MPI or multi-node tasks (optional)
-├── default_config.yaml                 # Default configuration values
+├── default_config.yml                  # Default configuration values
 ├── job_start_command_template.sh       # Setup commands for job start (optional)
 ├── pool.bicep                          # Azure Bicep template for pool creation
 └── pool.parameters.json                # Parameters for pool creation
 ```
+
+Packaged templates need only `template_name`. For a project-owned template, add `template_dir`
+to the job YAML. Relative paths are resolved from the YAML file's directory, not the shell's
+current working directory:
+
+```yaml
+template_name: project_gpu
+template_dir: ../templates/project_gpu
+```
+
+The external directory is validated before Azure authentication or pool creation. Resource paths
+inside its `default_config.yml` should normally be local names such as `pool.bicep` and
+`application_command_template.sh`. Omitting `template_dir` preserves the packaged-template
+behavior.
 
 For more details on these script templates and how they're used, see the [Script Templates Documentation](README-script-templates.md).
 
@@ -94,7 +109,7 @@ For more details on these script templates and how they're used, see the [Script
 
 The system uses a layered configuration approach:
 
-1. Templates provide base configurations in `default_config.yaml`
+1. Templates provide base configurations in `default_config.yml`
 2. User's job YAML file overrides template defaults
 3. Command-line parameters can override both
 
