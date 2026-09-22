@@ -222,7 +222,7 @@ git clone -b $GOTM_VERSION --depth 1 https://github.com/gotm-model/code.git gotm
 if [[ -d "schism" ]]; then
   rm -rf schism
 fi
-git clone -b $SCHISM_VERSION https://github.com/schism-dev/schism.git
+git clone -b $SCHISM_VERSION --depth 1 https://github.com/cadwrdeltamodeling/schism.git
 cd schism
 
 # Fix the code to use ifx
