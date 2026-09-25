@@ -114,7 +114,7 @@ Pool cycled to 0 → autoscale restored → tasks restart
 az deployment group create \
     --resource-group  <my-rg>           \
     --name            automation-account \
-    --template-file   bicep/automation_account.bicep \
+    --template-file   monitoring/automation_account.bicep \
     --parameters \
         batchAccountName=<my-batch-account> \
         poolId=<my-pool-id>
@@ -152,7 +152,7 @@ Or supply the path to `dmsbatch/restart_stuck_pool.py` directly via `--content @
 az deployment group create \
     --resource-group  <my-rg>       \
     --name            batch-alerts  \
-    --template-file   bicep/batch_pool_alert.bicep \
+    --template-file   monitoring/batch_pool_alert.bicep \
     --parameters \
         batchAccountName=<my-batch-account> \
         poolId=<my-pool-id>                 \
@@ -208,6 +208,6 @@ az automation runbook start \
 |------|---------|
 | `runbooks/restart_stuck_pool.sh` | On-demand bash script (uses `az` CLI) |
 | `dmsbatch/restart_stuck_pool.py` | Python runbook (local CLI + Azure Automation) |
-| `bicep/automation_account.bicep` | Automation Account, runbook, webhook, role assignment |
-| `bicep/batch_pool_alert.bicep` | Azure Monitor alerts + Action Group |
+| `monitoring/automation_account.bicep` | Automation Account, runbook, webhook, role assignment |
+| `monitoring/batch_pool_alert.bicep` | Azure Monitor alerts + Action Group |
 

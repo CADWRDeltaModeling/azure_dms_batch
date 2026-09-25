@@ -53,11 +53,11 @@ without running notification or termination actions.
 
 | File | Purpose |
 |---|---|
-| [bicep/schism_alert_logic_app.bicep](../bicep/schism_alert_logic_app.bicep) | Deploys the notification Logic App (`schism-stuck-handler`) + its role assignment |
-| [bicep/schism_alert_workflow.json](../bicep/schism_alert_workflow.json) | Workflow definition for the notification Logic App |
-| [bicep/schism_terminate_logic_app.bicep](../bicep/schism_terminate_logic_app.bicep) | Deploys the termination Logic App (`schism-terminate-handler`) + its role assignment |
-| [bicep/schism_terminate_workflow.json](../bicep/schism_terminate_workflow.json) | Workflow definition for the termination Logic App |
-| [bicep/setup_schism_alert.sh](../bicep/setup_schism_alert.sh) | End-to-end orchestration script — deploys both Logic Apps, wires up action groups and alert rules |
+| [monitoring/schism_alert_logic_app.bicep](../monitoring/schism_alert_logic_app.bicep) | Deploys the notification Logic App (`schism-stuck-handler`) + its role assignment |
+| [monitoring/schism_alert_workflow.json](../monitoring/schism_alert_workflow.json) | Workflow definition for the notification Logic App |
+| [monitoring/schism_terminate_logic_app.bicep](../monitoring/schism_terminate_logic_app.bicep) | Deploys the termination Logic App (`schism-terminate-handler`) + its role assignment |
+| [monitoring/schism_terminate_workflow.json](../monitoring/schism_terminate_workflow.json) | Workflow definition for the termination Logic App |
+| [monitoring/setup_schism_alert.sh](../monitoring/setup_schism_alert.sh) | End-to-end orchestration script — deploys both Logic Apps, wires up action groups and alert rules |
 | [app-packages/telegraf/telegraf.conf](../app-packages/telegraf/telegraf.conf) | Telegraf config that tags each metric with `host`, `created_by`, `batch_account`, `batch_region` |
 | `dmsbatch/templates/*/application_command_template.sh` | Batch task scripts — set the env vars Telegraf uses for tagging |
 
@@ -128,7 +128,7 @@ Logic Apps detect that case and skip automated action safely (see the
 
 ## Step 2 — Configure `setup_schism_alert.sh` for your environment
 
-Open [bicep/setup_schism_alert.sh](../bicep/setup_schism_alert.sh) and edit the
+Open [monitoring/setup_schism_alert.sh](../monitoring/setup_schism_alert.sh) and edit the
 configuration block near the top:
 
 ```bash
@@ -158,7 +158,7 @@ need to hardcode it.
 ```bash
 cd /path/to/azure_dms_batch
 az login                      # if not already logged in
-bash bicep/setup_schism_alert.sh skip
+bash monitoring/setup_schism_alert.sh skip
 ```
 
 Passing `skip` deploys everything **except** working email — a placeholder sender address
@@ -174,7 +174,7 @@ is used so the Logic Apps deploy successfully. The script will:
   **Contributor** on every Batch account
 7. Create/update the `schism-terminate-handler-ag` action group
 8. Create/update the `SCHISM-stuck-terminate` alert rule (fires after ~90 min stuck)
-9. Write `bicep/it_support_vars.txt` with the values IT needs for the next step
+9. Write `monitoring/it_support_vars.txt` with the values IT needs for the next step
 
 `it_support_vars.txt` is **not committed to git** (see `.gitignore`) since it contains
 subscription- and deployment-specific identifiers.
@@ -243,7 +243,7 @@ az rest --method GET \
 Once the admin confirms both grants and the access policy are in place:
 
 ```bash
-bash bicep/setup_schism_alert.sh schism-alerts@yourorg.com
+bash monitoring/setup_schism_alert.sh schism-alerts@yourorg.com
 ```
 
 This redeploys both Logic Apps with the real sender address wired into their workflows.
@@ -318,13 +318,13 @@ Timing:
   before destructive action is taken.
 
 To change these windows, edit the `KQL_QUERY` / `KQL_TERMINATE` heredocs inside
-[setup_schism_alert.sh](../bicep/setup_schism_alert.sh) and re-run the script.
+[setup_schism_alert.sh](../monitoring/setup_schism_alert.sh) and re-run the script.
 
 
 
 ## Adding a new Batch account later
 
 1. Add it to the `BATCH_ACCOUNTS` array in `setup_schism_alert.sh`
-2. Re-run `bash bicep/setup_schism_alert.sh <sender-email>` — it grants Contributor on
+2. Re-run `bash monitoring/setup_schism_alert.sh <sender-email>` — it grants Contributor on
    any new accounts without duplicating existing role assignments
 3. Rebuild/re-upload the telegraf package for the new account (Step 1 above)

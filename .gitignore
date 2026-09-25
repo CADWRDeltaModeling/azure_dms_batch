@@ -33,8 +33,13 @@ flux.out
 # vscode 
 .vscode/
 # Generated deployment artifacts — contain environment-specific IDs
-bicep/it_support_vars.txt
-bicep/*.json
+monitoring/it_support_vars.txt
+monitoring/it_support_vars_idle_node.txt
+# Compiled ARM templates (regenerate with `az bicep build`) — NOT the *_workflow.json
+# source files, which are hand-authored and must stay committed.
+monitoring/*_logic_app.json
+# Per-deployment resource-group/batch-account specifics — never committed.
+monitoring/local_deploy_configs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -1,0 +1,151 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "senderEmail": {
+      "type": "String"
+    },
+    "batchAccounts": {
+      "type": "Array",
+      "defaultValue": []
+    }
+  },
+  "triggers": {
+    "When_recurs": {
+      "type": "Recurrence",
+      "recurrence": {
+        "frequency": "Minute",
+        "interval": 30
+      }
+    }
+  },
+  "actions": {
+    "Foreach_batch_account": {
+      "type": "Foreach",
+      "runAfter": {},
+      "foreach": "@parameters('batchAccounts')",
+      "actions": {
+        "Get_account": {
+          "type": "Http",
+          "runAfter": {},
+          "inputs": {
+            "method": "GET",
+            "uri": "@{concat('https://management.azure.com', items('Foreach_batch_account'), '?api-version=2024-02-01')}",
+            "authentication": {
+              "type": "ManagedServiceIdentity",
+              "audience": "https://management.azure.com/"
+            }
+          }
+        },
+        "Get_node_counts": {
+          "type": "Http",
+          "runAfter": {
+            "Get_account": ["Succeeded"]
+          },
+          "inputs": {
+            "method": "GET",
+            "uri": "@{concat('https://', last(split(items('Foreach_batch_account'), '/')), '.', toLower(replace(body('Get_account')?['location'], ' ', '')), '.batch.azure.com/nodecounts?api-version=2024-02-01.19.0')}",
+            "authentication": {
+              "type": "ManagedServiceIdentity",
+              "audience": "https://batch.core.windows.net/"
+            }
+          }
+        },
+        "Filter_idle_pools": {
+          "type": "Query",
+          "runAfter": {
+            "Get_node_counts": ["Succeeded"]
+          },
+          "inputs": {
+            "from": "@coalesce(body('Get_node_counts')?['value'], json('[]'))",
+            "where": "@or(or(greater(add(coalesce(item()?['dedicated']?['idle'], 0), coalesce(item()?['lowPriority']?['idle'], 0)), 0), greater(add(coalesce(item()?['dedicated']?['waitingForStartTask'], 0), coalesce(item()?['lowPriority']?['waitingForStartTask'], 0)), 0)), or(greater(add(coalesce(item()?['dedicated']?['startTaskFailed'], 0), coalesce(item()?['lowPriority']?['startTaskFailed'], 0)), 0), greater(add(coalesce(item()?['dedicated']?['unusable'], 0), coalesce(item()?['lowPriority']?['unusable'], 0)), 0)))"
+          }
+        },
+        "Foreach_flagged_pool": {
+          "type": "Foreach",
+          "runAfter": {
+            "Filter_idle_pools": ["Succeeded"]
+          },
+          "foreach": "@body('Filter_idle_pools')",
+          "actions": {
+            "Get_pool_metadata": {
+              "type": "Http",
+              "runAfter": {},
+              "inputs": {
+                "method": "GET",
+                "uri": "@{concat('https://management.azure.com', items('Foreach_batch_account'), '/pools/', items('Foreach_flagged_pool')?['poolId'], '?api-version=2024-02-01')}",
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://management.azure.com/"
+                }
+              }
+            },
+            "Have_created_by_email": {
+              "type": "If",
+              "runAfter": {
+                "Get_pool_metadata": ["Succeeded"]
+              },
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@empty(coalesce(first(filter(body('Get_pool_metadata')?['properties']?['metadata'], item(), equals(item()?['name'], 'created-by')))?['value'], ''))",
+                      false
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Send_idle_node_email": {
+                  "type": "Http",
+                  "runAfter": {},
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{concat('https://graph.microsoft.com/v1.0/users/', parameters('senderEmail'), '/sendMail')}",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "https://graph.microsoft.com"
+                    },
+                    "body": {
+                      "message": {
+                        "subject": "@{concat('Azure Batch pool has idle/stuck nodes: ', items('Foreach_flagged_pool')?['poolId'])}",
+                        "body": {
+                          "contentType": "Text",
+                          "content": "@{concat('Your Azure Batch pool ', items('Foreach_flagged_pool')?['poolId'], ' has nodes that are allocated but not doing useful work (idle, stuck waiting for Start Task, Start Task failed, or unusable) while you continue to be billed for the pool.\n\nBatch account: ', last(split(items('Foreach_batch_account'), '/')), '\nRegion: ', body('Get_account')?['location'], '\nPool: ', items('Foreach_flagged_pool')?['poolId'], '\nNode counts (dedicated): ', string(items('Foreach_flagged_pool')?['dedicated']), '\nNode counts (low priority): ', string(items('Foreach_flagged_pool')?['lowPriority']), '\n\nPlease check the pool/job in the Azure portal and resize or delete it if it is no longer needed.')}"
+                        },
+                        "toRecipients": [
+                          {
+                            "emailAddress": {
+                              "address": "@{first(filter(body('Get_pool_metadata')?['properties']?['metadata'], item(), equals(item()?['name'], 'created-by')))?['value']}"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Log_no_created_by": {
+                    "type": "Compose",
+                    "runAfter": {},
+                    "inputs": {
+                      "event": "no_created_by_metadata",
+                      "poolId": "@items('Foreach_flagged_pool')?['poolId']",
+                      "batchAccount": "@last(split(items('Foreach_batch_account'), '/'))",
+                      "message": "Pool has no 'created-by' metadata \u2014 cannot notify a submitter automatically"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

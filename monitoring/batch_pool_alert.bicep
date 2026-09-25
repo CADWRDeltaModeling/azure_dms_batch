@@ -17,7 +17,7 @@
 // Both metric alerts call the Action Group, which posts to the Automation
 // runbook webhook to cycle the pool to 0 and back.
 //
-// Deploy after bicep/automation_account.bicep – provide the webhookUri output
+// Deploy after monitoring/automation_account.bicep – provide the webhookUri output
 // as the webhookUri parameter here:
 //
 //   WEBHOOK_URI=$(az deployment group show \
@@ -27,7 +27,7 @@
 //
 //   az deployment group create \
 //       --resource-group <rg> \
-//       --template-file  bicep/batch_pool_alert.bicep \
+//       --template-file  monitoring/batch_pool_alert.bicep \
 //       --parameters     batchAccountName=<acct>  poolId=<pool>  webhookUri="$WEBHOOK_URI"
 // ─────────────────────────────────────────────────────────────────────────────
 

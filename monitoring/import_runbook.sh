@@ -3,13 +3,13 @@
 # import_runbook.sh
 #
 # Post-deployment helper: uploads and publishes the Python restart runbook to
-# an Azure Automation Account created by bicep/automation_account.bicep.
+# an Azure Automation Account created by monitoring/automation_account.bicep.
 #
 # Run this once after `az deployment group create ... --template-file
-#   bicep/automation_account.bicep`.
+#   monitoring/automation_account.bicep`.
 #
 # Usage:
-#   bash bicep/import_runbook.sh \
+#   bash monitoring/import_runbook.sh \
 #       --resource-group       <rg-name>               \
 #       --automation-account   <automation-account>    \
 #       [--runbook-script      <path/to/restart_stuck_pool.py>]

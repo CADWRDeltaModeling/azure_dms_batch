@@ -12,16 +12,42 @@
 # Usage:
 #   cd /scratch/psandhu/azure_dms_batch
 #   module load azure_cli
-#   bash bicep/setup_schism_alert.sh [sender_email]
+#   bash monitoring/setup_schism_alert.sh [sender_email] [--overwrite|-f] [--config <path>]
 #
 #   sender_email – the shared mailbox to send alerts FROM (e.g. schism-alerts@water.ca.gov)
 #                  Required only after IT grants Mail.Send permission.
 #                  Pass "skip" to skip email setup for now.
+#   --overwrite / -f – update/replace the Logic Apps, action groups, and alert
+#                  rules if they already exist. Without this flag, existing
+#                  resources are left untouched and the step is skipped — safe
+#                  to re-run the script to pick up newly added Batch accounts
+#                  without clobbering an already-tuned deployment.
+#   --config <path> – source a local, gitignored shell file that overrides
+#                  RESOURCE_GROUP / LOCATION / APP_INSIGHTS_NAME / BATCH_ACCOUNTS
+#                  below for a specific deployment target, so real resource-group
+#                  and batch-account names never need to be committed here.
+#                  See monitoring/local_deploy_configs/ (gitignored).
 # =============================================================================
 set -euo pipefail
 
+OVERWRITE=false
+SENDER_EMAIL_ARG=""
+CONFIG_FILE=""
+ARGS=("$@")
+i=0
+while [[ $i -lt ${#ARGS[@]} ]]; do
+  ARG="${ARGS[$i]}"
+  case "$ARG" in
+    --overwrite|-f) OVERWRITE=true ;;
+    --config) i=$((i + 1)); CONFIG_FILE="${ARGS[$i]:-}" ;;
+    *) SENDER_EMAIL_ARG="$ARG" ;;
+  esac
+  i=$((i + 1))
+done
+
 # ── Configuration ─────────────────────────────────────────────────────────────
-# Update these values for your deployment before running.
+# Defaults below are just a fallback example — override via --config <path>
+# (see monitoring/local_deploy_configs/, gitignored) rather than editing here.
 SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 RESOURCE_GROUP="dwrbdo_schism_rg"
 LOCATION="eastus"
@@ -41,8 +67,17 @@ BATCH_ACCOUNTS=(
   "schismbatchscus2:dwrbdo_schism_scus_rg"
 )
 
-SENDER_EMAIL="${1:-skip}"
-IT_SUPPORT_FILE="bicep/it_support_vars.txt"
+if [[ -n "$CONFIG_FILE" ]]; then
+  # shellcheck source=/dev/null
+  source "$CONFIG_FILE"
+fi
+
+# The Logic Apps' own Bicep deployment needs exactly one account/RG; every
+# entry (including this one) still gets its own role assignment below.
+PRIMARY_ACCOUNT="${BATCH_ACCOUNTS[0]%%:*}"
+
+SENDER_EMAIL="${SENDER_EMAIL_ARG:-skip}"
+IT_SUPPORT_FILE="monitoring/it_support_vars.txt"
 # ──────────────────────────────────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -51,10 +86,32 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 log()  { echo "[$(date '+%H:%M:%S')] $*"; }
 step() { echo; echo "══════════════════════════════════════════════"; echo "  $*"; echo "══════════════════════════════════════════════"; }
 
+if [[ -n "$CONFIG_FILE" ]]; then
+  log "Loaded config overrides from $CONFIG_FILE"
+fi
+
+# Returns 0 (true) if resource exists in $RESOURCE_GROUP.
+resource_exists() {
+  az resource show --resource-group "$RESOURCE_GROUP" --resource-type "$1" --name "$2" &>/dev/null
+}
+
+# Skips a create/update step unless it's the first time or --overwrite was passed.
+should_deploy() {
+  local resource_type="$1" name="$2"
+  if resource_exists "$resource_type" "$name"; then
+    if [[ "$OVERWRITE" == "true" ]]; then
+      return 0
+    fi
+    log "  ↷ $name already exists — skipping (pass --overwrite to update)"
+    return 1
+  fi
+  return 0
+}
+
 # ── Step 1: Deploy Logic App ───────────────────────────────────────────────────
 step "1/5  Deploying Logic App via Bicep"
 
-BICEP_PARAMS="batchAccountName=schismbatch"
+BICEP_PARAMS="batchAccountName=$PRIMARY_ACCOUNT"
 if [[ "$SENDER_EMAIL" != "skip" ]]; then
   BICEP_PARAMS="$BICEP_PARAMS senderEmail=$SENDER_EMAIL"
 else
@@ -63,12 +120,14 @@ else
   log "WARNING: senderEmail set to placeholder. Re-run with real address after IT grants Mail.Send."
 fi
 
-az deployment group create \
-  --resource-group "$RESOURCE_GROUP" \
-  --template-file "$SCRIPT_DIR/schism_alert_logic_app.bicep" \
-  --parameters $BICEP_PARAMS \
-  --query "properties.provisioningState" \
-  --output tsv
+if should_deploy Microsoft.Logic/workflows "$LOGIC_APP_NAME"; then
+  az deployment group create \
+    --resource-group "$RESOURCE_GROUP" \
+    --template-file "$SCRIPT_DIR/schism_alert_logic_app.bicep" \
+    --parameters $BICEP_PARAMS \
+    --query "properties.provisioningState" \
+    --output tsv
+fi
 
 PRINCIPAL_ID=$(az resource show \
   --resource-group "$RESOURCE_GROUP" \
@@ -119,22 +178,23 @@ log "Webhook URL obtained"
 
 AG_ID="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/microsoft.insights/actionGroups/$ACTION_GROUP_NAME"
 
-az rest --method PUT \
-  --url "https://management.azure.com${AG_ID}?api-version=2023-01-01" \
-  --body "{
-    \"location\": \"global\",
-    \"properties\": {
-      \"groupShortName\": \"schismag\",
-      \"enabled\": true,
-      \"webhookReceivers\": [{
-        \"name\": \"LogicApp\",
-        \"serviceUri\": \"${WEBHOOK_URL}\",
-        \"useCommonAlertSchema\": true
-      }]
-    }
-  }" --output none
-
-log "  ✓ Action group $ACTION_GROUP_NAME updated"
+if should_deploy Microsoft.Insights/actionGroups "$ACTION_GROUP_NAME"; then
+  az rest --method PUT \
+    --url "https://management.azure.com${AG_ID}?api-version=2023-01-01" \
+    --body "{
+      \"location\": \"global\",
+      \"properties\": {
+        \"groupShortName\": \"schismag\",
+        \"enabled\": true,
+        \"webhookReceivers\": [{
+          \"name\": \"LogicApp\",
+          \"serviceUri\": \"${WEBHOOK_URL}\",
+          \"useCommonAlertSchema\": true
+        }]
+      }
+    }" --output none
+  log "  ✓ Action group $ACTION_GROUP_NAME updated"
+fi
 
 # ── Step 4: Create/update scheduled-query alert rule ──────────────────────────
 step "4/5  Creating/updating alert rule on $APP_INSIGHTS_NAME"
@@ -184,51 +244,54 @@ KQLEOF
 
 KQL_JSON=$(python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" <<< "$KQL_QUERY")
 
-az rest --method PUT \
-  --url "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Insights/scheduledQueryRules/$ALERT_RULE_NAME?api-version=2022-08-01-preview" \
-  --body "{
-    \"location\": \"$LOCATION\",
-    \"properties\": {
-      \"description\": \"Fires when a SCHISM job has not advanced simulation time in 30 minutes\",
-      \"severity\": 2,
-      \"enabled\": true,
-      \"scopes\": [\"${APP_INSIGHTS_ID}\"],
-      \"evaluationFrequency\": \"PT30M\",
-      \"windowSize\": \"PT2H\",
-      \"criteria\": {
-        \"allOf\": [{
-          \"query\": ${KQL_JSON},
-          \"timeAggregation\": \"Count\",
-          \"operator\": \"GreaterThan\",
-          \"threshold\": 0,
-          "dimensions": [{
-            "name": "host",
-            "operator": "Include",
-            "values": ["*"]
-          }],
-          \"failingPeriods\": {
-            \"numberOfEvaluationPeriods\": 1,
-            \"minFailingPeriodsToAlert\": 1
-          }
-        }]
-      },
-      \"actions\": {
-        \"actionGroups\": [\"${AG_ID}\"]
+if should_deploy Microsoft.Insights/scheduledqueryrules "$ALERT_RULE_NAME"; then
+  az rest --method PUT \
+    --url "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Insights/scheduledQueryRules/$ALERT_RULE_NAME?api-version=2022-08-01-preview" \
+    --body "{
+      \"location\": \"$LOCATION\",
+      \"properties\": {
+        \"description\": \"Fires when a SCHISM job has not advanced simulation time in 30 minutes\",
+        \"severity\": 2,
+        \"enabled\": true,
+        \"scopes\": [\"${APP_INSIGHTS_ID}\"],
+        \"evaluationFrequency\": \"PT30M\",
+        \"windowSize\": \"PT2H\",
+        \"criteria\": {
+          \"allOf\": [{
+            \"query\": ${KQL_JSON},
+            \"timeAggregation\": \"Count\",
+            \"operator\": \"GreaterThan\",
+            \"threshold\": 0,
+            "dimensions": [{
+              "name": "host",
+              "operator": "Include",
+              "values": ["*"]
+            }],
+            \"failingPeriods\": {
+              \"numberOfEvaluationPeriods\": 1,
+              \"minFailingPeriodsToAlert\": 1
+            }
+          }]
+        },
+        \"actions\": {
+          \"actionGroups\": [\"${AG_ID}\"]
+        }
       }
-    }
-  }" --output none
-
-log "  ✓ Alert rule $ALERT_RULE_NAME created/updated"
+    }" --output none
+  log "  ✓ Alert rule $ALERT_RULE_NAME created/updated"
+fi
 
 # ── Step 4b: Deploy termination Logic App ─────────────────────────────────────
 step "4b/5  Deploying termination Logic App"
 
-az deployment group create \
-  --resource-group "$RESOURCE_GROUP" \
-  --template-file "$SCRIPT_DIR/schism_terminate_logic_app.bicep" \
-  --parameters batchAccountName=schismbatch senderEmail="$SENDER_EMAIL" \
-  --query "properties.provisioningState" \
-  --output tsv
+if should_deploy Microsoft.Logic/workflows "$TERMINATE_APP_NAME"; then
+  az deployment group create \
+    --resource-group "$RESOURCE_GROUP" \
+    --template-file "$SCRIPT_DIR/schism_terminate_logic_app.bicep" \
+    --parameters batchAccountName="$PRIMARY_ACCOUNT" senderEmail="$SENDER_EMAIL" \
+    --query "properties.provisioningState" \
+    --output tsv
+fi
 
 TERMINATE_PRINCIPAL_ID=$(az resource show \
   --resource-group "$RESOURCE_GROUP" \
@@ -267,22 +330,23 @@ TERMINATE_WEBHOOK=$(az rest \
 
 TERMINATE_AG_ID="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/microsoft.insights/actionGroups/$TERMINATE_AG_NAME"
 
-az rest --method PUT \
-  --url "https://management.azure.com${TERMINATE_AG_ID}?api-version=2023-01-01" \
-  --body "{
-    \"location\": \"global\",
-    \"properties\": {
-      \"groupShortName\": \"schtermag\",
-      \"enabled\": true,
-      \"webhookReceivers\": [{
-        \"name\": \"TerminateLogicApp\",
-        \"serviceUri\": \"${TERMINATE_WEBHOOK}\",
-        \"useCommonAlertSchema\": true
-      }]
-    }
-  }" --output none
-
-log "  ✓ Termination action group $TERMINATE_AG_NAME created/updated"
+if should_deploy Microsoft.Insights/actionGroups "$TERMINATE_AG_NAME"; then
+  az rest --method PUT \
+    --url "https://management.azure.com${TERMINATE_AG_ID}?api-version=2023-01-01" \
+    --body "{
+      \"location\": \"global\",
+      \"properties\": {
+        \"groupShortName\": \"schtermag\",
+        \"enabled\": true,
+        \"webhookReceivers\": [{
+          \"name\": \"TerminateLogicApp\",
+          \"serviceUri\": \"${TERMINATE_WEBHOOK}\",
+          \"useCommonAlertSchema\": true
+        }]
+      }
+    }" --output none
+  log "  ✓ Termination action group $TERMINATE_AG_NAME created/updated"
+fi
 
 # Alert rule: wider KQL window — compares last 30 min against 90+ min ago
 # Fires if schism_time is identical across the gap (frozen), has stopped arriving
@@ -321,41 +385,42 @@ KQLEOF
 )
 KQL_TERMINATE_JSON=$(python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" <<< "$KQL_TERMINATE")
 
-az rest --method PUT \
-  --url "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Insights/scheduledQueryRules/$TERMINATE_ALERT_NAME?api-version=2022-08-01-preview" \
-  --body "{
-    \"location\": \"$LOCATION\",
-    \"properties\": {
-      \"description\": \"Terminates SCHISM job after schism_time stagnant for 90+ minutes\",
-      \"severity\": 1,
-      \"enabled\": true,
-      \"scopes\": [\"${APP_INSIGHTS_ID}\"],
-      \"evaluationFrequency\": \"PT30M\",
-      \"windowSize\": \"PT3H\",
-      \"criteria\": {
-        \"allOf\": [{
-          \"query\": ${KQL_TERMINATE_JSON},
-          \"timeAggregation\": \"Count\",
-          \"operator\": \"GreaterThan\",
-          \"threshold\": 0,
-          "dimensions": [{
-            "name": "host",
-            "operator": "Include",
-            "values": ["*"]
-          }],
-          \"failingPeriods\": {
-            \"numberOfEvaluationPeriods\": 1,
-            \"minFailingPeriodsToAlert\": 1
-          }
-        }]
-      },
-      \"actions\": {
-        \"actionGroups\": [\"${TERMINATE_AG_ID}\"]
+if should_deploy Microsoft.Insights/scheduledqueryrules "$TERMINATE_ALERT_NAME"; then
+  az rest --method PUT \
+    --url "https://management.azure.com/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Insights/scheduledQueryRules/$TERMINATE_ALERT_NAME?api-version=2022-08-01-preview" \
+    --body "{
+      \"location\": \"$LOCATION\",
+      \"properties\": {
+        \"description\": \"Terminates SCHISM job after schism_time stagnant for 90+ minutes\",
+        \"severity\": 1,
+        \"enabled\": true,
+        \"scopes\": [\"${APP_INSIGHTS_ID}\"],
+        \"evaluationFrequency\": \"PT30M\",
+        \"windowSize\": \"PT3H\",
+        \"criteria\": {
+          \"allOf\": [{
+            \"query\": ${KQL_TERMINATE_JSON},
+            \"timeAggregation\": \"Count\",
+            \"operator\": \"GreaterThan\",
+            \"threshold\": 0,
+            "dimensions": [{
+              "name": "host",
+              "operator": "Include",
+              "values": ["*"]
+            }],
+            \"failingPeriods\": {
+              \"numberOfEvaluationPeriods\": 1,
+              \"minFailingPeriodsToAlert\": 1
+            }
+          }]
+        },
+        \"actions\": {
+          \"actionGroups\": [\"${TERMINATE_AG_ID}\"]
+        }
       }
-    }
-  }" --output none
-
-log "  ✓ Termination alert rule $TERMINATE_ALERT_NAME created/updated"
+    }" --output none
+  log "  ✓ Termination alert rule $TERMINATE_ALERT_NAME created/updated"
+fi
 
 # ── Step 5: Save IT support variables ─────────────────────────────────────────
 step "5/5  Saving IT support variables"
@@ -407,7 +472,7 @@ echo "╠═══════════════════════�
 if [[ "$SENDER_EMAIL" == "skip" ]]; then
 echo "║  EMAIL: NOT configured yet.                                  ║"
 echo "║  1. Get IT to run the command in $IT_SUPPORT_FILE"
-echo "║  2. Re-run:  bash bicep/setup_schism_alert.sh you@org.com   ║"
+echo "║  2. Re-run:  bash monitoring/setup_schism_alert.sh you@org.com   ║"
 else
 echo "║  Sender email : $SENDER_EMAIL"
 fi
